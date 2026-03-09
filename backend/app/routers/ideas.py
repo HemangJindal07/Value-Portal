@@ -6,6 +6,8 @@ from app.schemas.idea import IdeaCreate, IdeaUpdate, IdeaResponse
 from app.services.ai_classifier import classify_idea
 from app.services.assignment_engine import auto_assign
 from app.services.tracking import record_status_change
+from app.services.notification_service import notify_status_change
+from app.services.scoring import award_points
 
 router = APIRouter(prefix="/ideas", tags=["Value Ideas"])
 
@@ -75,6 +77,8 @@ async def create_idea(
     background_tasks.add_task(classify_idea, str(idea["idea_id"]))
     background_tasks.add_task(auto_assign, "idea", str(idea["idea_id"]), str(idea["account_id"]))
 
+    award_points(current_user["id"], "idea", str(idea["idea_id"]), "submitted")
+
     return idea
 
 
@@ -126,6 +130,23 @@ async def update_idea(
             to_status=new_status,
             changed_by=current_user["id"],
         )
+        notify_status_change(
+            submission_type="idea",
+            submission_id=str(idea_id),
+            submission_title=existing.data.get("title", ""),
+            submitter_id=existing.data["submitted_by"],
+            old_status=old_status,
+            new_status=new_status,
+        )
+
+        scoreable = {"approved", "implemented"}
+        if new_status in scoreable:
+            award_points(
+                existing.data["submitted_by"],
+                "idea",
+                str(idea_id),
+                new_status,
+            )
 
     return result.data[0]
 

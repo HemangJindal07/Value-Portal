@@ -4,7 +4,10 @@ from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
 from app.services.assignment_engine import auto_assign
+from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
+from app.services.notification_service import notify_status_change
+from app.services.scoring import award_points
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -77,6 +80,9 @@ async def create_lead(
     background_tasks.add_task(
         auto_assign, "lead", str(lead["lead_id"]), str(lead["account_id"])
     )
+    background_tasks.add_task(classify_lead, str(lead["lead_id"]))
+
+    award_points(current_user["id"], "lead", str(lead["lead_id"]), "submitted")
 
     return lead
 
@@ -129,6 +135,24 @@ async def update_lead(
             to_status=new_status,
             changed_by=current_user["id"],
         )
+        notify_status_change(
+            submission_type="lead",
+            submission_id=str(lead_id),
+            submission_title=existing.data.get("title", ""),
+            submitter_id=existing.data["submitted_by"],
+            old_status=old_status,
+            new_status=new_status,
+        )
+
+        scoreable = {"qualified", "won"}
+        event_map = {"qualified": "qualified", "won": "deal_won"}
+        if new_status in scoreable:
+            award_points(
+                existing.data["submitted_by"],
+                "lead",
+                str(lead_id),
+                event_map[new_status],
+            )
 
     return result.data[0]
 

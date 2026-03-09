@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Bot, Loader2 } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,12 +11,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { IdeaWithRelations } from "@/types";
 import Link from "next/link";
 import { ActivitySection } from "@/components/activity-section";
+import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500/10 text-gray-400",
@@ -86,13 +94,25 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
   );
 }
 
+const ideaStatuses = [
+  "draft",
+  "submitted",
+  "under_review",
+  "approved",
+  "in_progress",
+  "implemented",
+  "rejected",
+];
+
 export default function IdeaDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const router = useRouter();
   const [idea, setIdea] = useState<IdeaWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [aiPolling, setAiPolling] = useState(false);
+  const [newStatus, setNewStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const pollAttempts = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -135,6 +155,7 @@ export default function IdeaDetailPage() {
     fetchIdea()
       .then((data) => {
         setIdea(data);
+        setNewStatus(data.status);
         startPolling(data);
       })
       .catch(() => router.push("/ideas"))
@@ -145,6 +166,34 @@ export default function IdeaDetailPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, id]);
+
+  const canChangeStatus =
+    user &&
+    (user.role === "admin" ||
+      user.role === "executive" ||
+      user.role === "practice_lead" ||
+      idea?.submitted_by === user?.id);
+
+  const handleStatusChange = async () => {
+    if (!token || !idea || !newStatus || newStatus === idea.status) return;
+    setSaving(true);
+    try {
+      const updated = await api<IdeaWithRelations>(`/api/ideas/${id}`, {
+        method: "PATCH",
+        token,
+        body: { status: newStatus },
+      });
+      setIdea({ ...idea, ...updated });
+      toast.success(`Status changed to ${newStatus.replace(/_/g, " ")}`);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update status"
+      );
+      setNewStatus(idea.status);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -191,6 +240,39 @@ export default function IdeaDetailPage() {
           </div>
         </div>
       </div>
+
+      {canChangeStatus && idea && (
+        <Card>
+          <CardContent className="flex items-center gap-4 py-4">
+            <p className="text-sm font-medium text-muted-foreground">
+              Change Status:
+            </p>
+            <Select
+              value={newStatus || idea.status}
+              onValueChange={setNewStatus}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ideaStatuses.map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">
+                    {s.replace(/_/g, " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              disabled={saving || newStatus === idea.status}
+              onClick={handleStatusChange}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">

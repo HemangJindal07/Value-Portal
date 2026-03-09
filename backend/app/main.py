@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking
+from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking, notifications, scoring, dashboard, governance
 
 settings = get_settings()
 
@@ -27,8 +27,19 @@ app.include_router(ideas.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(tracking.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(scoring.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
+app.include_router(governance.router, prefix="/api")
 
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "version": "0.1.0"}
+
+
+@app.post("/api/cron/reminders")
+async def run_reminder_check():
+    from app.services.reminder_engine import check_reminders_and_escalations
+    stats = check_reminders_and_escalations()
+    return {"status": "ok", **stats}

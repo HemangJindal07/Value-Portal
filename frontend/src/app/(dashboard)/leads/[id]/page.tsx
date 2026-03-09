@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,12 +11,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
 import Link from "next/link";
 import { ActivitySection } from "@/components/activity-section";
+import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500/10 text-gray-400",
@@ -50,20 +58,63 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
+const leadStatuses = [
+  "draft",
+  "submitted",
+  "under_review",
+  "qualified",
+  "won",
+  "lost",
+  "dropped",
+];
+
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const router = useRouter();
   const [lead, setLead] = useState<LeadWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
+  const [newStatus, setNewStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!token || !id) return;
     api<LeadWithRelations>(`/api/leads/${id}`, { token })
-      .then(setLead)
+      .then((data) => {
+        setLead(data);
+        setNewStatus(data.status);
+      })
       .catch(() => router.push("/leads"))
       .finally(() => setLoading(false));
   }, [token, id, router]);
+
+  const canChangeStatus =
+    user &&
+    (user.role === "admin" ||
+      user.role === "executive" ||
+      user.role === "sales" ||
+      lead?.submitted_by === user.id);
+
+  const handleStatusChange = async () => {
+    if (!token || !lead || !newStatus || newStatus === lead.status) return;
+    setSaving(true);
+    try {
+      const updated = await api<LeadWithRelations>(`/api/leads/${id}`, {
+        method: "PATCH",
+        token,
+        body: { status: newStatus },
+      });
+      setLead({ ...lead, ...updated });
+      toast.success(`Status changed to ${newStatus.replace("_", " ")}`);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update status"
+      );
+      setNewStatus(lead.status);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -102,6 +153,39 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      {canChangeStatus && (
+        <Card>
+          <CardContent className="flex items-center gap-4 py-4">
+            <p className="text-sm font-medium text-muted-foreground">
+              Change Status:
+            </p>
+            <Select
+              value={newStatus || lead.status}
+              onValueChange={setNewStatus}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {leadStatuses.map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">
+                    {s.replace("_", " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              disabled={saving || newStatus === lead.status}
+              onClick={handleStatusChange}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

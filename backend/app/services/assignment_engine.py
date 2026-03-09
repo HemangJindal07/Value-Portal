@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from app.database.supabase import get_supabase_admin
+from app.services.notification_service import notify_assignment
 
 
 ROLE_FIELD_MAP = {
@@ -58,6 +59,17 @@ async def auto_assign(submission_type: str, submission_id: str, account_id: str)
             return
 
         supabase.table("assignments").insert(assignments).execute()
+
+        submission_title = ""
+        if submission_type == "lead":
+            res = supabase.table("leads").select("title").eq("lead_id", submission_id).single().execute()
+            submission_title = (res.data or {}).get("title", "")
+        elif submission_type == "idea":
+            res = supabase.table("value_ideas").select("title").eq("idea_id", submission_id).single().execute()
+            submission_title = (res.data or {}).get("title", "")
+
+        for a in assignments:
+            notify_assignment(a["assigned_to"], submission_type, submission_id, submission_title)
 
         roles = [a["assigned_role"] for a in assignments]
         print(f"[ASSIGN] ✅ Created {len(assignments)} assignment(s) for {submission_type} {submission_id} → {', '.join(roles)}")
