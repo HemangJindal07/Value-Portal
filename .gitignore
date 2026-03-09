@@ -1,12 +1,10 @@
 node_modules/
 .next/
 out/
+venv/
 backend/venv/
 **/__pycache__/
 *.pyc
-.env
-.env.local
-.env.*.local
 .vscode/
 .idea/
 .DS_Store
