@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bot, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { IdeaWithRelations } from "@/types";
 import Link from "next/link";
+import { ActivitySection } from "@/components/activity-section";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500/10 text-gray-400",
@@ -27,6 +28,7 @@ const statusColors: Record<string, string> = {
   rejected: "bg-red-500/10 text-red-400",
 };
 
+// Labels for user-submitted idea_category (from the submission form)
 const categoryLabels: Record<string, string> = {
   automation: "Automation",
   cost_optimization: "Cost Optimization",
@@ -36,11 +38,24 @@ const categoryLabels: Record<string, string> = {
   process_improvement: "Process Improvement",
 };
 
+// Labels for AI-classified ai_category (doc section 9 — 6 defined categories)
+const aiCategoryLabels: Record<string, string> = {
+  revenue_opportunity: "Revenue Opportunity",
+  automation: "Automation",
+  cost_optimization: "Cost Optimization",
+  efficiency_improvement: "Efficiency Improvement",
+  risk_reduction: "Risk Reduction",
+  innovation: "Innovation",
+};
+
 const effortColors: Record<string, string> = {
   low: "bg-green-500/10 text-green-400",
   medium: "bg-amber-500/10 text-amber-400",
   high: "bg-red-500/10 text-red-400",
 };
+
+const AI_POLL_INTERVAL_MS = 3000;
+const AI_POLL_MAX_ATTEMPTS = 10;
 
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
@@ -51,20 +66,85 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
+function ConfidenceBar({ confidence }: { confidence: number }) {
+  const pct = Math.round(confidence * 100);
+  const color =
+    pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-1">AI Confidence</p>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className={`h-full rounded-full ${color}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-xs font-medium tabular-nums">{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
 export default function IdeaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const router = useRouter();
   const [idea, setIdea] = useState<IdeaWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
+  const [aiPolling, setAiPolling] = useState(false);
+  const pollAttempts = useRef(0);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchIdea = async (): Promise<IdeaWithRelations> => {
+    return api<IdeaWithRelations>(`/api/ideas/${id}`, { token: token! });
+  };
+
+  // Poll for AI fields after initial load if they are not yet populated
+  const startPolling = (currentIdea: IdeaWithRelations) => {
+    if (currentIdea.ai_category) return;
+    pollAttempts.current = 0;
+    setAiPolling(true);
+
+    const poll = async () => {
+      if (pollAttempts.current >= AI_POLL_MAX_ATTEMPTS) {
+        setAiPolling(false);
+        return;
+      }
+      pollAttempts.current += 1;
+
+      try {
+        const fresh = await fetchIdea();
+        if (fresh.ai_category) {
+          setIdea(fresh);
+          setAiPolling(false);
+          return;
+        }
+      } catch {
+        // silent — keep polling
+      }
+
+      pollTimer.current = setTimeout(poll, AI_POLL_INTERVAL_MS);
+    };
+
+    pollTimer.current = setTimeout(poll, AI_POLL_INTERVAL_MS);
+  };
 
   useEffect(() => {
     if (!token || !id) return;
-    api<IdeaWithRelations>(`/api/ideas/${id}`, { token })
-      .then(setIdea)
+    fetchIdea()
+      .then((data) => {
+        setIdea(data);
+        startPolling(data);
+      })
       .catch(() => router.push("/ideas"))
       .finally(() => setLoading(false));
-  }, [token, id, router]);
+
+    return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, id]);
 
   if (loading) {
     return (
@@ -85,21 +165,29 @@ export default function IdeaDetailPage() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{idea.title}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <Badge
-              variant="secondary"
-              className={statusColors[idea.status]}
-            >
-              {idea.status.replace("_", " ")}
+            <Badge variant="secondary" className={statusColors[idea.status]}>
+              {idea.status.replace(/_/g, " ")}
             </Badge>
             <Badge variant="outline">
               {categoryLabels[idea.idea_category] || idea.idea_category}
             </Badge>
-            <Badge
-              variant="secondary"
-              className={effortColors[idea.estimated_effort]}
-            >
-              {idea.estimated_effort} effort
-            </Badge>
+            {idea.estimated_effort && (
+              <Badge
+                variant="secondary"
+                className={effortColors[idea.estimated_effort]}
+              >
+                {idea.estimated_effort} effort
+              </Badge>
+            )}
+            {aiPolling && (
+              <Badge
+                variant="secondary"
+                className="bg-violet-500/10 text-violet-400 flex items-center gap-1"
+              >
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Classifying with AI...
+              </Badge>
+            )}
           </div>
         </div>
       </div>
@@ -127,6 +215,65 @@ export default function IdeaDetailPage() {
               </p>
             </CardContent>
           </Card>
+
+          {/* AI Classification Card */}
+          {idea.ai_category ? (
+            <Card className="border-violet-500/20 bg-violet-500/5">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-violet-400" />
+                  AI Classification
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground">AI Category</p>
+                  <Badge
+                    variant="secondary"
+                    className="bg-violet-500/10 text-violet-400"
+                  >
+                    {aiCategoryLabels[idea.ai_category] || idea.ai_category}
+                  </Badge>
+                </div>
+                {idea.ai_summary && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      AI Summary
+                    </p>
+                    <p className="text-sm leading-relaxed">{idea.ai_summary}</p>
+                  </div>
+                )}
+                {idea.ai_confidence != null && (
+                  <ConfidenceBar confidence={idea.ai_confidence} />
+                )}
+              </CardContent>
+            </Card>
+          ) : aiPolling ? (
+            <Card className="border-violet-500/20 bg-violet-500/5">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-violet-400" />
+                  AI Classification
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
+                  Claude is analysing this idea — this usually takes a few
+                  seconds...
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-dashed">
+              <CardContent className="py-4">
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI classification pending
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <Card>
@@ -135,7 +282,10 @@ export default function IdeaDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="Account" value={idea.account?.account_name ?? null} />
-            <Field label="Submitted by" value={idea.submitter?.full_name ?? null} />
+            <Field
+              label="Submitted by"
+              value={idea.submitter?.full_name ?? null}
+            />
             <Field
               label="Estimated Savings"
               value={
@@ -166,24 +316,19 @@ export default function IdeaDetailPage() {
             {idea.ai_category && (
               <>
                 <Separator />
-                <Field label="AI Category" value={idea.ai_category} />
-                <Field label="AI Summary" value={idea.ai_summary} />
+                <div className="flex items-center gap-1.5">
+                  <Bot className="h-3.5 w-3.5 text-violet-400" />
+                  <p className="text-xs text-violet-400 font-medium">
+                    AI Classified
+                  </p>
+                </div>
               </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Activity & Comments</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Comments and status timeline will be available in Step 3.
-          </p>
-        </CardContent>
-      </Card>
+      <ActivitySection submissionType="idea" submissionId={id} />
     </div>
   );
 }

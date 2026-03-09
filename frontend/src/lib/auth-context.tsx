@@ -45,13 +45,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.access_token) {
-        fetchProfile(session.access_token).finally(() => setLoading(false));
+    // getUser() validates the token with Supabase and refreshes if expired,
+    // then getSession() gives us the fresh access_token to use with the API.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.access_token) {
+            fetchProfile(session.access_token).finally(() => setLoading(false));
+          } else {
+            setLoading(false);
+          }
+        });
       } else {
         setLoading(false);
       }
-    });
+    }).catch(() => setLoading(false));
 
     const {
       data: { subscription },

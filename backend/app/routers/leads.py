@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
 from uuid import UUID
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
+from app.services.assignment_engine import auto_assign
+from app.services.tracking import record_status_change
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -61,6 +63,7 @@ async def get_lead(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_lead(
     payload: LeadCreate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     supabase = get_supabase_admin()
@@ -69,7 +72,13 @@ async def create_lead(
     data["status"] = "submitted"
 
     result = supabase.table("leads").insert(data).execute()
-    return result.data[0]
+    lead = result.data[0]
+
+    background_tasks.add_task(
+        auto_assign, "lead", str(lead["lead_id"]), str(lead["account_id"])
+    )
+
+    return lead
 
 
 @router.patch("/{lead_id}")
@@ -102,12 +111,25 @@ async def update_lead(
     if not update_data:
         return existing.data
 
+    old_status = existing.data.get("status")
+    new_status = update_data.get("status")
+
     result = (
         supabase.table("leads")
         .update(update_data)
         .eq("lead_id", str(lead_id))
         .execute()
     )
+
+    if new_status and new_status != old_status:
+        record_status_change(
+            submission_type="lead",
+            submission_id=str(lead_id),
+            from_status=old_status,
+            to_status=new_status,
+            changed_by=current_user["id"],
+        )
+
     return result.data[0]
 
 

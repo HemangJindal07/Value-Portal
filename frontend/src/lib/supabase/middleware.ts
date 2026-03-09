@@ -28,24 +28,32 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const isAuthPage =
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/register");
 
-  if (!user && !isAuthPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (user && isAuthPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    if (!user && !isAuthPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+
+    if (user && isAuthPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+  } catch {
+    // Edge runtime network failure — let the request through.
+    // Client-side auth context will handle session validation.
+    if (isAuthPage) {
+      return supabaseResponse;
+    }
   }
 
   return supabaseResponse;

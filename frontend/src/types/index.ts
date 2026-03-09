@@ -159,7 +159,15 @@ export interface Assignment {
   due_date: string | null;
   action_taken: ActionTaken;
   action_date: string | null;
-  comments: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AssignmentWithRelations extends Assignment {
+  assignee?: { id: string; full_name: string; email: string; role: string };
+  submission_title?: string;
+  submission_status?: string;
+  account_name?: string;
 }
 
 // ── M6: Notifications ──

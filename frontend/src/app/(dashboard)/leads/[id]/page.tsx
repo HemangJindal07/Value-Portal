@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
 import Link from "next/link";
+import { ActivitySection } from "@/components/activity-section";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500/10 text-gray-400",
@@ -154,16 +155,7 @@ export default function LeadDetailPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Activity & Comments</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Comments and status timeline will be available in Step 3.
-          </p>
-        </CardContent>
-      </Card>
+      <ActivitySection submissionType="lead" submissionId={id} />
     </div>
   );
 }

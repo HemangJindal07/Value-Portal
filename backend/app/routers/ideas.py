@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
 from uuid import UUID
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.idea import IdeaCreate, IdeaUpdate, IdeaResponse
+from app.services.ai_classifier import classify_idea
+from app.services.assignment_engine import auto_assign
+from app.services.tracking import record_status_change
 
 router = APIRouter(prefix="/ideas", tags=["Value Ideas"])
 
@@ -58,6 +61,7 @@ async def get_idea(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_idea(
     payload: IdeaCreate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     supabase = get_supabase_admin()
@@ -66,7 +70,12 @@ async def create_idea(
     data["status"] = "submitted"
 
     result = supabase.table("value_ideas").insert(data).execute()
-    return result.data[0]
+    idea = result.data[0]
+
+    background_tasks.add_task(classify_idea, str(idea["idea_id"]))
+    background_tasks.add_task(auto_assign, "idea", str(idea["idea_id"]), str(idea["account_id"]))
+
+    return idea
 
 
 @router.patch("/{idea_id}")
@@ -99,12 +108,25 @@ async def update_idea(
     if not update_data:
         return existing.data
 
+    old_status = existing.data.get("status")
+    new_status = update_data.get("status")
+
     result = (
         supabase.table("value_ideas")
         .update(update_data)
         .eq("idea_id", str(idea_id))
         .execute()
     )
+
+    if new_status and new_status != old_status:
+        record_status_change(
+            submission_type="idea",
+            submission_id=str(idea_id),
+            from_status=old_status,
+            to_status=new_status,
+            changed_by=current_user["id"],
+        )
+
     return result.data[0]
 
 
