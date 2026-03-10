@@ -60,9 +60,11 @@ export default function AccountDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" render={<Link href="/accounts" />}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        <Link href="/accounts">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">
             {account.account_name}

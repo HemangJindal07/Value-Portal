@@ -56,10 +56,12 @@ export default function AccountsPage() {
             Manage client accounts and engagements.
           </p>
         </div>
-        <Button render={<Link href="/accounts/new" />}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Account
-        </Button>
+        <Link href="/accounts/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Account
+          </Button>
+        </Link>
       </div>
 
       <div className="relative max-w-sm">

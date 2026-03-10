@@ -87,10 +87,12 @@ export default function IdeasPage() {
             Innovation, automation, and process improvement ideas.
           </p>
         </div>
-        <Button render={<Link href="/ideas/new" />}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Idea
-        </Button>
+        <Link href="/ideas/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Idea
+          </Button>
+        </Link>
       </div>
 
       <div className="flex gap-3 flex-wrap">

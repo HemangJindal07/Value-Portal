@@ -85,10 +85,12 @@ export default function LeadsPage() {
             Track cross-sell, upsell, and new service opportunities.
           </p>
         </div>
-        <Button render={<Link href="/leads/new" />}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Lead
-        </Button>
+        <Link href="/leads/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Lead
+          </Button>
+        </Link>
       </div>
 
       <div className="flex gap-3 flex-wrap">

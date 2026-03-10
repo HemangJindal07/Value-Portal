@@ -208,9 +208,11 @@ export default function IdeaDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" render={<Link href="/ideas" />}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        <Link href="/ideas">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{idea.title}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
