@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AccountCombobox } from "@/components/account-combobox";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ export default function NewLeadPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountId, setAccountId] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -125,18 +127,14 @@ export default function NewLeadPage() {
 
               <div className="space-y-2">
                 <Label>Account *</Label>
-                <Select name="account_id" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((a) => (
-                      <SelectItem key={a.account_id} value={a.account_id}>
-                        {a.account_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AccountCombobox
+                  accounts={accounts}
+                  value={accountId}
+                  onChange={setAccountId}
+                  name="account_id"
+                  placeholder="Select or type to search account..."
+                  required
+                />
               </div>
             </div>
 
