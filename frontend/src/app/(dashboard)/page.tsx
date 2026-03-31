@@ -13,8 +13,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Target, Lightbulb, Trophy, Users, ClipboardList, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { CampaignBanner } from "@/components/ui/campaign-banner";
-
 type DashboardStats = {
   total_leads: number;
   total_ideas: number;
@@ -153,7 +151,6 @@ export default function DashboardPage() {
     <div className="space-y-6">
 
       {/* Campaign Banner — Template 3 */}
-      <CampaignBanner />
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-[#232222]">Dashboard</h1>

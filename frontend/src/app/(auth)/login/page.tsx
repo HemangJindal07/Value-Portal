@@ -37,7 +37,7 @@ export default function LoginPage() {
       {/* Heading */}
       <div>
         <h2 className="text-2xl font-bold text-[#232222] leading-tight">
-          Welcome Back
+          Welcome 
         </h2>
         <p className="text-sm text-[#5D5D5D] mt-1">
           Sign in to your Value Portal account.
