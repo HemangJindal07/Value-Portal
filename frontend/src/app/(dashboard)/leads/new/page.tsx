@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -20,48 +20,58 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FileAttachment } from "@/components/ui/file-attachment";
 import { AccountCombobox } from "@/components/account-combobox";
 import { useAuth } from "@/lib/auth-context";
-import { api } from "@/lib/api";
+import { uploadFile } from "@/lib/api";
 import { toast } from "sonner";
-import type { Account } from "@/types";
 
 export default function NewLeadPage() {
   const { token } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState("");
-
-  useEffect(() => {
-    if (!token) return;
-    api<Account[]>("/api/accounts", { token }).then(setAccounts).catch(() => {});
-  }, [token]);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
 
+    if (!attachment) {
+      setAttachmentError(true);
+      toast.error("Please attach a supporting document before submitting.");
+      return;
+    }
+
+    // Read form data synchronously before any await — React nullifies
+    // e.currentTarget after the first await in a synthetic event handler.
     const fd = new FormData(e.currentTarget);
-    const payload = {
-      title: fd.get("title") as string,
-      description: fd.get("description") as string,
-      lead_type: fd.get("lead_type") as string,
-      account_id: fd.get("account_id") as string,
-      estimated_value: fd.get("estimated_value")
-        ? Number(fd.get("estimated_value"))
-        : null,
-      currency: (fd.get("currency") as string) || "USD",
-      probability: fd.get("probability")
-        ? Number(fd.get("probability"))
-        : null,
-      expected_close_date: (fd.get("expected_close_date") as string) || null,
-      priority: (fd.get("priority") as string) || "medium",
-    };
+
+    setLoading(true);
+    setAttachmentError(false);
 
     try {
+      const uploaded = await uploadFile(attachment, token!);
+
+      const payload = {
+        title: fd.get("title") as string,
+        description: fd.get("description") as string,
+        lead_type: fd.get("lead_type") as string,
+        account_id: fd.get("account_id") as string,
+        estimated_value: fd.get("estimated_value")
+          ? Number(fd.get("estimated_value"))
+          : null,
+        currency: (fd.get("currency") as string) || "USD",
+        probability: fd.get("probability")
+          ? Number(fd.get("probability"))
+          : null,
+        expected_close_date: (fd.get("expected_close_date") as string) || null,
+        priority: (fd.get("priority") as string) || "medium",
+        supporting_docs: [uploaded.url],
+      };
+
       await api("/api/leads", { method: "POST", body: payload, token: token! });
-      toast.success("Lead submitted");
+      toast.success("Lead submitted successfully.");
       router.push("/leads");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to submit lead");
@@ -75,7 +85,7 @@ export default function NewLeadPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Submit New Lead</h1>
         <p className="text-muted-foreground">
-          Log a cross-sell, upsell, or new service opportunity.
+          Log a cross-sell or upsell opportunity at a client account.
         </p>
       </div>
 
@@ -119,8 +129,6 @@ export default function NewLeadPage() {
                   <SelectContent>
                     <SelectItem value="cross_sell">Cross-sell</SelectItem>
                     <SelectItem value="upsell">Upsell</SelectItem>
-                    <SelectItem value="new_service">New Service</SelectItem>
-                    <SelectItem value="expansion">Expansion</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -128,11 +136,10 @@ export default function NewLeadPage() {
               <div className="space-y-2">
                 <Label>Account *</Label>
                 <AccountCombobox
-                  accounts={accounts}
+                  token={token!}
                   value={accountId}
                   onChange={setAccountId}
                   name="account_id"
-                  placeholder="Select or type to search account..."
                   required
                 />
               </div>
@@ -195,6 +202,23 @@ export default function NewLeadPage() {
               </div>
             </div>
 
+            {/* Mandatory attachment */}
+            <div className="space-y-2">
+              <Label>
+                Supporting Document{" "}
+                <span className="text-[#B12B35]">*</span>
+              </Label>
+              <FileAttachment
+                file={attachment}
+                onChange={(f) => {
+                  setAttachment(f);
+                  if (f) setAttachmentError(false);
+                }}
+                error={attachmentError}
+                disabled={loading}
+              />
+            </div>
+
             <div className="flex gap-3 pt-4">
               <Button type="submit" disabled={loading}>
                 {loading ? "Submitting..." : "Submit Lead"}
@@ -203,6 +227,7 @@ export default function NewLeadPage() {
                 type="button"
                 variant="outline"
                 onClick={() => router.back()}
+                disabled={loading}
               >
                 Cancel
               </Button>

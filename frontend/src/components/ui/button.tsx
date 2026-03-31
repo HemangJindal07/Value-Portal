@@ -10,15 +10,18 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // Brand Red primary — #B12B35, hover brightens to #E42525
+        default:
+          "bg-primary text-primary-foreground hover:bg-[#E42525] active:bg-[#9a2330]",
+        // Brand Red outline
         outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-primary text-primary bg-transparent hover:bg-primary/5 dark:border-primary dark:text-primary dark:hover:bg-primary/10",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
           "hover:bg-muted hover:text-foreground dark:hover:bg-muted/50",
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30",
+          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

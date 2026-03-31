@@ -14,9 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Target,
   Lightbulb,
-  TrendingUp,
   Trophy,
-  DollarSign,
   Users,
   ClipboardList,
   ArrowRight,
@@ -31,9 +29,6 @@ type DashboardStats = {
   leads_by_status: Record<string, number>;
   ideas_by_status: Record<string, number>;
   pending_assignments: number;
-  pipeline_value: number;
-  won_value: number;
-  total_savings: number;
 };
 
 type Activity = {
@@ -44,12 +39,6 @@ type Activity = {
   changed_by: string;
   changed_at: string;
 };
-
-function formatCurrency(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
-}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -107,9 +96,6 @@ export default function DashboardPage() {
     leads_by_status: {},
     ideas_by_status: {},
     pending_assignments: 0,
-    pipeline_value: 0,
-    won_value: 0,
-    total_savings: 0,
   };
 
   const topCards = [
@@ -118,6 +104,8 @@ export default function DashboardPage() {
       value: s.total_leads,
       desc: `${s.leads_by_status["qualified"] || 0} qualified`,
       icon: Target,
+      iconColor: "text-[#B12B35]",
+      iconBg: "bg-[#B12B35]/10",
       href: "/leads",
     },
     {
@@ -125,21 +113,17 @@ export default function DashboardPage() {
       value: s.total_ideas,
       desc: `${s.ideas_by_status["implemented"] || 0} implemented`,
       icon: Lightbulb,
+      iconColor: "text-[#003466]",
+      iconBg: "bg-[#003466]/10",
       href: "/ideas",
-    },
-    {
-      title: "Pipeline Value",
-      value: formatCurrency(s.pipeline_value),
-      desc: `${formatCurrency(s.won_value)} won`,
-      icon: TrendingUp,
-      href: "/leads",
-      raw: true,
     },
     {
       title: "Your Score",
       value: myScore.toLocaleString(),
       desc: "Value points earned",
       icon: Trophy,
+      iconColor: "text-[#B12B35]",
+      iconBg: "bg-[#B12B35]/10",
       href: "/leaderboard",
       raw: true,
     },
@@ -157,71 +141,48 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {topCards.map((c) => (
           <Link key={c.title} href={c.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#C5C5C5]">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">
                   {c.title}
                 </CardTitle>
-                <c.icon className="h-4 w-4 text-muted-foreground" />
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${c.iconBg}`}>
+                  <c.icon className={`h-4 w-4 ${c.iconColor}`} />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-[#232222]">
                   {c.raw ? c.value : c.value.toLocaleString()}
                 </div>
-                <p className="text-xs text-muted-foreground">{c.desc}</p>
+                <p className="text-xs text-[#5D5D5D]">{c.desc}</p>
               </CardContent>
             </Card>
           </Link>
         ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Accounts
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{s.total_accounts}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Users
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{s.active_users}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Pending Reviews
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{s.pending_assignments}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Savings
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(s.total_savings)}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { label: "Accounts", value: s.total_accounts, icon: Users, iconColor: "text-[#003466]", iconBg: "bg-[#003466]/10" },
+          { label: "Active Users", value: s.active_users, icon: Users, iconColor: "text-[#2E75B6]", iconBg: "bg-[#2E75B6]/10" },
+          { label: "Pending Reviews", value: s.pending_assignments, icon: ClipboardList, iconColor: "text-[#B12B35]", iconBg: "bg-[#B12B35]/10" },
+        ].map((c) => (
+          <Card key={c.label} className="border-[#C5C5C5]">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-[#5D5D5D]">
+                {c.label}
+              </CardTitle>
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${c.iconBg}`}>
+                <c.icon className={`h-4 w-4 ${c.iconColor}`} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-[#232222]">
+                {c.raw ? c.value : String(c.value)}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

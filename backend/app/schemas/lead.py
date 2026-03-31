@@ -37,6 +37,7 @@ class LeadCreate(BaseModel):
     probability: int | None = None
     expected_close_date: date | None = None
     priority: Priority = Priority.medium
+    supporting_docs: list[str] = []
 
 
 class LeadUpdate(BaseModel):

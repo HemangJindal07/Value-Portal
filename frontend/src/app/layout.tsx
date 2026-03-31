@@ -1,24 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+// Server-only: not inlined by Turbopack — always read fresh from .env.local
+const apiUrlForClient = process.env.API_URL || "http://localhost:8000";
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Value Portal",
+  title: "Value Portal — TestingXperts",
   description:
-    "Track leads, value ideas, and measure impact across client accounts.",
+    "Capture, track, and measure the business value generated at client accounts.",
 };
 
 export default function RootLayout({
@@ -28,10 +27,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        suppressHydrationWarning
-      >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__VALUE_PORTAL_API_URL__=${JSON.stringify(apiUrlForClient)};`,
+          }}
+        />
+      </head>
+      <body className={`${inter.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             {children}

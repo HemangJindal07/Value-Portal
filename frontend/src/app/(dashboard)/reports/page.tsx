@@ -20,66 +20,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  BarChart3,
-  Download,
-  TrendingUp,
-  DollarSign,
-  Target,
-  Lightbulb,
-} from "lucide-react";
+import { BarChart3, Download, Target, Lightbulb, Trophy } from "lucide-react";
 import { toast } from "sonner";
 
-type DashboardStats = {
+type UserStats = {
   total_leads: number;
   total_ideas: number;
-  total_accounts: number;
-  active_users: number;
   leads_by_status: Record<string, number>;
   ideas_by_status: Record<string, number>;
   pending_assignments: number;
-  pipeline_value: number;
-  won_value: number;
-  total_savings: number;
 };
 
-type ImpactRow = {
-  impact_id: string;
-  submission_type: string;
-  submission_id: string;
-  revenue_influenced: number | null;
-  cost_saved: number | null;
-  efficiency_gain: string | null;
-  measurement_date: string;
-  verified: boolean;
-  measurer?: { id: string; full_name: string };
+type ScoreEvent = {
+  event_id: string;
+  event_type: string;
+  points: number;
+  created_at: string;
 };
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
 
 export default function ReportsPage() {
-  const { token } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [impacts, setImpacts] = useState<ImpactRow[]>([]);
+  const { token, user } = useAuth();
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [scoreEvents, setScoreEvents] = useState<ScoreEvent[]>([]);
+  const [totalPoints, setTotalPoints] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     if (!token) return;
     try {
-      const [s, i] = await Promise.all([
-        api<DashboardStats>("/api/dashboard/stats", { token }),
-        api<ImpactRow[]>("/api/governance/impact", { token }),
+      const [s, scoreData] = await Promise.all([
+        api<UserStats>("/api/dashboard/stats", { token }),
+        api<{ total_points: number; events?: ScoreEvent[] }>("/api/scores/me", { token }),
       ]);
       setStats(s);
-      setImpacts(i);
+      setTotalPoints(scoreData.total_points || 0);
+      setScoreEvents(scoreData.events || []);
     } catch {
-      toast.error("Failed to load report data");
+      toast.error("Failed to load report data.");
     } finally {
       setLoading(false);
     }
@@ -92,21 +69,25 @@ export default function ReportsPage() {
   const exportCSV = () => {
     if (!stats) return;
     const rows = [
+      ["My Report — Value Portal", ""],
+      ["User", user?.full_name || user?.email || ""],
+      ["Generated", new Date().toLocaleString()],
+      ["", ""],
       ["Metric", "Value"],
-      ["Total Leads", String(stats.total_leads)],
-      ["Total Ideas", String(stats.total_ideas)],
-      ["Pipeline Value", String(stats.pipeline_value)],
-      ["Won Value", String(stats.won_value)],
-      ["Total Savings", String(stats.total_savings)],
-      ["Accounts", String(stats.total_accounts)],
-      ["Active Users", String(stats.active_users)],
+      ["My Leads", String(stats.total_leads)],
+      ["My Value Ideas", String(stats.total_ideas)],
       ["Pending Assignments", String(stats.pending_assignments)],
+      ["My Score (Points)", String(totalPoints)],
+      ["", ""],
+      ["Lead Status", "Count"],
       ...Object.entries(stats.leads_by_status).map(([k, v]) => [
-        `Leads - ${k}`,
+        k.replace(/_/g, " "),
         String(v),
       ]),
+      ["", ""],
+      ["Idea Status", "Count"],
       ...Object.entries(stats.ideas_by_status).map(([k, v]) => [
-        `Ideas - ${k}`,
+        k.replace(/_/g, " "),
         String(v),
       ]),
     ];
@@ -115,10 +96,10 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `value-portal-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `my-report-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Report exported");
+    toast.success("Report exported.");
   };
 
   if (loading) {
@@ -130,22 +111,15 @@ export default function ReportsPage() {
   }
 
   const s = stats!;
-  const totalImpactRevenue = impacts.reduce(
-    (sum, i) => sum + (i.revenue_influenced || 0),
-    0
-  );
-  const totalImpactSavings = impacts.reduce(
-    (sum, i) => sum + (i.cost_saved || 0),
-    0
-  );
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
+          <h1 className="text-2xl font-bold tracking-tight">My Reports</h1>
           <p className="text-muted-foreground">
-            Analytics, metrics, and exportable reports.
+            Your personal activity, submissions, and points summary.
           </p>
         </div>
         <Button variant="outline" onClick={exportCSV}>
@@ -154,188 +128,185 @@ export default function ReportsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
+      {/* Top KPI cards — user-scoped */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="border-[#C5C5C5]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Leads
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">
+              My Leads
             </CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#B12B35]/10">
+              <Target className="h-4 w-4 text-[#B12B35]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{s.total_leads}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-[#232222]">
+              {s.total_leads}
+            </div>
+            <p className="text-xs text-[#5D5D5D]">
               {s.leads_by_status["won"] || 0} won
             </p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="border-[#C5C5C5]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Ideas
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">
+              My Value Ideas
             </CardTitle>
-            <Lightbulb className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#003466]/10">
+              <Lightbulb className="h-4 w-4 text-[#003466]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{s.total_ideas}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-[#232222]">
+              {s.total_ideas}
+            </div>
+            <p className="text-xs text-[#5D5D5D]">
               {s.ideas_by_status["implemented"] || 0} implemented
             </p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="border-[#C5C5C5]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Revenue Influenced
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">
+              My Score
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#B12B35]/10">
+              <Trophy className="h-4 w-4 text-[#B12B35]" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(totalImpactRevenue || s.won_value)}
+            <div className="text-2xl font-bold text-[#232222]">
+              {totalPoints.toLocaleString()}
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Cost Savings
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(totalImpactSavings || s.total_savings)}
-            </div>
+            <p className="text-xs text-[#5D5D5D]">Value points earned</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Lead funnel + Idea funnel */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="border-[#C5C5C5]">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Lead Funnel
+              <BarChart3 className="h-4 w-4 text-[#B12B35]" />
+              My Lead Funnel
             </CardTitle>
-            <CardDescription>Breakdown by status</CardDescription>
+            <CardDescription>Your leads by current status</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {Object.entries(s.leads_by_status).map(([status, count]) => {
-                const pct =
-                  s.total_leads > 0
-                    ? Math.round((count / s.total_leads) * 100)
-                    : 0;
-                return (
-                  <div key={status} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="capitalize">
-                        {status.replace("_", " ")}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {count} ({pct}%)
-                      </span>
+            {Object.keys(s.leads_by_status).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No leads submitted yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(s.leads_by_status).map(([status, count]) => {
+                  const pct =
+                    s.total_leads > 0
+                      ? Math.round((count / s.total_leads) * 100)
+                      : 0;
+                  return (
+                    <div key={status} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="capitalize text-[#232222]">
+                          {status.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[#5D5D5D]">
+                          {count} ({pct}%)
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[#EDE7E6]">
+                        <div
+                          className="h-full rounded-full bg-[#B12B35] transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-[#C5C5C5]">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Idea Funnel
+              <BarChart3 className="h-4 w-4 text-[#003466]" />
+              My Idea Funnel
             </CardTitle>
-            <CardDescription>Breakdown by status</CardDescription>
+            <CardDescription>Your value ideas by current status</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {Object.entries(s.ideas_by_status).map(([status, count]) => {
-                const pct =
-                  s.total_ideas > 0
-                    ? Math.round((count / s.total_ideas) * 100)
-                    : 0;
-                return (
-                  <div key={status} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="capitalize">
-                        {status.replace("_", " ")}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {count} ({pct}%)
-                      </span>
+            {Object.keys(s.ideas_by_status).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No ideas submitted yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(s.ideas_by_status).map(([status, count]) => {
+                  const pct =
+                    s.total_ideas > 0
+                      ? Math.round((count / s.total_ideas) * 100)
+                      : 0;
+                  return (
+                    <div key={status} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="capitalize text-[#232222]">
+                          {status.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[#5D5D5D]">
+                          {count} ({pct}%)
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[#EDE7E6]">
+                        <div
+                          className="h-full rounded-full bg-[#003466] transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {impacts.length > 0 && (
-        <Card>
+      {/* Score activity log */}
+      {scoreEvents.length > 0 && (
+        <Card className="border-[#C5C5C5]">
           <CardHeader>
-            <CardTitle className="text-base">Impact Measurements</CardTitle>
+            <CardTitle className="text-base">Points Activity</CardTitle>
             <CardDescription>
-              Verified business impact from implemented ideas and won leads
+              Recent points earned from your submissions
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Revenue Influenced</TableHead>
-                  <TableHead>Cost Saved</TableHead>
-                  <TableHead>Efficiency Gain</TableHead>
-                  <TableHead>Measured By</TableHead>
+                  <TableHead>Activity</TableHead>
+                  <TableHead>Points</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Verified</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {impacts.map((i) => (
-                  <TableRow key={i.impact_id}>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {i.submission_type}
-                      </Badge>
+                {scoreEvents.map((e) => (
+                  <TableRow key={e.event_id}>
+                    <TableCell className="capitalize">
+                      {e.event_type.replace(/_/g, " ")}
+                    </TableCell>
+                    <TableCell className="font-semibold text-[#B12B35]">
+                      +{e.points}
+                    </TableCell>
+                    <TableCell className="text-[#5D5D5D]">
+                      {new Date(e.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      {i.revenue_influenced
-                        ? formatCurrency(i.revenue_influenced)
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {i.cost_saved ? formatCurrency(i.cost_saved) : "—"}
-                    </TableCell>
-                    <TableCell>{i.efficiency_gain || "—"}</TableCell>
-                    <TableCell>
-                      {i.measurer?.full_name || "Unknown"}
-                    </TableCell>
-                    <TableCell>{i.measurement_date}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={i.verified ? "default" : "secondary"}
-                      >
-                        {i.verified ? "Verified" : "Pending"}
+                      <Badge className="bg-[#B12B35]/10 text-[#B12B35] border-0">
+                        Awarded
                       </Badge>
                     </TableCell>
                   </TableRow>

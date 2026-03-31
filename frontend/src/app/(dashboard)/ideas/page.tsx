@@ -33,13 +33,13 @@ import { api } from "@/lib/api";
 import type { IdeaWithRelations } from "@/types";
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-500/10 text-gray-400",
-  submitted: "bg-blue-500/10 text-blue-400",
-  under_review: "bg-amber-500/10 text-amber-400",
-  approved: "bg-green-500/10 text-green-400",
-  in_progress: "bg-cyan-500/10 text-cyan-400",
-  implemented: "bg-emerald-500/10 text-emerald-400",
-  rejected: "bg-red-500/10 text-red-400",
+  draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  under_review: "bg-[#003466]/10 text-[#003466]",
+  approved: "bg-[#B12B35]/10 text-[#B12B35]",
+  in_progress: "bg-[#003466]/10 text-[#003466]",
+  implemented: "bg-[#003466]/15 text-[#003466]",
+  rejected: "bg-[#E42525]/10 text-[#E42525]",
 };
 
 const categoryLabels: Record<string, string> = {
@@ -52,9 +52,9 @@ const categoryLabels: Record<string, string> = {
 };
 
 const effortColors: Record<string, string> = {
-  low: "bg-green-500/10 text-green-400",
-  medium: "bg-amber-500/10 text-amber-400",
-  high: "bg-red-500/10 text-red-400",
+  low: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  medium: "bg-[#003466]/10 text-[#003466]",
+  high: "bg-[#E42525]/10 text-[#E42525]",
 };
 
 export default function IdeasPage() {

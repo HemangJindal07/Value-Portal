@@ -40,6 +40,7 @@ class IdeaCreate(BaseModel):
     estimated_timeline: str | None = None
     impact_area: list[str] = []
     tools_involved: list[str] = []
+    supporting_docs: list[str] = []
 
 
 class IdeaUpdate(BaseModel):

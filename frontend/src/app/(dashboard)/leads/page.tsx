@@ -33,26 +33,24 @@ import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-500/10 text-gray-400",
-  submitted: "bg-blue-500/10 text-blue-400",
-  under_review: "bg-amber-500/10 text-amber-400",
-  qualified: "bg-green-500/10 text-green-400",
-  won: "bg-emerald-500/10 text-emerald-400",
-  lost: "bg-red-500/10 text-red-400",
-  dropped: "bg-gray-500/10 text-gray-500",
+  draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  under_review: "bg-[#003466]/10 text-[#003466]",
+  qualified: "bg-[#B12B35]/10 text-[#B12B35]",
+  won: "bg-[#003466]/15 text-[#003466]",
+  lost: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  dropped: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
 };
 
 const priorityColors: Record<string, string> = {
-  high: "bg-red-500/10 text-red-400",
-  medium: "bg-amber-500/10 text-amber-400",
-  low: "bg-blue-500/10 text-blue-400",
+  high: "bg-[#E42525]/10 text-[#E42525]",
+  medium: "bg-[#003466]/10 text-[#003466]",
+  low: "bg-[#2E75B6]/10 text-[#2E75B6]",
 };
 
 const typeLabels: Record<string, string> = {
   cross_sell: "Cross-sell",
   upsell: "Upsell",
-  new_service: "New Service",
-  expansion: "Expansion",
 };
 
 export default function LeadsPage() {

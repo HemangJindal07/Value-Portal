@@ -155,7 +155,7 @@ export default function NewAccountPage() {
 
             <div className="flex gap-3 pt-4">
               <Button type="submit" disabled={loading}>
-                {loading ? "Creating..." : "Create Account"}
+                {loading ? "Creating Account..." : "Create Account"}
               </Button>
               <Button
                 type="button"
