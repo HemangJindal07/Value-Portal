@@ -58,7 +58,7 @@ function NavGroup({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="text-[10px] font-semibold tracking-widest text-white/40 uppercase px-3 py-2">
+      <SidebarGroupLabel className="text-[10px] font-semibold tracking-widest text-[#C5C5C5] uppercase px-3 py-2">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
@@ -68,7 +68,7 @@ function NavGroup({
               <SidebarMenuButton
                 isActive={pathname === item.href}
                 render={<Link href={item.href} />}
-                className="text-white/70 hover:text-white hover:bg-white/10 data-[active=true]:bg-[#B12B35] data-[active=true]:text-white rounded-md mx-1"
+                className="text-[#5D5D5D] hover:text-[#232222] hover:bg-[#F9F9F9] data-[active=true]:bg-[#B12B35]/10 data-[active=true]:text-[#B12B35] data-[active=true]:font-semibold rounded-md mx-1"
               >
                 <item.icon className="h-4 w-4" />
                 <span>{item.title}</span>
@@ -85,24 +85,25 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <Sidebar className="bg-[#232222] border-r border-white/10">
+    <Sidebar className="bg-white border-r border-[#EDE7E6]">
       {/* Header — TX logo + brand name */}
-      <SidebarHeader className="border-b border-white/10 px-4 py-4">
+      <SidebarHeader className="border-b border-[#EDE7E6] px-4 py-4">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white p-1">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#B12B35]/8 border border-[#B12B35]/20 p-1">
             <Image
               src="/txlogo.webp"
               alt="TestingXperts"
-              width={24}
-              height={24}
+              width={36}
+              height={36}
               className="object-contain"
+              priority
             />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white leading-none">
+            <p className="text-sm font-semibold text-[#232222] leading-none tracking-tight">
               Value Portal
             </p>
-            <p className="text-[11px] text-white/50 mt-0.5">TestingXperts</p>
+            <p className="text-[11px] text-[#5D5D5D] mt-0.5 tracking-wide">TestingXperts</p>
           </div>
         </Link>
       </SidebarHeader>
@@ -113,8 +114,8 @@ export function AppSidebar() {
         <NavGroup label="System" items={systemNav} pathname={pathname} />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-white/10 px-4 py-3">
-        <p className="text-[11px] text-white/30">
+      <SidebarFooter className="border-t border-[#EDE7E6] px-4 py-3">
+        <p className="text-[11px] text-[#C5C5C5]">
           v0.1.0 &middot; TestingXperts
         </p>
       </SidebarFooter>

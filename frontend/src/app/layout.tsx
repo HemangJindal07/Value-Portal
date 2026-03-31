@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -8,10 +8,11 @@ import "./globals.css";
 // Server-only: not inlined by Turbopack — always read fresh from .env.local
 const apiUrlForClient = process.env.API_URL || "http://localhost:8000";
 
-const inter = Inter({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
+  weight: ["300", "400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -34,7 +35,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} antialiased`} suppressHydrationWarning>
+      <body className={`${plusJakartaSans.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             {children}
