@@ -35,8 +35,10 @@ import type { LeadWithRelations } from "@/types";
 const statusColors: Record<string, string> = {
   draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
   submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  routing_pending: "bg-amber-100 text-amber-700",
   under_review: "bg-[#003466]/10 text-[#003466]",
   qualified: "bg-[#B12B35]/10 text-[#B12B35]",
+  approved: "bg-green-100 text-green-700",
   won: "bg-[#003466]/15 text-[#003466]",
   lost: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
   dropped: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
@@ -54,7 +56,8 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function LeadsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -69,10 +72,17 @@ export default function LeadsPage() {
     const qs = params.toString() ? `?${params.toString()}` : "";
 
     api<LeadWithRelations[]>(`/api/leads${qs}`, { token })
-      .then(setLeads)
+      .then((data) => {
+        // Non-admin users only see their own leads
+        if (!isAdmin && user?.id) {
+          setLeads(data.filter((l) => l.submitted_by === user.id));
+        } else {
+          setLeads(data);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token, search, statusFilter]);
+  }, [token, search, statusFilter, isAdmin, user?.id]);
 
   return (
     <div className="space-y-6">
@@ -111,17 +121,22 @@ export default function LeadsPage() {
           <SelectContent>
             <SelectItem value="">All Statuses</SelectItem>
             <SelectItem value="submitted">Submitted</SelectItem>
+            <SelectItem value="routing_pending">Routing Pending</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="qualified">Qualified</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="won">Won</SelectItem>
             <SelectItem value="lost">Lost</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All Leads</CardTitle>
+          <CardTitle className="text-base">
+            {isAdmin ? "All Leads" : "My Leads"}
+          </CardTitle>
           <CardDescription>
             {leads.length} lead{leads.length !== 1 ? "s" : ""}
           </CardDescription>

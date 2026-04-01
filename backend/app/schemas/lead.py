@@ -14,11 +14,14 @@ class LeadType(str, Enum):
 class LeadStatus(str, Enum):
     draft = "draft"
     submitted = "submitted"
+    routing_pending = "routing_pending"
     under_review = "under_review"
     qualified = "qualified"
+    approved = "approved"
     won = "won"
     lost = "lost"
     dropped = "dropped"
+    rejected = "rejected"
 
 
 class Priority(str, Enum):

@@ -296,7 +296,7 @@ These are confirmed missing requirements from the BRD. Do NOT mark them as done 
 | 4 | Vertical coverage in routing | 8.6 | P1 |
 | 5 | Fallback logic: "Routing Pending" status + exception queue | 8.7 | P0 |
 | 6 | Admin exception queue for unresolved routing | 8.7 | P1 |
-| 7 | Email integration via Resend (mandatory per BRD) | 8.9 | P0 |
+| 7 | ~~Email integration via Resend~~ ✅ DONE — sandbox FROM until domain verified | 8.9 | P0 |
 | 8 | Mandatory attachment for Value Idea submission | 8.4 | P1 |
 | 9 | Account name predictive search / autosuggest | 8.3 | P1 |
 | 10 | Lead type taxonomy: "Current Lead" / "New Lead" | 8.4 | P1 |

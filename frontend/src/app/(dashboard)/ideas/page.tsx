@@ -35,8 +35,9 @@ import type { IdeaWithRelations } from "@/types";
 const statusColors: Record<string, string> = {
   draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
   submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  routing_pending: "bg-amber-100 text-amber-700",
   under_review: "bg-[#003466]/10 text-[#003466]",
-  approved: "bg-[#B12B35]/10 text-[#B12B35]",
+  approved: "bg-green-100 text-green-700",
   in_progress: "bg-[#003466]/10 text-[#003466]",
   implemented: "bg-[#003466]/15 text-[#003466]",
   rejected: "bg-[#E42525]/10 text-[#E42525]",
@@ -58,7 +59,8 @@ const effortColors: Record<string, string> = {
 };
 
 export default function IdeasPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [ideas, setIdeas] = useState<IdeaWithRelations[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -73,10 +75,17 @@ export default function IdeasPage() {
     const qs = params.toString() ? `?${params.toString()}` : "";
 
     api<IdeaWithRelations[]>(`/api/ideas${qs}`, { token })
-      .then(setIdeas)
+      .then((data) => {
+        // Non-admin users only see their own ideas
+        if (!isAdmin && user?.id) {
+          setIdeas(data.filter((i) => i.submitted_by === user.id));
+        } else {
+          setIdeas(data);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token, search, statusFilter]);
+  }, [token, search, statusFilter, isAdmin, user?.id]);
 
   return (
     <div className="space-y-6">
@@ -115,17 +124,21 @@ export default function IdeasPage() {
           <SelectContent>
             <SelectItem value="">All Statuses</SelectItem>
             <SelectItem value="submitted">Submitted</SelectItem>
+            <SelectItem value="routing_pending">Routing Pending</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="implemented">Implemented</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All Ideas</CardTitle>
+          <CardTitle className="text-base">
+            {isAdmin ? "All Ideas" : "My Value Ideas"}
+          </CardTitle>
           <CardDescription>
             {ideas.length} idea{ideas.length !== 1 ? "s" : ""}
           </CardDescription>

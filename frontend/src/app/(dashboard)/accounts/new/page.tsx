@@ -22,27 +22,66 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { UserCombobox } from "@/components/user-combobox";
+
+const REGIONS = [
+  "Australia",
+  "Brazil",
+  "Canada",
+  "China",
+  "France",
+  "Germany",
+  "India",
+  "Japan",
+  "Malaysia",
+  "Mexico",
+  "Middle East",
+  "Netherlands",
+  "New Zealand",
+  "Philippines",
+  "Poland",
+  "Singapore",
+  "South Africa",
+  "South Korea",
+  "Sweden",
+  "UAE",
+  "United Kingdom",
+  "United States",
+  "Other",
+];
 
 export default function NewAccountPage() {
   const { token } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
+  // Stakeholder IDs
+  const [dhId, setDhId] = useState<string | null>(null);
+  const [duId, setDuId] = useState<string | null>(null);
+  const [salesId, setSalesId] = useState<string | null>(null);
+
+  // Region (controlled so we can read it on submit)
+  const [region, setRegion] = useState<string>("");
+  const [status, setStatus] = useState<string>("prospect");
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     setLoading(true);
 
-    const formData = new FormData(e.currentTarget);
     const payload = {
       account_name: formData.get("account_name") as string,
       industry: (formData.get("industry") as string) || null,
-      region: (formData.get("region") as string) || null,
+      region: region || null,
       contract_value: formData.get("contract_value")
         ? Number(formData.get("contract_value"))
         : null,
       engagement_start: (formData.get("engagement_start") as string) || null,
       engagement_end: (formData.get("engagement_end") as string) || null,
-      account_status: (formData.get("account_status") as string) || "prospect",
+      account_status: status || "prospect",
+      account_owner_id: dhId || null,
+      practice_leader_id: duId || null,
+      sales_lead_id: salesId || null,
     };
 
     try {
@@ -67,7 +106,7 @@ export default function NewAccountPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">New Account</h1>
         <p className="text-muted-foreground">
-          Register a new client account.
+          Register a new client account and assign stakeholders.
         </p>
       </div>
 
@@ -75,11 +114,12 @@ export default function NewAccountPage() {
         <CardHeader>
           <CardTitle className="text-base">Account Details</CardTitle>
           <CardDescription>
-            Fill in the client account information.
+            Fill in the client account information and map the routing stakeholders.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Account Name */}
             <div className="space-y-2">
               <Label htmlFor="account_name">Account Name *</Label>
               <Input
@@ -90,6 +130,7 @@ export default function NewAccountPage() {
               />
             </div>
 
+            {/* Industry + Region */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="industry">Industry</Label>
@@ -100,15 +141,23 @@ export default function NewAccountPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="region">Region</Label>
-                <Input
-                  id="region"
-                  name="region"
-                  placeholder="e.g. North America"
-                />
+                <Label>Region / Country</Label>
+                <Select value={region} onValueChange={setRegion}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select region…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REGIONS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
+            {/* Contract Value */}
             <div className="space-y-2">
               <Label htmlFor="contract_value">Contract Value ($)</Label>
               <Input
@@ -120,28 +169,22 @@ export default function NewAccountPage() {
               />
             </div>
 
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="engagement_start">Engagement Start</Label>
-                <Input
-                  id="engagement_start"
-                  name="engagement_start"
-                  type="date"
-                />
+                <Input id="engagement_start" name="engagement_start" type="date" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="engagement_end">Engagement End</Label>
-                <Input
-                  id="engagement_end"
-                  name="engagement_end"
-                  type="date"
-                />
+                <Input id="engagement_end" name="engagement_end" type="date" />
               </div>
             </div>
 
+            {/* Status */}
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select name="account_status" defaultValue="prospect">
+              <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -153,9 +196,63 @@ export default function NewAccountPage() {
               </Select>
             </div>
 
+            {/* ── Stakeholder Mapping ─────────────────────────────────── */}
+            <div className="pt-2 border-t">
+              <p className="text-sm font-medium mb-3">Stakeholder Mapping</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                Submissions for this account will be routed in the order:
+                <span className="font-medium text-foreground"> DH → DU → Sales</span>.
+                Search by typing at least 3 characters.
+              </p>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>
+                    Delivery Head (DH)
+                    <span className="ml-1 text-xs text-muted-foreground">— first reviewer</span>
+                  </Label>
+                  <UserCombobox
+                    value={dhId}
+                    onChange={(id) => setDhId(id)}
+                    token={token ?? ""}
+                    placeholder="Search for Delivery Head…"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    Delivery Unit Manager (DU)
+                    <span className="ml-1 text-xs text-muted-foreground">— second reviewer</span>
+                  </Label>
+                  <UserCombobox
+                    value={duId}
+                    onChange={(id) => setDuId(id)}
+                    token={token ?? ""}
+                    placeholder="Search for DU Manager…"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    Sales Executive
+                    <span className="ml-1 text-xs text-muted-foreground">— final reviewer</span>
+                  </Label>
+                  <UserCombobox
+                    value={salesId}
+                    onChange={(id) => setSalesId(id)}
+                    token={token ?? ""}
+                    placeholder="Search for Sales Executive…"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex gap-3 pt-4">
               <Button type="submit" disabled={loading}>
-                {loading ? "Creating Account..." : "Create Account"}
+                {loading ? "Creating Account…" : "Create Account"}
               </Button>
               <Button
                 type="button"

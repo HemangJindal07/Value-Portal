@@ -16,6 +16,7 @@ class IdeaCategory(str, Enum):
 class IdeaStatus(str, Enum):
     draft = "draft"
     submitted = "submitted"
+    routing_pending = "routing_pending"
     under_review = "under_review"
     approved = "approved"
     in_progress = "in_progress"

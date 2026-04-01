@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye } from "lucide-react";
+import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,12 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { AssignmentWithRelations } from "@/types";
+import type { AssignmentWithRelations, LeadWithRelations, IdeaWithRelations } from "@/types";
 
 const roleLabels: Record<string, string> = {
-  account_owner: "Account Owner",
-  sales_lead: "Sales Lead",
-  practice_leader: "Practice Leader",
+  account_owner: "Delivery Head (DH)",
+  practice_leader: "Delivery Unit Manager (DU)",
+  sales_lead: "Sales Executive",
   review_committee: "Review Committee",
 };
 
@@ -181,12 +181,129 @@ function SkeletonCard() {
   );
 }
 
+const submissionStatusColors: Record<string, string> = {
+  draft:           "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  submitted:       "bg-[#2E75B6]/10 text-[#2E75B6]",
+  routing_pending: "bg-amber-100 text-amber-700",
+  under_review:    "bg-[#003466]/10 text-[#003466]",
+  qualified:       "bg-[#B12B35]/10 text-[#B12B35]",
+  approved:        "bg-green-100 text-green-700",
+  in_progress:     "bg-[#003466]/10 text-[#003466]",
+  implemented:     "bg-[#003466]/15 text-[#003466]",
+  won:             "bg-[#003466]/15 text-[#003466]",
+  lost:            "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  dropped:         "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  rejected:        "bg-[#E42525]/10 text-[#E42525]",
+};
+
+function MySubmissionsTab({
+  leads,
+  ideas,
+  loading,
+}: {
+  leads: LeadWithRelations[];
+  ideas: IdeaWithRelations[];
+  loading: boolean;
+}) {
+  const combined = [
+    ...leads.map((l) => ({
+      id: l.lead_id,
+      type: "lead" as const,
+      title: l.title,
+      status: l.status,
+      account: l.account?.account_name ?? "—",
+      href: `/leads/${l.lead_id}`,
+      created_at: l.created_at,
+    })),
+    ...ideas.map((i) => ({
+      id: i.idea_id,
+      type: "idea" as const,
+      title: i.title,
+      status: i.status,
+      account: i.account?.account_name ?? "—",
+      href: `/ideas/${i.idea_id}`,
+      created_at: i.created_at,
+    })),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  if (loading) {
+    return (
+      <div className="space-y-3 mt-4">
+        {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+    );
+  }
+
+  if (combined.length === 0) {
+    return (
+      <div className="text-center py-16 text-muted-foreground mt-4">
+        <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">No submissions yet.</p>
+        <p className="text-xs mt-1">Submit a lead or value idea to start tracking.</p>
+        <div className="flex gap-3 justify-center mt-4">
+          <Link
+            href="/leads/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#B12B35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#9a2330] transition-colors"
+          >
+            <Target className="h-4 w-4" /> New Lead
+          </Link>
+          <Link
+            href="/ideas/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#003466] px-4 py-2 text-sm font-semibold text-white hover:bg-[#003466]/90 transition-colors"
+          >
+            <Lightbulb className="h-4 w-4" /> New Idea
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 mt-4">
+      {combined.map((item) => (
+        <Card key={item.id} className="hover:bg-muted/30 transition-colors">
+          <CardContent className="py-4 px-5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Badge
+                variant="secondary"
+                className={`text-[11px] px-2 py-0 ${item.type === "lead" ? "bg-blue-500/10 text-blue-600" : "bg-violet-500/10 text-violet-600"}`}
+              >
+                {item.type === "lead" ? "Lead" : "Idea"}
+              </Badge>
+              <Link
+                href={item.href}
+                className="text-sm font-medium hover:underline flex items-center gap-1"
+              >
+                {item.title}
+                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </Link>
+              <span className="text-xs text-muted-foreground ml-auto">
+                {item.account}
+              </span>
+            </div>
+            <div className="mt-2">
+              <Badge
+                variant="secondary"
+                className={`text-[11px] ${submissionStatusColors[item.status] ?? ""}`}
+              >
+                {item.status.replace(/_/g, " ")}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function AssignmentsPage() {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "executive";
+  const isAdmin = user?.role === "admin";
 
   const [myAssignments, setMyAssignments] = useState<AssignmentWithRelations[]>([]);
   const [allAssignments, setAllAssignments] = useState<AssignmentWithRelations[]>([]);
+  const [myLeads, setMyLeads] = useState<LeadWithRelations[]>([]);
+  const [myIdeas, setMyIdeas] = useState<IdeaWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<string | null>(null);
 
@@ -199,13 +316,23 @@ export default function AssignmentsPage() {
       if (isAdmin) {
         const all = await api<AssignmentWithRelations[]>("/api/assignments/all", { token });
         setAllAssignments(all);
+      } else {
+        // Fetch the user's own submitted leads and ideas for the tracker tab
+        const [leads, ideas] = await Promise.all([
+          api<LeadWithRelations[]>("/api/leads", { token }),
+          api<IdeaWithRelations[]>("/api/ideas", { token }),
+        ]);
+        if (user?.id) {
+          setMyLeads(leads.filter((l) => l.submitted_by === user.id));
+          setMyIdeas(ideas.filter((i) => i.submitted_by === user.id));
+        }
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to load assignments");
     } finally {
       setLoading(false);
     }
-  }, [token, isAdmin]);
+  }, [token, isAdmin, user?.id]);
 
   useEffect(() => {
     fetchAssignments();
@@ -251,10 +378,21 @@ export default function AssignmentsPage() {
         )}
       </div>
 
-      <Tabs defaultValue="pending">
+      <Tabs defaultValue={isAdmin ? "pending" : "submissions"}>
         <TabsList>
+          {/* My Submissions tracker — end users only */}
+          {!isAdmin && (
+            <TabsTrigger value="submissions">
+              My Submissions
+              {(myLeads.length + myIdeas.length) > 0 && (
+                <span className="ml-1.5 text-xs bg-[#B12B35]/10 text-[#B12B35] px-1.5 py-0.5 rounded-full">
+                  {myLeads.length + myIdeas.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="pending">
-            Pending
+            Pending Review
             {myPending.length > 0 && (
               <span className="ml-1.5 text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
                 {myPending.length}
@@ -281,6 +419,17 @@ export default function AssignmentsPage() {
           )}
         </TabsList>
 
+        {/* My Submissions tab — shows the user's leads + ideas with current status */}
+        {!isAdmin && (
+          <TabsContent value="submissions">
+            <MySubmissionsTab
+              leads={myLeads}
+              ideas={myIdeas}
+              loading={loading}
+            />
+          </TabsContent>
+        )}
+
         <TabsContent value="pending" className="mt-4 space-y-3">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
@@ -288,7 +437,7 @@ export default function AssignmentsPage() {
             <div className="text-center py-16 text-muted-foreground">
               <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No pending assignments.</p>
-              <p className="text-xs mt-1">You're all caught up!</p>
+              <p className="text-xs mt-1">You&apos;re all caught up!</p>
             </div>
           ) : (
             myPending.map((a) => (

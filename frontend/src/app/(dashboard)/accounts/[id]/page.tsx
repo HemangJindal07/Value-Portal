@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,11 +23,49 @@ const statusColors: Record<string, string> = {
   prospect: "bg-[#2E75B6]/10 text-[#2E75B6]",
 };
 
+interface UserProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+}
+
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className="text-sm">{value || "—"}</p>
+    </div>
+  );
+}
+
+function StakeholderRow({
+  step,
+  label,
+  user,
+}: {
+  step: number;
+  label: string;
+  user: UserProfile | null | undefined;
+}) {
+  return (
+    <div className="flex items-start gap-3 py-2">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#B12B35]/10 text-[#B12B35] text-xs font-bold">
+        {step}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {user ? (
+          <p className="text-sm font-medium truncate">
+            {user.full_name}
+            <span className="ml-1 text-xs text-muted-foreground font-normal">
+              ({user.email})
+            </span>
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">Not assigned</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -38,11 +76,40 @@ export default function AccountDetailPage() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dh, setDh] = useState<UserProfile | null>(null);
+  const [du, setDu] = useState<UserProfile | null>(null);
+  const [sales, setSales] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     if (!token || !id) return;
     api<Account>(`/api/accounts/${id}`, { token })
-      .then(setAccount)
+      .then((acct) => {
+        setAccount(acct);
+        // Resolve stakeholder names in parallel
+        const fetches: Promise<void>[] = [];
+        if (acct.account_owner_id) {
+          fetches.push(
+            api<UserProfile>(`/api/users/${acct.account_owner_id}`, { token })
+              .then(setDh)
+              .catch(() => setDh(null))
+          );
+        }
+        if (acct.practice_leader_id) {
+          fetches.push(
+            api<UserProfile>(`/api/users/${acct.practice_leader_id}`, { token })
+              .then(setDu)
+              .catch(() => setDu(null))
+          );
+        }
+        if (acct.sales_lead_id) {
+          fetches.push(
+            api<UserProfile>(`/api/users/${acct.sales_lead_id}`, { token })
+              .then(setSales)
+              .catch(() => setSales(null))
+          );
+        }
+        return Promise.all(fetches);
+      })
       .catch(() => router.push("/accounts"))
       .finally(() => setLoading(false));
   }, [token, id, router]);
@@ -81,6 +148,11 @@ export default function AccountDetailPage() {
                 {account.industry}
               </span>
             )}
+            {account.region && (
+              <span className="text-sm text-muted-foreground">
+                · {account.region}
+              </span>
+            )}
           </div>
         </div>
         <Button variant="outline" size="sm">
@@ -96,7 +168,7 @@ export default function AccountDetailPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
             <Field label="Industry" value={account.industry} />
-            <Field label="Region" value={account.region} />
+            <Field label="Region / Country" value={account.region} />
             <Field
               label="Contract Value"
               value={
@@ -124,6 +196,31 @@ export default function AccountDetailPage() {
         </Card>
       </div>
 
+      {/* Stakeholder Routing Map */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-4 w-4 text-[#B12B35]" />
+            Stakeholder Routing
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            Leads and Value Ideas submitted for this account follow this approval chain:
+          </p>
+          <div className="divide-y">
+            <StakeholderRow step={1} label="Delivery Head (DH) — First Review" user={dh} />
+            <StakeholderRow step={2} label="Delivery Unit Manager (DU) — Second Review" user={du} />
+            <StakeholderRow step={3} label="Sales Executive — Final Approval" user={sales} />
+          </div>
+          {!account.account_owner_id && !account.practice_leader_id && !account.sales_lead_id && (
+            <p className="mt-3 text-xs text-amber-600 bg-amber-50 rounded px-3 py-2">
+              No stakeholders mapped — submissions will be placed in &quot;Routing Pending&quot; status until stakeholders are assigned.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Separator />
 
       <Card>
@@ -132,7 +229,7 @@ export default function AccountDetailPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Leads and ideas linked to this account will appear here in Step 2.
+            Leads and ideas linked to this account will appear here.
           </p>
         </CardContent>
       </Card>

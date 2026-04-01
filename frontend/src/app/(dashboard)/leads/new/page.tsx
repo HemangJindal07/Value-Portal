@@ -23,7 +23,7 @@ import {
 import { FileAttachment } from "@/components/ui/file-attachment";
 import { AccountCombobox } from "@/components/account-combobox";
 import { useAuth } from "@/lib/auth-context";
-import { uploadFile } from "@/lib/api";
+import { api, uploadFile } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function NewLeadPage() {

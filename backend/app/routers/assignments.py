@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from uuid import UUID
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
 from app.schemas.assignment import AssignmentUpdate
+from app.services.routing_engine import advance_routing
 
 router = APIRouter(prefix="/assignments", tags=["Assignments"])
 
@@ -133,9 +134,10 @@ async def get_assignment(
 async def update_assignment(
     assignment_id: UUID,
     payload: AssignmentUpdate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
-    """Update action_taken and notes. Only the assigned user or admin/executive can act."""
+    """Update action_taken and notes. Triggers routing advancement on approve/reject."""
     supabase = get_supabase_admin()
 
     existing = (
@@ -168,5 +170,15 @@ async def update_assignment(
         .execute()
     )
 
-    print(f"[ASSIGN] ✏️  Assignment {assignment_id} updated → action_taken={payload.action_taken} by {current_user['full_name']}")
+    print(f"[ASSIGN] ✏️  Assignment {assignment_id} → action_taken={payload.action_taken} by {current_user['full_name']}")
+
+    # Advance the routing chain when the reviewer approves or rejects
+    if payload.action_taken in ("approved", "rejected"):
+        background_tasks.add_task(
+            advance_routing,
+            assignment_id=str(assignment_id),
+            action=payload.action_taken,
+            actor_id=current_user["id"],
+        )
+
     return result.data[0]

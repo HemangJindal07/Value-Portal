@@ -14,6 +14,7 @@ import {
   Settings,
   ShieldCheck,
   BarChart3,
+  GitMerge,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,24 +28,64 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/lib/auth-context";
 
-const mainNav = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Accounts", href: "/accounts", icon: Building2 },
-  { title: "Leads", href: "/leads", icon: Target },
-  { title: "Value Ideas", href: "/ideas", icon: Lightbulb },
-  { title: "My Assignments", href: "/assignments", icon: ClipboardList },
+// ─── Admin nav (full access) ──────────────────────────────────────────────
+const ADMIN_NAV = [
+  {
+    label: "Main",
+    items: [
+      { title: "Dashboard",       href: "/",              icon: LayoutDashboard },
+      { title: "Accounts",        href: "/accounts",      icon: Building2 },
+      { title: "Leads",           href: "/leads",         icon: Target },
+      { title: "Value Ideas",     href: "/ideas",         icon: Lightbulb },
+      { title: "My Assignments",  href: "/assignments",   icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
+      { title: "Reports",     href: "/reports",     icon: BarChart3 },
+      { title: "Reviews",     href: "/reviews",     icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { title: "Notifications",        href: "/notifications",                icon: Bell },
+      { title: "Stakeholder Mapping",  href: "/admin/stakeholder-mapping",    icon: GitMerge },
+      { title: "Admin",                href: "/admin/users",                  icon: Settings },
+    ],
+  },
 ];
 
-const insightsNav = [
-  { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
-  { title: "Reports", href: "/reports", icon: BarChart3 },
-  { title: "Reviews", href: "/reviews", icon: ShieldCheck },
-];
-
-const systemNav = [
-  { title: "Notifications", href: "/notifications", icon: Bell },
-  { title: "Admin", href: "/admin/users", icon: Settings },
+// ─── End-user nav (all non-admin roles) ──────────────────────────────────
+// Exactly: Dashboard · Leads · Value Ideas · My Assignments ·
+//          Leaderboard · Reports · Notifications
+const USER_NAV = [
+  {
+    label: "Main",
+    items: [
+      { title: "Dashboard",      href: "/",            icon: LayoutDashboard },
+      { title: "Leads",          href: "/leads",       icon: Target },
+      { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
+      { title: "My Assignments", href: "/assignments", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
+      { title: "Reports",     href: "/reports",     icon: BarChart3 },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { title: "Notifications", href: "/notifications", icon: Bell },
+    ],
+  },
 ];
 
 function NavGroup({
@@ -53,9 +94,10 @@ function NavGroup({
   pathname,
 }: {
   label: string;
-  items: typeof mainNav;
+  items: { title: string; href: string; icon: React.ElementType }[];
   pathname: string;
 }) {
+  if (items.length === 0) return null;
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="text-[10px] font-semibold tracking-widest text-[#C5C5C5] uppercase px-3 py-2">
@@ -66,7 +108,11 @@ function NavGroup({
           {items.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
-                isActive={pathname === item.href}
+                isActive={
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname.startsWith(item.href)
+                }
                 render={<Link href={item.href} />}
                 className="text-[#5D5D5D] hover:text-[#232222] hover:bg-[#F9F9F9] data-[active=true]:bg-[#B12B35]/10 data-[active=true]:text-[#B12B35] data-[active=true]:font-semibold rounded-md mx-1"
               >
@@ -83,13 +129,16 @@ function NavGroup({
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const isAdmin = user?.role === "admin";
+  const navGroups = isAdmin ? ADMIN_NAV : USER_NAV;
 
   return (
     <Sidebar className="bg-white border-r border-[#EDE7E6]">
-      {/* Header — TX logo + brand name */}
       <SidebarHeader className="border-b border-[#EDE7E6] px-4 py-4">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#B12B35]/8 border border-[#B12B35]/20 p-1">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#B12B35]/20 p-1">
             <Image
               src="/txlogo.webp"
               alt="TestingXperts"
@@ -103,15 +152,22 @@ export function AppSidebar() {
             <p className="text-sm font-semibold text-[#232222] leading-none tracking-tight">
               Value Portal
             </p>
-            <p className="text-[11px] text-[#5D5D5D] mt-0.5 tracking-wide">TestingXperts</p>
+            <p className="text-[11px] text-[#5D5D5D] mt-0.5 tracking-wide">
+              TestingXperts
+            </p>
           </div>
         </Link>
       </SidebarHeader>
 
       <SidebarContent className="py-2">
-        <NavGroup label="Main" items={mainNav} pathname={pathname} />
-        <NavGroup label="Insights" items={insightsNav} pathname={pathname} />
-        <NavGroup label="System" items={systemNav} pathname={pathname} />
+        {navGroups.map((group) => (
+          <NavGroup
+            key={group.label}
+            label={group.label}
+            items={group.items}
+            pathname={pathname}
+          />
+        ))}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-[#EDE7E6] px-4 py-3">
