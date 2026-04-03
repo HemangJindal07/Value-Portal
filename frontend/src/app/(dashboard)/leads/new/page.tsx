@@ -122,13 +122,13 @@ export default function NewLeadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Lead Type *</Label>
-                <Select name="lead_type" required defaultValue="cross_sell">
+                <Select name="lead_type" required defaultValue="current_lead">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cross_sell">Cross-sell</SelectItem>
-                    <SelectItem value="upsell">Upsell</SelectItem>
+                    <SelectItem value="current_lead">Current Lead</SelectItem>
+                    <SelectItem value="new_lead">New Lead</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -221,7 +221,7 @@ export default function NewLeadPage() {
 
             <div className="flex gap-3 pt-4">
               <Button type="submit" disabled={loading}>
-                {loading ? "Submitting..." : "Submit Lead"}
+                {loading ? "Submitting…" : "Submit Lead"}
               </Button>
               <Button
                 type="button"

@@ -58,9 +58,12 @@ const effortColors: Record<string, string> = {
   high: "bg-[#E42525]/10 text-[#E42525]",
 };
 
+// Roles that can see ALL ideas across the org (practice_lead reviews them)
+const IDEAS_ALL_ROLES = ["admin", "executive", "practice_lead"];
+
 export default function IdeasPage() {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const canSeeAll = IDEAS_ALL_ROLES.includes(user?.role ?? "");
   const [ideas, setIdeas] = useState<IdeaWithRelations[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -76,8 +79,8 @@ export default function IdeasPage() {
 
     api<IdeaWithRelations[]>(`/api/ideas${qs}`, { token })
       .then((data) => {
-        // Non-admin users only see their own ideas
-        if (!isAdmin && user?.id) {
+        // delivery_manager and sales only see their own submissions
+        if (!canSeeAll && user?.id) {
           setIdeas(data.filter((i) => i.submitted_by === user.id));
         } else {
           setIdeas(data);
@@ -85,7 +88,7 @@ export default function IdeasPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token, search, statusFilter, isAdmin, user?.id]);
+  }, [token, search, statusFilter, canSeeAll, user?.id]);
 
   return (
     <div className="space-y-6">
@@ -137,7 +140,7 @@ export default function IdeasPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {isAdmin ? "All Ideas" : "My Value Ideas"}
+            {canSeeAll ? "All Value Ideas" : "My Value Ideas"}
           </CardTitle>
           <CardDescription>
             {ideas.length} idea{ideas.length !== 1 ? "s" : ""}
@@ -146,7 +149,7 @@ export default function IdeasPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : ideas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -164,7 +167,7 @@ export default function IdeasPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>Effort</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Est. Savings</TableHead>
+                  <TableHead className="text-right">Est. Saving</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

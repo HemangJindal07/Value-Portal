@@ -198,7 +198,7 @@ export default function IdeaDetailPage() {
   if (loading) {
     return (
       <p className="text-sm text-muted-foreground py-12 text-center">
-        Loading...
+        Loading…
       </p>
     );
   }
@@ -227,7 +227,7 @@ export default function IdeaDetailPage() {
                 variant="secondary"
                 className={effortColors[idea.estimated_effort]}
               >
-                {idea.estimated_effort} effort
+                {idea.estimated_effort.charAt(0).toUpperCase() + idea.estimated_effort.slice(1)} Effort
               </Badge>
             )}
             {aiPolling && (
@@ -236,7 +236,7 @@ export default function IdeaDetailPage() {
                 className="bg-violet-500/10 text-violet-400 flex items-center gap-1"
               >
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Classifying with AI...
+                Classifying with AI…
               </Badge>
             )}
           </div>
@@ -270,7 +270,7 @@ export default function IdeaDetailPage() {
               onClick={handleStatusChange}
             >
               <Save className="mr-2 h-4 w-4" />
-              {saving ? "Saving..." : "Save"}
+              {saving ? "Saving…" : "Save"}
             </Button>
           </CardContent>
         </Card>
@@ -343,8 +343,8 @@ export default function IdeaDetailPage() {
               <CardContent>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-                  Claude is analysing this idea — this usually takes a few
-                  seconds...
+                  Claude is analyzing this idea — this usually takes a few
+                  seconds…
                 </div>
               </CardContent>
             </Card>
@@ -367,11 +367,11 @@ export default function IdeaDetailPage() {
           <CardContent className="space-y-4">
             <Field label="Account" value={idea.account?.account_name ?? null} />
             <Field
-              label="Submitted by"
+              label="Submitted By"
               value={idea.submitter?.full_name ?? null}
             />
             <Field
-              label="Estimated Savings"
+              label="Estimated Saving"
               value={
                 idea.estimated_saving
                   ? `$${Number(idea.estimated_saving).toLocaleString()}`

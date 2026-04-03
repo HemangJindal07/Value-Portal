@@ -19,6 +19,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const submissionTypeLabel: Record<string, string> = {
+  lead:       "Lead",
+  value_idea: "Value Idea",
+  idea:       "Value Idea",
+};
+
 const typeConfig: Record<
   string,
   { icon: React.ElementType; color: string; label: string }
@@ -122,7 +128,7 @@ export default function NotificationsPage() {
         {unreadCount > 0 && (
           <Button variant="outline" size="sm" onClick={markAllRead}>
             <CheckCheck className="mr-2 h-4 w-4" />
-            Mark all read ({unreadCount})
+            Mark All Read ({unreadCount})
           </Button>
         )}
       </div>
@@ -140,7 +146,7 @@ export default function NotificationsPage() {
         <TabsContent value={tab} className="mt-4 space-y-2">
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading notifications...
+              Loading notifications…
             </p>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -174,7 +180,7 @@ export default function NotificationsPage() {
                           {cfg.label}
                         </Badge>
                         <Badge variant="secondary" className="text-xs">
-                          {n.submission_type}
+                          {submissionTypeLabel[n.submission_type] ?? n.submission_type}
                         </Badge>
                         <span className="text-xs text-muted-foreground ml-auto">
                           {timeAgo(n.sent_at)}
@@ -189,7 +195,7 @@ export default function NotificationsPage() {
                         className="shrink-0"
                         onClick={() => markAsRead([n.notification_id])}
                       >
-                        Mark read
+                        Mark Read
                       </Button>
                     )}
                   </CardContent>

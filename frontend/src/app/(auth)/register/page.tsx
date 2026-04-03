@@ -38,7 +38,7 @@ export default function RegisterPage() {
       {/* Heading */}
       <div>
         <h2 className="text-2xl font-bold text-[#232222] leading-tight">
-          Create An Account
+          Create an Account
         </h2>
         <p className="text-sm text-[#5D5D5D] mt-1">
           Join the Value Portal and start contributing today.
@@ -100,7 +100,7 @@ export default function RegisterPage() {
           className="w-full h-11 text-base font-semibold bg-[#B12B35] hover:bg-[#9a2330] text-white rounded-lg mt-2 transition-colors"
           disabled={loading}
         >
-          {loading ? "Creating Account..." : "Create Account"}
+          {loading ? "Creating Account…" : "Create Account"}
         </Button>
       </form>
 

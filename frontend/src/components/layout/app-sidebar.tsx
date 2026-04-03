@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   BarChart3,
   GitMerge,
+  Route,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -54,7 +56,9 @@ const ADMIN_NAV = [
     label: "System",
     items: [
       { title: "Notifications",        href: "/notifications",                icon: Bell },
+      { title: "Exception Queue",      href: "/admin/exception-queue",        icon: AlertTriangle },
       { title: "Stakeholder Mapping",  href: "/admin/stakeholder-mapping",    icon: GitMerge },
+      { title: "Routing Config",       href: "/admin/routing-config",         icon: Route },
       { title: "Admin",                href: "/admin/users",                  icon: Settings },
     ],
   },

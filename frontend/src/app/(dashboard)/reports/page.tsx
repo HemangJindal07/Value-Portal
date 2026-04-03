@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import {
@@ -8,10 +9,11 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { BarChart3, Download, Target, Lightbulb, Trophy, ClipboardList } from "lucide-react";
+import { BarChart3, Download, Target, Lightbulb, Trophy, ClipboardList, GitBranch, ArrowRight, Users } from "lucide-react";
 import { toast } from "sonner";
 import type { LeadWithRelations, IdeaWithRelations } from "@/types";
 
@@ -87,12 +89,246 @@ function StatusFunnel({
   );
 }
 
+// ── Pipeline types + helpers ───────────────────────────────────────────────
+
+type PipelineLead = {
+  lead_id: string;
+  title: string;
+  status: string;
+  lead_type: string;
+  estimated_value: number | null;
+  priority: string;
+  created_at: string;
+  account: { account_name: string; region?: string } | null;
+  submitter: { full_name: string } | null;
+  current_assignee: string | null;
+  current_assignee_role: string | null;
+};
+
+type PipelineIdea = {
+  idea_id: string;
+  title: string;
+  status: string;
+  idea_category: string;
+  estimated_saving: number | null;
+  created_at: string;
+  account: { account_name: string } | null;
+  submitter: { full_name: string } | null;
+  current_assignee: string | null;
+  current_assignee_role: string | null;
+};
+
+const LEAD_TYPE_LABEL: Record<string, string> = {
+  current_lead: "Current Lead",
+  new_lead:     "New Lead",
+};
+
+// Maps a status to a simplified outcome for the Outcome column
+function leadOutcome(status: string): { label: string; cls: string } | null {
+  if (status === "won")       return { label: "Won",           cls: "bg-green-100 text-green-700" };
+  if (status === "qualified") return { label: "Qualified",     cls: "bg-[#B12B35]/10 text-[#B12B35]" };
+  if (status === "lost")      return { label: "Lost",          cls: "bg-[#C5C5C5]/30 text-[#5D5D5D]" };
+  if (status === "rejected")  return { label: "Disqualified",  cls: "bg-[#E42525]/10 text-[#E42525]" };
+  if (status === "dropped")   return { label: "Dropped",       cls: "bg-[#C5C5C5]/30 text-[#5D5D5D]" };
+  return null;
+}
+
+function ideaOutcome(status: string): { label: string; cls: string } | null {
+  if (status === "implemented") return { label: "Implemented",     cls: "bg-green-100 text-green-700" };
+  if (status === "approved")    return { label: "Approved",        cls: "bg-[#B12B35]/10 text-[#B12B35]" };
+  if (status === "rejected")    return { label: "Rejected",        cls: "bg-[#E42525]/10 text-[#E42525]" };
+  return null;
+}
+
+// ── Pipeline sub-components ────────────────────────────────────────────────
+
+function FlowStep({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+      <ArrowRight className="h-3 w-3" />
+      {label}
+    </span>
+  );
+}
+
+function LeadsPipelineTable({ leads, loading }: { leads: PipelineLead[]; loading: boolean }) {
+  if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>;
+  if (leads.length === 0)
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <Target className="h-10 w-10 mb-3 opacity-30" />
+        <p className="text-sm">No leads to show.</p>
+      </div>
+    );
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Lead</TableHead>
+          <TableHead>Account</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>
+            <span className="flex items-center gap-1"><Users className="h-3 w-3" />Assigned To</span>
+          </TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Outcome</TableHead>
+          <TableHead className="text-right">Value</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {leads.map((lead) => {
+          const outcome = leadOutcome(lead.status);
+          return (
+            <TableRow key={lead.lead_id}>
+              <TableCell>
+                <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline text-[#232222]">
+                  {lead.title}
+                </Link>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {lead.submitter?.full_name}
+                </p>
+              </TableCell>
+              <TableCell className="text-sm text-[#5D5D5D]">
+                {lead.account?.account_name ?? "—"}
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline" className="text-[10px]">
+                  {LEAD_TYPE_LABEL[lead.lead_type] ?? lead.lead_type}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                {lead.current_assignee ? (
+                  <div>
+                    <p className="text-sm font-medium text-[#232222]">{lead.current_assignee}</p>
+                    <p className="text-[10px] text-muted-foreground">{lead.current_assignee_role}</p>
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary" className={`capitalize text-[11px] ${STATUS_BADGE[lead.status] ?? "bg-[#C5C5C5]/20 text-[#5D5D5D]"}`}>
+                  {lead.status.replace(/_/g, " ")}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                {outcome ? (
+                  <Badge variant="secondary" className={`text-[11px] ${outcome.cls}`}>
+                    {outcome.label}
+                  </Badge>
+                ) : (
+                  <span className="text-xs text-muted-foreground">In Progress</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right text-sm font-medium text-[#232222]">
+                {lead.estimated_value
+                  ? `$${Number(lead.estimated_value).toLocaleString()}`
+                  : "—"}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+function IdeasPipelineTable({ ideas, loading }: { ideas: PipelineIdea[]; loading: boolean }) {
+  if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>;
+  if (ideas.length === 0)
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <Lightbulb className="h-10 w-10 mb-3 opacity-30" />
+        <p className="text-sm">No value ideas to show.</p>
+      </div>
+    );
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Idea</TableHead>
+          <TableHead>Account</TableHead>
+          <TableHead>Category</TableHead>
+          <TableHead>
+            <span className="flex items-center gap-1"><Users className="h-3 w-3" />Assigned To</span>
+          </TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Outcome</TableHead>
+          <TableHead className="text-right">Est. Saving</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {ideas.map((idea) => {
+          const outcome = ideaOutcome(idea.status);
+          return (
+            <TableRow key={idea.idea_id}>
+              <TableCell>
+                <Link href={`/ideas/${idea.idea_id}`} className="font-medium hover:underline text-[#232222]">
+                  {idea.title}
+                </Link>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {idea.submitter?.full_name}
+                </p>
+              </TableCell>
+              <TableCell className="text-sm text-[#5D5D5D]">
+                {idea.account?.account_name ?? "—"}
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline" className="text-[10px] capitalize">
+                  {idea.idea_category.replace(/_/g, " ")}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                {idea.current_assignee ? (
+                  <div>
+                    <p className="text-sm font-medium text-[#232222]">{idea.current_assignee}</p>
+                    <p className="text-[10px] text-muted-foreground">{idea.current_assignee_role}</p>
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">—</span>
+                )}
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary" className={`capitalize text-[11px] ${STATUS_BADGE[idea.status] ?? "bg-[#C5C5C5]/20 text-[#5D5D5D]"}`}>
+                  {idea.status.replace(/_/g, " ")}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                {outcome ? (
+                  <Badge variant="secondary" className={`text-[11px] ${outcome.cls}`}>
+                    {outcome.label}
+                  </Badge>
+                ) : (
+                  <span className="text-xs text-muted-foreground">In Progress</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right text-sm font-medium text-[#232222]">
+                {idea.estimated_saving
+                  ? `$${Number(idea.estimated_saving).toLocaleString()}`
+                  : "—"}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
 // ── Reports page ───────────────────────────────────────────────────────────
+
+const PIPELINE_ALL_ROLES = ["admin", "executive"];
 
 export default function ReportsPage() {
   const { token, user } = useAuth();
   const [reportData, setReportData] = useState<UserReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pipeline, setPipeline] = useState<{ leads: PipelineLead[]; ideas: PipelineIdea[] } | null>(null);
+  const [pipelineLoading, setPipelineLoading] = useState(true);
+
+  const canSeeAll = PIPELINE_ALL_ROLES.includes(user?.role ?? "");
 
   const fetchData = useCallback(async () => {
     if (!token || !user?.id) return;
@@ -125,7 +361,25 @@ export default function ReportsPage() {
     }
   }, [token, user?.id]);
 
+  const fetchPipeline = useCallback(async () => {
+    if (!token) return;
+    setPipelineLoading(true);
+    try {
+      const scope = canSeeAll ? "all" : "mine";
+      const data = await api<{ leads: PipelineLead[]; ideas: PipelineIdea[] }>(
+        `/api/dashboard/pipeline?scope=${scope}`,
+        { token }
+      );
+      setPipeline(data);
+    } catch {
+      toast.error("Failed to load pipeline data.");
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [token, canSeeAll]);
+
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchPipeline(); }, [fetchPipeline]);
 
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
@@ -194,9 +448,9 @@ export default function ReportsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#232222]">My Reports</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[#232222]">Reports</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Your personal activity, submissions and points — data for{" "}
+            Submission pipeline and personal activity for{" "}
             <span className="font-medium text-[#232222]">
               {user?.full_name || user?.email}
             </span>
@@ -207,6 +461,101 @@ export default function ReportsPage() {
           Export CSV
         </Button>
       </div>
+
+      <Tabs defaultValue="pipeline">
+        <TabsList>
+          <TabsTrigger value="pipeline" className="gap-2">
+            <GitBranch className="h-4 w-4" />
+            Pipeline
+          </TabsTrigger>
+          <TabsTrigger value="my-report" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            My Report
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Pipeline tab ───────────────────────────────────────────────── */}
+        <TabsContent value="pipeline" className="mt-4 space-y-6">
+          {/* BRD flow legend */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground bg-[#F9F9F9] border border-[#EDE7E6] rounded-lg px-4 py-3">
+            <span className="font-semibold text-[#232222]">Lead flow:</span>
+            <span>Submission</span>
+            <FlowStep label="Assigned To" />
+            <FlowStep label="Status" />
+            <FlowStep label="Qualified / Disqualified" />
+            <FlowStep label="Win / Loss" />
+            <span className="ml-4 font-semibold text-[#232222]">Idea flow:</span>
+            <span>Submission</span>
+            <FlowStep label="Assigned To" />
+            <FlowStep label="Review Status" />
+            <FlowStep label="Approved / Rejected" />
+            <FlowStep label="Implemented" />
+          </div>
+
+          <Tabs defaultValue="leads-pipeline">
+            <TabsList>
+              <TabsTrigger value="leads-pipeline" className="gap-2">
+                <Target className="h-4 w-4" />
+                Leads
+                {pipeline && (
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
+                    {pipeline.leads.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ideas-pipeline" className="gap-2">
+                <Lightbulb className="h-4 w-4" />
+                Value Ideas
+                {pipeline && (
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
+                    {pipeline.ideas.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="leads-pipeline" className="mt-4">
+              <Card className="border-[#C5C5C5] bg-white">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-[#232222]">
+                    {canSeeAll ? "All Leads — Pipeline" : "My Leads — Pipeline"}
+                  </CardTitle>
+                  <CardDescription>
+                    Lead → Assigned To → Status → Qualified/Disqualified → Win/Loss
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <LeadsPipelineTable
+                    leads={pipeline?.leads ?? []}
+                    loading={pipelineLoading}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="ideas-pipeline" className="mt-4">
+              <Card className="border-[#C5C5C5] bg-white">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-[#232222]">
+                    {canSeeAll ? "All Value Ideas — Pipeline" : "My Value Ideas — Pipeline"}
+                  </CardTitle>
+                  <CardDescription>
+                    Idea → Assigned To → Review Status → Approved/Rejected → Implemented
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <IdeasPipelineTable
+                    ideas={pipeline?.ideas ?? []}
+                    loading={pipelineLoading}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        {/* ── My Report tab (existing content) ───────────────────────────── */}
+        <TabsContent value="my-report" className="mt-4 space-y-6">
 
       {/* KPI cards — strictly user-scoped */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -414,6 +763,8 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders
+from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing
 
 settings = get_settings()
 
@@ -37,6 +37,7 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(governance.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(stakeholders.router, prefix="/api")
+app.include_router(vertical_routing.router, prefix="/api")
 
 
 @app.get("/health")

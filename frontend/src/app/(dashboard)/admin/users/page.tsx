@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : (
             <Table>

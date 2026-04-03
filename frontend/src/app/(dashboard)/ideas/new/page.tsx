@@ -259,7 +259,7 @@ export default function NewIdeaPage() {
 
             <div className="flex gap-3 pt-4">
               <Button type="submit" disabled={loading}>
-                {loading ? "Submitting..." : "Submit Idea"}
+                {loading ? "Submitting…" : "Submit Idea"}
               </Button>
               <Button
                 type="button"

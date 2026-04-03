@@ -9,6 +9,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Target, Lightbulb, Trophy, Users, ClipboardList, ArrowRight, ShieldCheck,
+  TrendingUp, BadgePercent, AlertTriangle, Banknote, Clock, Globe, BarChart3,
+  Building2,
 } from "lucide-react";
 import Link from "next/link";
 import type { LeadWithRelations, IdeaWithRelations } from "@/types";
@@ -123,24 +125,61 @@ function StatCard({
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
+// ── Admin analytics types ─────────────────────────────────────────────────
+
+type BreakdownItem = { region?: string; vertical?: string; count: number; value?: number };
+type AccountItem   = { account_name: string; leads: number; ideas: number };
+type TurnaroundRow = { role: string; avg_days: number; count: number };
+
+type AdminAnalytics = {
+  total_leads:          number;
+  qualification_ratio:  number;
+  win_rate:             number;
+  won_count:            number;
+  lost_count:           number;
+  pipeline_value:       number;
+  won_value:            number;
+  total_savings:        number;
+  leads_by_region:      BreakdownItem[];
+  leads_by_vertical:    BreakdownItem[];
+  top_accounts:         AccountItem[];
+  turnaround:           TurnaroundRow[];
+  routing_pending_leads: number;
+  routing_pending_ideas: number;
+};
+
+// ── Small bar inside analytics tables ─────────────────────────────────────
+
+function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="h-1.5 w-full rounded-full bg-[#EDE7E6] overflow-hidden mt-1">
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  );
+}
+
 // ── Admin dashboard ────────────────────────────────────────────────────────
 
 function AdminDashboard({ token, userName }: { token: string; userName: string }) {
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [myScore, setMyScore] = useState(0);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     try {
-      const [s, a, score] = await Promise.all([
+      const [s, a, score, an] = await Promise.all([
         api<OrgStats>("/api/dashboard/stats", { token }),
         api<Activity[]>("/api/dashboard/recent-activity?limit=8", { token }),
         api<{ total_points: number }>("/api/scores/me", { token }),
+        api<AdminAnalytics>("/api/dashboard/admin-analytics", { token }),
       ]);
       setStats(s);
       setActivity(a);
       setMyScore(score.total_points || 0);
+      setAnalytics(an);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, [token]);
@@ -227,6 +266,221 @@ function AdminDashboard({ token, userName }: { token: string; userName: string }
           )}
         </CardContent>
       </Card>
+
+      {/* ── Analytics section (admin only) ── */}
+      {analytics && (
+        <>
+          {/* Section header */}
+          <div className="flex items-center gap-2 pt-2">
+            <BarChart3 className="h-4 w-4 text-[#B12B35]" />
+            <span className="text-xs font-semibold text-[#B12B35] uppercase tracking-wider">Analytics</span>
+          </div>
+
+          {/* Ratio + Value KPIs */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="border-[#C5C5C5] bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Qualification Rate</CardTitle>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#B12B35]/10">
+                  <BadgePercent className="h-4 w-4 text-[#B12B35]" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#232222]">{analytics.qualification_ratio}%</div>
+                <p className="text-xs text-[#5D5D5D] mt-0.5">leads reaching qualified+</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#C5C5C5] bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Win Rate</CardTitle>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#232222]">{analytics.win_rate}%</div>
+                <p className="text-xs text-[#5D5D5D] mt-0.5">{analytics.won_count}W / {analytics.lost_count}L closed deals</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#C5C5C5] bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Pipeline Value</CardTitle>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#003466]/10">
+                  <Banknote className="h-4 w-4 text-[#003466]" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#232222]">
+                  ${analytics.pipeline_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+                <p className="text-xs text-[#5D5D5D] mt-0.5">
+                  ${analytics.won_value.toLocaleString(undefined, { maximumFractionDigits: 0 })} won
+                </p>
+              </CardContent>
+            </Card>
+
+            <Link href="/admin/exception-queue">
+              <Card className="border-[#C5C5C5] bg-white hover:shadow-md transition-shadow cursor-pointer h-full">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-[#5D5D5D]">Exception Queue</CardTitle>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-[#232222]">
+                    {analytics.routing_pending_leads + analytics.routing_pending_ideas}
+                  </div>
+                  <p className="text-xs text-[#5D5D5D] mt-0.5">
+                    {analytics.routing_pending_leads}L / {analytics.routing_pending_ideas}I pending routing
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
+
+          {/* Region · Vertical · Top Accounts */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Region breakdown */}
+            <Card className="border-[#C5C5C5] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-[#232222] flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-[#2E75B6]" /> Leads by Region
+                </CardTitle>
+                <CardDescription>Geographic pipeline distribution</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.leads_by_region.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No region data yet.</p>
+                ) : (() => {
+                  const maxR = Math.max(...analytics.leads_by_region.map((r) => r.count), 1);
+                  return (
+                    <div className="space-y-3">
+                      {analytics.leads_by_region.map((r) => (
+                        <div key={r.region}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-[#232222] truncate max-w-[65%]">{r.region}</span>
+                            <span className="text-[#5D5D5D] text-xs font-semibold">{r.count}</span>
+                          </div>
+                          <MiniBar value={r.count} max={maxR} color="#2E75B6" />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* Vertical breakdown */}
+            <Card className="border-[#C5C5C5] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-[#232222] flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-[#B12B35]" /> Leads by Vertical
+                </CardTitle>
+                <CardDescription>Industry / practice coverage</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.leads_by_vertical.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No vertical data yet.</p>
+                ) : (() => {
+                  const maxV = Math.max(...analytics.leads_by_vertical.map((v) => v.count), 1);
+                  return (
+                    <div className="space-y-3">
+                      {analytics.leads_by_vertical.map((v) => (
+                        <div key={v.vertical}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-[#232222] truncate max-w-[65%]">{v.vertical}</span>
+                            <span className="text-[#5D5D5D] text-xs font-semibold">{v.count}</span>
+                          </div>
+                          <MiniBar value={v.count} max={maxV} color="#B12B35" />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* Top accounts */}
+            <Card className="border-[#C5C5C5] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-[#232222] flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[#003466]" /> Top Accounts
+                </CardTitle>
+                <CardDescription>By total leads + ideas submitted</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.top_accounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No account data yet.</p>
+                ) : (
+                  <div className="divide-y divide-[#EDE7E6]">
+                    {analytics.top_accounts.map((a) => (
+                      <div key={a.account_name} className="flex items-center justify-between py-2 text-sm">
+                        <span className="font-medium text-[#232222] truncate max-w-[55%]">{a.account_name}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20">
+                            {a.leads}L
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#003466]/10 text-[#003466] border-[#003466]/20">
+                            {a.ideas}I
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Reviewer turnaround */}
+          <Card className="border-[#C5C5C5] bg-white">
+            <CardHeader>
+              <CardTitle className="text-base text-[#232222] flex items-center gap-2">
+                <Clock className="h-4 w-4 text-[#5D5D5D]" /> Reviewer Turnaround
+              </CardTitle>
+              <CardDescription>Average days from assignment to action, per reviewer role</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {analytics.turnaround.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No completed reviews yet — turnaround data will appear once assignments are acted on.</p>
+              ) : (() => {
+                const maxDays = Math.max(...analytics.turnaround.map((t) => t.avg_days), 1);
+                return (
+                  <div className="space-y-4">
+                    {analytics.turnaround.map((t) => (
+                      <div key={t.role}>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="font-medium text-[#232222] capitalize">{t.role.replace(/_/g, " ")}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-[#5D5D5D]">{t.count} reviews</span>
+                            <span className="font-bold text-[#232222] w-16 text-right">
+                              {t.avg_days < 1
+                                ? `${Math.round(t.avg_days * 24)}h`
+                                : `${t.avg_days}d`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-[#EDE7E6] overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.round((t.avg_days / maxDays) * 100)}%`,
+                              background: t.avg_days <= 2 ? "#22c55e" : t.avg_days <= 5 ? "#2E75B6" : "#B12B35",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -84,7 +84,7 @@ export default function AccountsPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : accounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">

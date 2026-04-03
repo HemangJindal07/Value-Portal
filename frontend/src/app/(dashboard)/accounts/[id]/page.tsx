@@ -117,7 +117,7 @@ export default function AccountDetailPage() {
   if (loading) {
     return (
       <p className="text-sm text-muted-foreground py-12 text-center">
-        Loading...
+        Loading…
       </p>
     );
   }

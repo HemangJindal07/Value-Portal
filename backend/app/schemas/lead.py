@@ -5,10 +5,8 @@ from uuid import UUID
 
 
 class LeadType(str, Enum):
-    cross_sell = "cross_sell"
-    upsell = "upsell"
-    new_service = "new_service"
-    expansion = "expansion"
+    current_lead = "current_lead"
+    new_lead = "new_lead"
 
 
 class LeadStatus(str, Enum):

@@ -51,13 +51,16 @@ const priorityColors: Record<string, string> = {
 };
 
 const typeLabels: Record<string, string> = {
-  cross_sell: "Cross-sell",
-  upsell: "Upsell",
+  current_lead: "Current Lead",
+  new_lead: "New Lead",
 };
+
+// Roles that can see ALL leads across the org
+const LEADS_ALL_ROLES = ["admin", "executive", "sales"];
 
 export default function LeadsPage() {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -73,8 +76,8 @@ export default function LeadsPage() {
 
     api<LeadWithRelations[]>(`/api/leads${qs}`, { token })
       .then((data) => {
-        // Non-admin users only see their own leads
-        if (!isAdmin && user?.id) {
+        // delivery_manager and practice_lead only see their own submissions
+        if (!canSeeAll && user?.id) {
           setLeads(data.filter((l) => l.submitted_by === user.id));
         } else {
           setLeads(data);
@@ -82,7 +85,7 @@ export default function LeadsPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token, search, statusFilter, isAdmin, user?.id]);
+  }, [token, search, statusFilter, canSeeAll, user?.id]);
 
   return (
     <div className="space-y-6">
@@ -135,7 +138,7 @@ export default function LeadsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {isAdmin ? "All Leads" : "My Leads"}
+            {canSeeAll ? "All Leads" : "My Leads"}
           </CardTitle>
           <CardDescription>
             {leads.length} lead{leads.length !== 1 ? "s" : ""}
@@ -144,7 +147,7 @@ export default function LeadsPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : leads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
