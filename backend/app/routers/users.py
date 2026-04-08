@@ -11,17 +11,20 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def list_users(
     role: str | None = None,
     active_only: bool = True,
+    search: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     supabase = get_supabase_admin()
-    query = supabase.table("profiles").select("*")
+    query = supabase.table("profiles").select("id, full_name, email, role")
 
     if active_only:
         query = query.eq("is_active", True)
     if role:
         query = query.eq("role", role)
+    if search:
+        query = query.ilike("full_name", f"%{search}%")
 
-    query = query.order("full_name")
+    query = query.order("full_name").limit(20)
     result = query.execute()
     return result.data
 

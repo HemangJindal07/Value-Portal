@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Brand Guidelines Audit — Value Portal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --red: #B12B35;
+    --red-bright: #E42525;
+    --red-dark: #9a2330;
+    --black: #232222;
+    --navy: #003466;
+    --blue: #2E75B6;
+    --grey-mid: #5D5D5D;
+    --grey-light: #C5C5C5;
+    --cream: #EDE7E6;
+    --offwhite: #F9F9F9;
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: #e8e8e8;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; color: #fff; }
+  header span { font-size: 12px; color: #666; margin-left: auto; }
+
+  .score-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 100px;
+    font-size: 12px; font-weight: 600;
+  }
+  .score-chip.good { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .score-chip.warn { background: rgba(251,191,36,0.12); color: #fbbf24; }
+  .score-chip.bad  { background: rgba(239,68,68,0.12);  color: #f87171; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; padding: 24px 40px 0; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 10px 18px; font-size: 13px; font-weight: 500; cursor: pointer;
+    border-bottom: 2px solid transparent; color: #666; transition: all 0.18s;
+    border-radius: 6px 6px 0 0;
+  }
+  .tab:hover { color: #ccc; }
+  .tab.active { color: #fff; border-bottom-color: var(--red); background: var(--surface2); }
+
+  .panel { display: none; padding: 32px 40px 60px; }
+  .panel.active { display: block; }
+
+  /* Summary cards */
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 32px; }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .summary-card .num { font-size: 36px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
+  .summary-card .label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.08em; }
+  .num.green { color: #4ade80; }
+  .num.yellow { color: #fbbf24; }
+  .num.red { color: #f87171; }
+  .num.blue { color: #60a5fa; }
+
+  /* Section heading */
+  .section-heading {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #555; margin-bottom: 16px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Audit table */
+  .audit-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+  .audit-table th {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #555; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  .audit-table td {
+    padding: 14px 14px; font-size: 13px; border-bottom: 1px solid #1e1e1e;
+    vertical-align: top; line-height: 1.5;
+  }
+  .audit-table tr:hover td { background: var(--surface2); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 100px; font-size: 11px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge.match   { background: rgba(34,197,94,0.12);  color: #4ade80; }
+  .badge.partial { background: rgba(251,191,36,0.12); color: #fbbf24; }
+  .badge.missing { background: rgba(239,68,68,0.12);  color: #f87171; }
+
+  .note { font-size: 12px; color: #666; margin-top: 4px; }
+
+  /* Color swatches */
+  .swatch-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 32px; }
+  .swatch {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    cursor: pointer;
+  }
+  .swatch-box {
+    width: 56px; height: 56px; border-radius: 10px;
+    border: 2px solid transparent; transition: all 0.15s;
+    position: relative;
+  }
+  .swatch:hover .swatch-box { transform: scale(1.1); }
+  .swatch-label { font-size: 10px; color: #666; text-align: center; max-width: 64px; }
+  .swatch-hex { font-size: 9px; color: #444; font-family: 'DM Mono', monospace; }
+  .match-icon {
+    position: absolute; bottom: -4px; right: -4px;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; border: 2px solid var(--bg);
+  }
+  .match-icon.yes { background: #4ade80; color: #052e16; }
+  .match-icon.no  { background: #f87171; color: #450a0a; }
+
+  /* Template cards */
+  .template-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 20px; }
+  .template-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden; transition: all 0.2s;
+  }
+  .template-card:hover { border-color: #444; transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  .template-header {
+    padding: 16px 20px; display: flex; align-items: center;
+    justify-content: space-between; border-bottom: 1px solid var(--border);
+  }
+  .template-name { font-size: 13px; font-weight: 600; }
+  .template-body { padding: 20px; }
+  .check-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .check-text { flex: 1; }
+  .check-detail { font-size: 11px; color: #666; margin-top: 2px; }
+
+  /* Typography section */
+  .font-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+  .font-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px;
+  }
+  .font-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #555; margin-bottom: 12px; }
+  .font-preview-brand { font-size: 32px; font-weight: 700; color: #fff; letter-spacing: -0.02em; line-height: 1.1; }
+  .font-preview-impl  { font-family: 'DM Sans', sans-serif; font-size: 32px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+  .font-note { font-size: 12px; color: #666; margin-top: 8px; }
+
+  /* Gap summary */
+  .gap-list { display: flex; flex-direction: column; gap: 10px; }
+  .gap-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .gap-num {
+    min-width: 24px; height: 24px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 11px; font-weight: 700; color: #555;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace;
+  }
+  .gap-item h4 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .gap-item p  { font-size: 12px; color: #777; line-height: 1.5; }
+  .priority-chip {
+    margin-left: auto; flex-shrink: 0;
+    padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  }
+  .p-high   { background: rgba(239,68,68,0.15);  color: #f87171; }
+  .p-medium { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .p-low    { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-dot"></div>
+  <h1>Brand Guidelines Audit — Value Portal</h1>
+  <div style="display:flex;gap:8px;margin-left:auto;align-items:center;">
+    <span class="score-chip good">7 Matches</span>
+    <span class="score-chip warn">6 Partial</span>
+    <span class="score-chip bad">4 Missing</span>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('templates')">Templates (7)</div>
+  <div class="tab" onclick="switchTab('colors')">Colors & Tokens</div>
+  <div class="tab" onclick="switchTab('typography')">Typography</div>
+  <div class="tab" onclick="switchTab('gaps')">Gaps & Fixes</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="panel active" id="tab-overview">
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="num green">7</div>
+      <div class="label">Fully Implemented</div>
+    </div>
+    <div class="summary-card">
+      <div class="num yellow">6</div>
+      <div class="label">Partially Done</div>
+    </div>
+    <div class="summary-card">
+      <div class="num red">4</div>
+      <div class="label">Missing / Not Built</div>
+    </div>
+    <div class="summary-card">
+      <div class="num blue">85%</div>
+      <div class="label">Color Palette Match</div>
+    </div>
+  </div>
+
+  <div class="section-heading">Quick Cross-Check</div>
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>Brand Element</th>
+        <th>Guideline Spec</th>
+        <th>Current Implementation</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Primary Color</strong></td>
+        <td>Primary Red <code>#B12B35</code></td>
+        <td><code>--primary: #B12B35</code> used in CSS vars, buttons, sidebar active, topbar accents</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Dark / Background</strong></td>
+        <td>Dark <code>#232222</code></td>
+        <td>Sidebar background <code>bg-[#232222]</code>, headings <code>text-[#232222]</code></td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Accent Blue</strong></td>
+        <td>Accent Blue <code>#2E75B6</code>, Navy <code>#003466</code></td>
+        <td>Dashboard icon colors hardcoded as <code>#2E75B6</code>, <code>#003466</code></td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Grey Scale</strong></td>
+        <td>Mid Grey <code>#5D5D5D</code>, Light Grey <code>#C5C5C5</code>, Cream <code>#EDE7E6</code>, Off-White <code>#F9F9F9</code></td>
+        <td>All 4 greys present in CSS vars and used consistently across inputs, dividers, labels</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Typography / Font</strong></td>
+        <td>Brand font: <em>Texta</em> (LLTor Tiglo listed in template notes)</td>
+        <td><strong>Inter</strong> loaded via <code>next/font/google</code> — no Texta or LLTor Tiglo</td>
+        <td><span class="badge missing">✗ Missing</span></td>
+      </tr>
+      <tr>
+        <td><strong>Logo Mark</strong></td>
+        <td>TX monogram / red-white logo mark</td>
+        <td><code>/txlogo.webp</code> used in sidebar + auth layout — correct</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Button Styles</strong></td>
+        <td>Rounded, red primary; white/outline cancel; red-on-white outline secondary</td>
+        <td>Primary: <code>bg-[#B12B35] rounded-lg text-white</code> ✓; Cancel: <code>border-[#B12B35] text-[#B12B35]</code> ✓; Hover states correct</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Hero / Landing (Auth)</strong></td>
+        <td>Template 1 — Red left panel, lightbulb illustration, "Got an idea?" copy, feature icons</td>
+        <td>Red left panel ✓, tagline different ("Capture Every Opportunity"), no illustration/lightbulb graphic, feature bullets present</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td><strong>Dashboard Layout</strong></td>
+        <td>Template 2 — Stats row, line chart (Idea Status), in-progress list, activity feed, ROI metric</td>
+        <td>Stat cards ✓, no charts rendered yet (chart components may not be wired), limited activity feed</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td><strong>Campaign / Hero Banner</strong></td>
+        <td>Template 3 — Red full-width banner for announcements/CTAs</td>
+        <td>No standalone campaign banner component found</td>
+        <td><span class="badge missing">✗ Missing</span></td>
+      </tr>
+      <tr>
+        <td><strong>App Cards / Portal Switcher</strong></td>
+        <td>Template 4 — Multi-portal card grid (IDEA Portal, Valu Portal, Quality Hub, Insight)</td>
+        <td>Single-app deployment; no multi-portal switcher component</td>
+        <td><span class="badge missing">✗ Missing</span></td>
+      </tr>
+      <tr>
+        <td><strong>Form UI</strong></td>
+        <td>Template 5 — "Submit Your Idea" with title, category dropdown, textarea, red submit</td>
+        <td>Idea submission forms exist under <code>/ideas</code> route; input styling matches brand colors</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td><strong>Storytelling Banner</strong></td>
+        <td>Template 6 — Full red banner "Because great work should not go unseen"</td>
+        <td>No storytelling/marketing banner section in app (internal tool, may be intentional)</td>
+        <td><span class="badge missing">✗ Missing</span></td>
+      </tr>
+      <tr>
+        <td><strong>Dark Mode</strong></td>
+        <td>Not specified in brand guidelines — brand is light-first</td>
+        <td>App defaults to <strong>dark mode</strong> (<code>defaultTheme="dark"</code>) — contradicts brand direction</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td><strong>Sidebar Navigation</strong></td>
+        <td>Not shown in provided templates</td>
+        <td>Dark sidebar <code>#232222</code>, red active states, white text, brand logo — well executed</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Card Components</strong></td>
+        <td>Clean white cards, light border, slight shadow</td>
+        <td>Cards use <code>ring-1 ring-foreground/10</code>, <code>rounded-xl</code> — consistent with brand</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><strong>Tagline</strong></td>
+        <td>"Passion For Perfection" (TestingXperts tagline)</td>
+        <td>Present in auth layout left panel only: <code>text-white/60 text-xs tracking-wide</code></td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- TEMPLATES -->
+<div class="panel" id="tab-templates">
+  <div class="section-heading">7 Brand Templates vs Implementation</div>
+  <div class="template-grid">
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 1 — App Landing Screen</div>
+        <span class="badge partial">~ Partial</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">Red hero left-panel with white text
+            <div class="check-detail">Implemented in <code>(auth)/layout.tsx</code> — <code>bg-[#B12B35]</code>, decorative circles</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">Brand logo (TX mark) + "TestingXperts" + tagline
+            <div class="check-detail">Logo block, "Passion For Perfection" present</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">⚠️</span>
+          <div class="check-text">Hero copy differs from brand template
+            <div class="check-detail">Brand: "Got an idea? Log it. Track it. Build it." — App: "Capture Every Opportunity. Drive Real Value."</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">Lightbulb / chart illustration missing
+            <div class="check-detail">Brand template shows a decorative lightbulb + upward-trending graphic — not in current auth layout</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">⚠️</span>
+          <div class="check-text">Feature icons (Capture / Track / Build) — simplified
+            <div class="check-detail">Template shows 3 icon+label blocks; implementation has text bullets, no icon trio</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 2 — Dashboard</div>
+        <span class="badge partial">~ Partial</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">Stat cards row (submitted / in progress / implemented)
+            <div class="check-detail">Dashboard page has 4-column stat grid with counts</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">⚠️</span>
+          <div class="check-text">"Idea Status" line chart — not confirmed rendered
+            <div class="check-detail">Chart components exist in codebase but may not be wired in <code>page.tsx</code></div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">"Ideas in Progress" progress-bar list
+            <div class="check-detail">Brand shows Services/Testing/etc. with % bars — not present in current dashboard</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">⚠️</span>
+          <div class="check-text">Activity Feed — partial
+            <div class="check-detail">Some activity display exists; brand template shows richer feed with avatars + timestamps</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">ROI/Impact metric card (2,068 "Is Telow" style)
+            <div class="check-detail">No hero ROI number widget on current dashboard</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 3 — Campaign Banner</div>
+        <span class="badge missing">✗ Missing</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">Full-bleed red banner with headline + CTA button
+            <div class="check-detail">"Got an Idea? IDEA Portal — Log It Now" — no such component anywhere in the frontend</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">Logo mark displayed inside banner
+            <div class="check-detail">TX logo inside red banner with white button — not implemented</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">💡</span>
+          <div class="check-text">Could be used as a top-of-dashboard CTA banner
+            <div class="check-detail">Suggested for dashboard or notifications page to prompt idea submission</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 4 — App Cards / Portal Switcher</div>
+        <span class="badge missing">✗ Not Applicable</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">Multi-portal grid card layout
+            <div class="check-detail">Brand shows 4 portals: IDEA Portal, Valu Portal, Quality Hub, Insight Dashboard — Value Portal is a single-app deployment</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">💡</span>
+          <div class="check-text">Likely an ecosystem-level template
+            <div class="check-detail">This template may belong to a parent "Exemplics" hub, not required for this app alone</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 5 — Form UI</div>
+        <span class="badge partial">~ Partial</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">Input field styles — match
+            <div class="check-detail"><code>border-[#C5C5C5]</code>, <code>focus-visible:border-[#B12B35]</code>, <code>bg-white</code>, <code>rounded-lg</code></div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">Red "Submit" button style
+            <div class="check-detail"><code>bg-[#B12B35] text-white rounded-lg</code> — correct</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">White/outline "Cancel" button
+            <div class="check-detail"><code>border border-[#B12B35] text-[#B12B35]</code> — correct</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">⚠️</span>
+          <div class="check-text">Category dropdown + textarea — verify all idea forms
+            <div class="check-detail">Login page form matches; ideas form pages need separate audit</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 6 — Storytelling / Video Frame</div>
+        <span class="badge missing">✗ Missing</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">Red full-frame marketing banner
+            <div class="check-detail">"Because great work should not go unseen" — no such marketing section in the app</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">💡</span>
+          <div class="check-text">Could be used as an onboarding/empty-state hero
+            <div class="check-detail">Suggested for reports or leaderboard empty states</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="template-card">
+      <div class="template-header">
+        <div class="template-name">Template 7 — Color Palette & Typography</div>
+        <span class="badge partial">~ Partial</span>
+      </div>
+      <div class="template-body">
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <div class="check-text">All 5 brand colors present in code
+            <div class="check-detail">Primary Red, Dark, Accent Blue, Light Grey, Dash Grey — all in globals.css and used across components</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">❌</span>
+          <div class="check-text">Brand typeface not implemented
+            <div class="check-detail">Spec: <em>Texta</em> / LLTor Tiglo — Implementation: <strong>Inter</strong> (Google Fonts)</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">⚠️</span>
+          <div class="check-text">Font sizing / weight scale — not fully mapped
+            <div class="check-detail">Brand shows 30px body weight / specific size scale — current uses Tailwind defaults</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- COLORS -->
+<div class="panel" id="tab-colors">
+  <div class="section-heading">Brand Color Palette — Audit</div>
+
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-box" style="background:#B12B35;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Primary Red</div>
+      <div class="swatch-hex">#B12B35</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#232222;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Brand Black</div>
+      <div class="swatch-hex">#232222</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#003466;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Navy Blue</div>
+      <div class="swatch-hex">#003466</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#2E75B6;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Accent Blue</div>
+      <div class="swatch-hex">#2E75B6</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#5D5D5D;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Mid Grey</div>
+      <div class="swatch-hex">#5D5D5D</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#C5C5C5;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Light Grey</div>
+      <div class="swatch-hex">#C5C5C5</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#EDE7E6; border:1px solid #333;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Light Cream</div>
+      <div class="swatch-hex">#EDE7E6</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#F9F9F9; border:1px solid #333;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Off White</div>
+      <div class="swatch-hex">#F9F9F9</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-box" style="background:#E42525;">
+        <div class="match-icon yes">✓</div>
+      </div>
+      <div class="swatch-label">Bright Red (hover)</div>
+      <div class="swatch-hex">#E42525</div>
+    </div>
+  </div>
+
+  <div class="section-heading">Where Each Color Is Used</div>
+  <table class="audit-table">
+    <thead>
+      <tr><th>Color</th><th>Brand Guideline Use</th><th>Implementation Use</th><th>Correct?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#B12B35;margin-right:6px;"></span><strong>#B12B35</strong></td>
+        <td>Primary actions, CTAs, highlights</td>
+        <td>Buttons, sidebar active, topbar badge, input focus ring, avatar, role badge, links</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#232222;margin-right:6px;"></span><strong>#232222</strong></td>
+        <td>Headers, dark backgrounds, body text</td>
+        <td>Sidebar bg, heading text, topbar dropdown name</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#003466;margin-right:6px;"></span><strong>#003466</strong></td>
+        <td>Navy accents, charts</td>
+        <td>Dashboard stat icon color only — could be used more broadly in charts</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#2E75B6;margin-right:6px;"></span><strong>#2E75B6</strong></td>
+        <td>Secondary accent, info states</td>
+        <td>Dashboard stat icon — not used in info badges or status chips yet</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#5D5D5D;margin-right:6px;"></span><strong>#5D5D5D</strong></td>
+        <td>Secondary text, labels</td>
+        <td>Subtext, email in dropdown, descriptions, sidebar group labels</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#C5C5C5;margin-right:6px;"></span><strong>#C5C5C5</strong></td>
+        <td>Borders, dividers, placeholders</td>
+        <td>Input borders, card borders, placeholder text — consistent</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#EDE7E6;border:1px solid #555;margin-right:6px;"></span><strong>#EDE7E6</strong></td>
+        <td>Light backgrounds, subtle fills</td>
+        <td>Dividers in login page, secondary bg token — used correctly</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#F9F9F9;border:1px solid #555;margin-right:6px;"></span><strong>#F9F9F9</strong></td>
+        <td>Page backgrounds, form backgrounds</td>
+        <td>Auth form column bg, search input bg, topbar input bg — correct</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- TYPOGRAPHY -->
+<div class="panel" id="tab-typography">
+  <div class="section-heading">Typography Comparison</div>
+  <div class="font-compare">
+    <div class="font-box">
+      <div class="label">Brand Guideline Font</div>
+      <div class="font-preview-brand" style="font-family: 'DM Sans', sans-serif; color: #B12B35;">Texta</div>
+      <div style="font-size: 28px; color: #fff; margin-top: 8px; font-family: Georgia, serif;">LLTor Tiglo</div>
+      <div class="font-note">Specified in Template 7 notes: "LLTor Tiglo" (likely Texta typeface). Not available on Google Fonts — requires licensed font file or CDN link.</div>
+    </div>
+    <div class="font-box">
+      <div class="label">Currently Implemented</div>
+      <div class="font-preview-impl">Inter</div>
+      <div style="font-size: 14px; color: #777; margin-top: 8px; font-family: 'DM Mono', monospace;">next/font/google → Inter → CSS var --font-sans</div>
+      <div class="font-note">Inter is a solid, neutral sans-serif. Close in feel but not the brand typeface. Should be replaced with Texta (if licensed) or a close substitute like DM Sans or Plus Jakarta Sans.</div>
+    </div>
+  </div>
+
+  <div class="section-heading">Text Style Audit</div>
+  <table class="audit-table">
+    <thead>
+      <tr><th>Text Role</th><th>Brand Spec</th><th>Implementation</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Page Title / H1</td>
+        <td>Bold, brand red or dark, large</td>
+        <td><code>text-2xl font-bold tracking-tight text-[#232222]</code></td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td>Section Heading</td>
+        <td>Semi-bold, dark</td>
+        <td><code>font-semibold text-[#232222]</code></td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td>Body / Description</td>
+        <td>Regular, mid grey</td>
+        <td><code>text-muted-foreground</code> → <code>#5D5D5D</code></td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td>Labels / Captions</td>
+        <td>Small, mid grey</td>
+        <td><code>text-xs text-[#5D5D5D]</code> / <code>text-sm text-muted-foreground</code></td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td>Button Text</td>
+        <td>Semi-bold, 14–16px, white on red</td>
+        <td><code>font-semibold text-base text-white</code> on primary button</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td>Nav Item</td>
+        <td>Medium weight, white/muted</td>
+        <td><code>text-white/70 hover:text-white</code> in sidebar</td>
+        <td><span class="badge match">✓ Match</span></td>
+      </tr>
+      <tr>
+        <td>Hero H1 (Auth)</td>
+        <td>"Got an idea?" — large, bold, white</td>
+        <td><code>text-[2.6rem] font-bold text-white leading-[1.15]</code> — size/weight correct, copy differs</td>
+        <td><span class="badge partial">~ Partial</span></td>
+      </tr>
+      <tr>
+        <td>Typeface</td>
+        <td>Texta / LLTor Tiglo</td>
+        <td>Inter — wrong font family</td>
+        <td><span class="badge missing">✗ Missing</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- GAPS -->
+<div class="panel" id="tab-gaps">
+  <div class="section-heading">Identified Gaps — Prioritized Fix List</div>
+  <div class="gap-list">
+
+    <div class="gap-item">
+      <div class="gap-num">01</div>
+      <div>
+        <h4>Brand Font Not Implemented</h4>
+        <p>The guidelines specify Texta (LLTor Tiglo). The app currently uses Inter. Replace with a licensed Texta font or use Plus Jakarta Sans / DM Sans as an approved substitute. Update <code>layout.tsx</code> font import and <code>--font-sans</code> CSS variable.</p>
+      </div>
+      <span class="priority-chip p-high">High</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">02</div>
+      <div>
+        <h4>Dark Mode Is Default — Brand Is Light-First</h4>
+        <p>The app defaults to dark theme (<code>defaultTheme="dark"</code> in ThemeProvider). The brand guidelines show all templates in light mode. Change default to <code>"light"</code> in <code>theme-provider.tsx</code> so the app matches brand intent out of the box.</p>
+      </div>
+      <span class="priority-chip p-high">High</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">03</div>
+      <div>
+        <h4>Dashboard Missing Charts (Idea Status line chart)</h4>
+        <p>Template 2 prominently shows a multi-line chart for "Idea Status" over time. The dashboard page has stat cards but no chart. Wire up the chart component (likely Recharts or Chart.js already in the codebase) to the <code>/api/dashboard</code> endpoint.</p>
+      </div>
+      <span class="priority-chip p-high">High</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">04</div>
+      <div>
+        <h4>Auth Landing — Missing Lightbulb Illustration + Icon Trio</h4>
+        <p>Template 1 shows a stylized lightbulb + upward chart graphic on the red panel, plus 3 feature icons (Capture / Track / Build). Current implementation has text bullets only. Add SVG illustration and icon row to <code>(auth)/layout.tsx</code>.</p>
+      </div>
+      <span class="priority-chip p-medium">Medium</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">05</div>
+      <div>
+        <h4>Hero Copy Doesn't Match Brand Tagline</h4>
+        <p>Brand: "Got an idea? Log it. Track it. Build it." — App: "Capture Every Opportunity. Drive Real Value." Consider aligning to brand copy or getting sign-off on the custom variant.</p>
+      </div>
+      <span class="priority-chip p-medium">Medium</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">06</div>
+      <div>
+        <h4>Dashboard Missing "Ideas in Progress" Progress-Bar List</h4>
+        <p>Template 2 shows a category breakdown (Services 81%, Testing, Seeking Approval) with horizontal progress bars. This is absent from the current dashboard. Add a widget using <code>/api/dashboard</code> data grouped by category/status.</p>
+      </div>
+      <span class="priority-chip p-medium">Medium</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">07</div>
+      <div>
+        <h4>Campaign Banner Component (Template 3) — Not Built</h4>
+        <p>A reusable red promotional banner ("Got an Idea? Log It Now") is defined in the brand kit. Build a <code>CampaignBanner</code> component using <code>bg-[#B12B35]</code> with logo, headline, and white CTA button. Could appear at top of dashboard.</p>
+      </div>
+      <span class="priority-chip p-medium">Medium</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">08</div>
+      <div>
+        <h4>Accent Blue / Navy Not Used in Status Badges</h4>
+        <p><code>#2E75B6</code> and <code>#003466</code> appear only in dashboard icon colors. Brand guidelines intend them for info states, secondary accents, and chart lines. Extend their use to status chips, info alerts, and chart series colors.</p>
+      </div>
+      <span class="priority-chip p-low">Low</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">09</div>
+      <div>
+        <h4>Geist Mono Referenced But Not Loaded</h4>
+        <p><code>--font-geist-mono</code> is in the <code>@theme</code> CSS block but Geist Mono is never imported in <code>layout.tsx</code>. Either import it or remove the reference to avoid silent fallback to system monospace.</p>
+      </div>
+      <span class="priority-chip p-low">Low</span>
+    </div>
+
+    <div class="gap-item">
+      <div class="gap-num">10</div>
+      <div>
+        <h4>Template 4 (Portal Switcher) — Architectural Decision Needed</h4>
+        <p>Brand shows a multi-portal card grid (Exemplics hub). Value Portal is currently standalone. Decide whether to build a portal-switcher landing page or confirm this is out of scope for this deployment.</p>
+      </div>
+      <span class="priority-chip p-low">Low</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+</script>
+</body>
+</html>

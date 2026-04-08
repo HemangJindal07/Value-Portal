@@ -26,9 +26,9 @@ import { api } from "@/lib/api";
 import type { Account } from "@/types";
 
 const statusColors: Record<string, string> = {
-  active: "bg-green-500/10 text-green-500",
-  inactive: "bg-gray-500/10 text-gray-400",
-  prospect: "bg-blue-500/10 text-blue-400",
+  active: "bg-[#B12B35]/10 text-[#B12B35]",
+  inactive: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  prospect: "bg-[#2E75B6]/10 text-[#2E75B6]",
 };
 
 export default function AccountsPage() {
@@ -84,7 +84,7 @@ export default function AccountsPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : accounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">

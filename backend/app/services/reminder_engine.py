@@ -50,7 +50,7 @@ def check_reminders_and_escalations() -> dict:
         elif sub_type == "idea" and assignment.get("idea"):
             title = assignment["idea"].get("title", "")
 
-        if days_pending >= 3 and days_pending < 7:
+        if days_pending >= 5 and days_pending < 7:
             already_reminded = (
                 supabase.table("notifications")
                 .select("notification_id", count="exact")

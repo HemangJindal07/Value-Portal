@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking, notifications, scoring, dashboard, governance
+from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing
 
 settings = get_settings()
 
@@ -16,7 +16,7 @@ app.add_middleware(
     allow_origins=[
         settings.frontend_url,
         "http://localhost:3000",
-        "http://192.168.14.214:3000",
+        # "http://192.168.14.214:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -35,6 +35,9 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(scoring.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(governance.router, prefix="/api")
+app.include_router(uploads.router, prefix="/api")
+app.include_router(stakeholders.router, prefix="/api")
+app.include_router(vertical_routing.router, prefix="/api")
 
 
 @app.get("/health")

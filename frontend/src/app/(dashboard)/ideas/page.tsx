@@ -33,13 +33,14 @@ import { api } from "@/lib/api";
 import type { IdeaWithRelations } from "@/types";
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-500/10 text-gray-400",
-  submitted: "bg-blue-500/10 text-blue-400",
-  under_review: "bg-amber-500/10 text-amber-400",
-  approved: "bg-green-500/10 text-green-400",
-  in_progress: "bg-cyan-500/10 text-cyan-400",
-  implemented: "bg-emerald-500/10 text-emerald-400",
-  rejected: "bg-red-500/10 text-red-400",
+  draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  routing_pending: "bg-amber-100 text-amber-700",
+  under_review: "bg-[#003466]/10 text-[#003466]",
+  approved: "bg-green-100 text-green-700",
+  in_progress: "bg-[#003466]/10 text-[#003466]",
+  implemented: "bg-[#003466]/15 text-[#003466]",
+  rejected: "bg-[#E42525]/10 text-[#E42525]",
 };
 
 const categoryLabels: Record<string, string> = {
@@ -52,13 +53,17 @@ const categoryLabels: Record<string, string> = {
 };
 
 const effortColors: Record<string, string> = {
-  low: "bg-green-500/10 text-green-400",
-  medium: "bg-amber-500/10 text-amber-400",
-  high: "bg-red-500/10 text-red-400",
+  low: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  medium: "bg-[#003466]/10 text-[#003466]",
+  high: "bg-[#E42525]/10 text-[#E42525]",
 };
 
+// Roles that can see ALL ideas across the org (practice_lead reviews them)
+const IDEAS_ALL_ROLES = ["admin", "executive", "practice_lead"];
+
 export default function IdeasPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canSeeAll = IDEAS_ALL_ROLES.includes(user?.role ?? "");
   const [ideas, setIdeas] = useState<IdeaWithRelations[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -73,10 +78,17 @@ export default function IdeasPage() {
     const qs = params.toString() ? `?${params.toString()}` : "";
 
     api<IdeaWithRelations[]>(`/api/ideas${qs}`, { token })
-      .then(setIdeas)
+      .then((data) => {
+        // delivery_manager and sales only see their own submissions
+        if (!canSeeAll && user?.id) {
+          setIdeas(data.filter((i) => i.submitted_by === user.id));
+        } else {
+          setIdeas(data);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token, search, statusFilter]);
+  }, [token, search, statusFilter, canSeeAll, user?.id]);
 
   return (
     <div className="space-y-6">
@@ -115,17 +127,21 @@ export default function IdeasPage() {
           <SelectContent>
             <SelectItem value="">All Statuses</SelectItem>
             <SelectItem value="submitted">Submitted</SelectItem>
+            <SelectItem value="routing_pending">Routing Pending</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="implemented">Implemented</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All Ideas</CardTitle>
+          <CardTitle className="text-base">
+            {canSeeAll ? "All Value Ideas" : "My Value Ideas"}
+          </CardTitle>
           <CardDescription>
             {ideas.length} idea{ideas.length !== 1 ? "s" : ""}
           </CardDescription>
@@ -133,7 +149,7 @@ export default function IdeasPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : ideas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -151,7 +167,7 @@ export default function IdeasPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>Effort</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Est. Savings</TableHead>
+                  <TableHead className="text-right">Est. Saving</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

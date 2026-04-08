@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     anthropic_api_key: str = ""
     resend_api_key: str = ""
+    portal_url: str = "http://localhost:3000"
 
     frontend_url: str = "http://localhost:3000"
     environment: str = "development"

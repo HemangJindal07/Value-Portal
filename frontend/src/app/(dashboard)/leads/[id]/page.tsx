@@ -43,10 +43,8 @@ const priorityColors: Record<string, string> = {
 };
 
 const typeLabels: Record<string, string> = {
-  cross_sell: "Cross-sell",
-  upsell: "Upsell",
-  new_service: "New Service",
-  expansion: "Expansion",
+  current_lead: "Current Lead",
+  new_lead: "New Lead",
 };
 
 function Field({ label, value }: { label: string; value: string | null }) {
@@ -105,7 +103,7 @@ export default function LeadDetailPage() {
         body: { status: newStatus },
       });
       setLead({ ...lead, ...updated });
-      toast.success(`Status changed to ${newStatus.replace("_", " ")}`);
+      toast.success(`Status changed to ${newStatus.replace(/_/g, " ")}`);
     } catch (err: unknown) {
       toast.error(
         err instanceof Error ? err.message : "Failed to update status"
@@ -119,7 +117,7 @@ export default function LeadDetailPage() {
   if (loading) {
     return (
       <p className="text-sm text-muted-foreground py-12 text-center">
-        Loading...
+        Loading…
       </p>
     );
   }
@@ -141,7 +139,7 @@ export default function LeadDetailPage() {
               variant="secondary"
               className={statusColors[lead.status]}
             >
-              {lead.status.replace("_", " ")}
+              {lead.status.replace(/_/g, " ")}
             </Badge>
             <Badge
               variant="secondary"
@@ -172,7 +170,7 @@ export default function LeadDetailPage() {
               <SelectContent>
                 {leadStatuses.map((s) => (
                   <SelectItem key={s} value={s} className="capitalize">
-                    {s.replace("_", " ")}
+                    {s.replace(/_/g, " ")}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -183,7 +181,7 @@ export default function LeadDetailPage() {
               onClick={handleStatusChange}
             >
               <Save className="mr-2 h-4 w-4" />
-              {saving ? "Saving..." : "Save"}
+              {saving ? "Saving…" : "Save"}
             </Button>
           </CardContent>
         </Card>
@@ -205,7 +203,7 @@ export default function LeadDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="Account" value={lead.account?.account_name ?? null} />
-            <Field label="Submitted by" value={lead.submitter?.full_name ?? null} />
+            <Field label="Submitted By" value={lead.submitter?.full_name ?? null} />
             <Field
               label="Estimated Value"
               value={

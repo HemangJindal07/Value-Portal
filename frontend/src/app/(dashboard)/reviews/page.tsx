@@ -37,7 +37,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Calendar, CheckCircle, Clock, Play } from "lucide-react";
+import { Plus, Calendar, CheckCircle, Clock, Play, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 type ReviewCycle = {
@@ -131,6 +131,21 @@ export default function ReviewsPage() {
       toast.error("Failed to update cycle");
     }
   };
+
+  if (!isPrivileged) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
+        <div className="h-12 w-12 rounded-full bg-[#EDE7E6] flex items-center justify-center">
+          <ShieldCheck className="h-6 w-6 text-[#5D5D5D]" />
+        </div>
+        <p className="text-sm font-medium text-[#232222]">Access Restricted</p>
+        <p className="text-xs text-muted-foreground max-w-xs">
+          The Reviews section is only accessible to Admin and Executive roles.
+          Contact your administrator if you need access.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -231,7 +246,7 @@ export default function ReviewsPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : cycles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">

@@ -41,15 +41,18 @@ export interface Account {
 
 // ── M3: Lead Submission ──
 
-export type LeadType = "cross_sell" | "upsell" | "new_service" | "expansion";
+export type LeadType = "current_lead" | "new_lead";
 export type LeadStatus =
   | "draft"
   | "submitted"
+  | "routing_pending"
   | "under_review"
   | "qualified"
+  | "approved"
   | "won"
   | "lost"
-  | "dropped";
+  | "dropped"
+  | "rejected";
 export type Priority = "high" | "medium" | "low";
 
 export interface Lead {
@@ -88,6 +91,7 @@ export type IdeaCategory =
 export type IdeaStatus =
   | "draft"
   | "submitted"
+  | "routing_pending"
   | "under_review"
   | "approved"
   | "in_progress"

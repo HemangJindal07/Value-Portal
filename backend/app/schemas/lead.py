@@ -5,20 +5,21 @@ from uuid import UUID
 
 
 class LeadType(str, Enum):
-    cross_sell = "cross_sell"
-    upsell = "upsell"
-    new_service = "new_service"
-    expansion = "expansion"
+    current_lead = "current_lead"
+    new_lead = "new_lead"
 
 
 class LeadStatus(str, Enum):
     draft = "draft"
     submitted = "submitted"
+    routing_pending = "routing_pending"
     under_review = "under_review"
     qualified = "qualified"
+    approved = "approved"
     won = "won"
     lost = "lost"
     dropped = "dropped"
+    rejected = "rejected"
 
 
 class Priority(str, Enum):
@@ -37,6 +38,7 @@ class LeadCreate(BaseModel):
     probability: int | None = None
     expected_close_date: date | None = None
     priority: Priority = Priority.medium
+    supporting_docs: list[str] = []
 
 
 class LeadUpdate(BaseModel):

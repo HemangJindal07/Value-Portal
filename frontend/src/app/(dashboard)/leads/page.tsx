@@ -33,30 +33,34 @@ import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-500/10 text-gray-400",
-  submitted: "bg-blue-500/10 text-blue-400",
-  under_review: "bg-amber-500/10 text-amber-400",
-  qualified: "bg-green-500/10 text-green-400",
-  won: "bg-emerald-500/10 text-emerald-400",
-  lost: "bg-red-500/10 text-red-400",
-  dropped: "bg-gray-500/10 text-gray-500",
+  draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
+  routing_pending: "bg-amber-100 text-amber-700",
+  under_review: "bg-[#003466]/10 text-[#003466]",
+  qualified: "bg-[#B12B35]/10 text-[#B12B35]",
+  approved: "bg-green-100 text-green-700",
+  won: "bg-[#003466]/15 text-[#003466]",
+  lost: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  dropped: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
 };
 
 const priorityColors: Record<string, string> = {
-  high: "bg-red-500/10 text-red-400",
-  medium: "bg-amber-500/10 text-amber-400",
-  low: "bg-blue-500/10 text-blue-400",
+  high: "bg-[#E42525]/10 text-[#E42525]",
+  medium: "bg-[#003466]/10 text-[#003466]",
+  low: "bg-[#2E75B6]/10 text-[#2E75B6]",
 };
 
 const typeLabels: Record<string, string> = {
-  cross_sell: "Cross-sell",
-  upsell: "Upsell",
-  new_service: "New Service",
-  expansion: "Expansion",
+  current_lead: "Current Lead",
+  new_lead: "New Lead",
 };
 
+// Roles that can see ALL leads across the org
+const LEADS_ALL_ROLES = ["admin", "executive", "sales"];
+
 export default function LeadsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -71,10 +75,17 @@ export default function LeadsPage() {
     const qs = params.toString() ? `?${params.toString()}` : "";
 
     api<LeadWithRelations[]>(`/api/leads${qs}`, { token })
-      .then(setLeads)
+      .then((data) => {
+        // delivery_manager and practice_lead only see their own submissions
+        if (!canSeeAll && user?.id) {
+          setLeads(data.filter((l) => l.submitted_by === user.id));
+        } else {
+          setLeads(data);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token, search, statusFilter]);
+  }, [token, search, statusFilter, canSeeAll, user?.id]);
 
   return (
     <div className="space-y-6">
@@ -113,17 +124,22 @@ export default function LeadsPage() {
           <SelectContent>
             <SelectItem value="">All Statuses</SelectItem>
             <SelectItem value="submitted">Submitted</SelectItem>
+            <SelectItem value="routing_pending">Routing Pending</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="qualified">Qualified</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="won">Won</SelectItem>
             <SelectItem value="lost">Lost</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All Leads</CardTitle>
+          <CardTitle className="text-base">
+            {canSeeAll ? "All Leads" : "My Leads"}
+          </CardTitle>
           <CardDescription>
             {leads.length} lead{leads.length !== 1 ? "s" : ""}
           </CardDescription>
@@ -131,7 +147,7 @@ export default function LeadsPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading...
+              Loading…
             </p>
           ) : leads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">

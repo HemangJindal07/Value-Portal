@@ -1,10 +1,58 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const DEFAULT_API_URL = "http://localhost:8000";
+
+function getApiBaseUrl(): string {
+  // Prefer a runtime-injected value so we don't get stuck with stale
+  // Turbopack inlined `NEXT_PUBLIC_*` values.
+  if (typeof window !== "undefined") {
+    const injected = (window as unknown as {
+      __VALUE_PORTAL_API_URL__?: unknown;
+    }).__VALUE_PORTAL_API_URL__;
+
+    if (typeof injected === "string" && injected.length > 0) return injected;
+  }
+
+  return process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+}
 
 type RequestOptions = {
   method?: string;
   body?: unknown;
   token?: string;
 };
+
+export type UploadResult = {
+  url: string;
+  filename: string;
+  size: number;
+  content_type: string;
+};
+
+/**
+ * Upload a file to the backend /api/uploads endpoint.
+ * Returns the Supabase Storage public URL.
+ */
+export async function uploadFile(
+  file: File,
+  token: string
+): Promise<UploadResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${getApiBaseUrl()}/api/uploads`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "Upload failed" }));
+    throw new Error(error.detail || `Upload error: ${res.status}`);
+  }
+
+  return res.json();
+}
 
 export async function api<T = unknown>(
   endpoint: string,
@@ -20,7 +68,7 @@ export async function api<T = unknown>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const res = await fetch(`${getApiBaseUrl()}${endpoint}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,

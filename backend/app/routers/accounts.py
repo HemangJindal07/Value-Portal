@@ -1,8 +1,12 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from uuid import UUID
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
 from app.schemas.account import AccountCreate, AccountUpdate, AccountResponse
+from app.services.notification_service import send_notification
+
+logger = logging.getLogger("accounts")
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"])
 
@@ -62,7 +66,66 @@ async def create_account(
     supabase = get_supabase_admin()
     data = payload.model_dump(mode="json")
     result = supabase.table("accounts").insert(data).execute()
-    return result.data[0]
+    account = result.data[0]
+    account_id   = str(account["account_id"])
+    account_name = account["account_name"]
+
+    # ── Auto-populate account_stakeholders: DU (step 1) → DH (step 2) ───────
+    du_id = str(payload.practice_leader_id) if payload.practice_leader_id else None
+    dh_id = str(payload.account_owner_id)   if payload.account_owner_id   else None
+
+    stakeholder_rows = []
+    step = 1
+    if du_id:
+        stakeholder_rows.append({
+            "account_id": account_id,
+            "user_id":    du_id,
+            "role_label": "Delivery Unit",
+            "step_order": step,
+        })
+        step += 1
+    if dh_id:
+        stakeholder_rows.append({
+            "account_id": account_id,
+            "user_id":    dh_id,
+            "role_label": "Delivery Head",
+            "step_order": step,
+        })
+
+    if stakeholder_rows:
+        try:
+            supabase.table("account_stakeholders").upsert(
+                stakeholder_rows, on_conflict="account_id,user_id"
+            ).execute()
+            logger.info("[ACCOUNT] Inserted %d stakeholder(s) for account %s", len(stakeholder_rows), account_id)
+        except Exception as exc:
+            logger.exception("[ACCOUNT] Failed to insert stakeholders for %s: %s", account_id, exc)
+
+    # ── Notify DU and DH of their assignment ─────────────────────────────────
+    if du_id:
+        send_notification(
+            recipient_id=du_id,
+            submission_type="account",
+            submission_id=account_id,
+            notification_type="info",
+            message=(
+                f'You have been assigned as Delivery Unit (DU) for account "{account_name}". '
+                f'Leads and ideas from this account will be routed to you first for review.'
+            ),
+        )
+    if dh_id:
+        send_notification(
+            recipient_id=dh_id,
+            submission_type="account",
+            submission_id=account_id,
+            notification_type="info",
+            message=(
+                f'You have been assigned as Delivery Head (DH) for account "{account_name}". '
+                f'You will receive leads and ideas for review after DU approval.'
+            ),
+        )
+
+    return account
 
 
 @router.patch("/{account_id}")
