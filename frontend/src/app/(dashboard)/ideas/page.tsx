@@ -1,224 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * Value Ideas feature is disabled — leads-only portal.
+ * Original list UI commented out in git history; re-enable `/api/ideas` + sidebar link to restore.
+ */
 import Link from "next/link";
-import { Plus, Lightbulb, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useAuth } from "@/lib/auth-context";
-import { api } from "@/lib/api";
-import type { IdeaWithRelations } from "@/types";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
-const statusColors: Record<string, string> = {
-  draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
-  submitted: "bg-[#2E75B6]/10 text-[#2E75B6]",
-  routing_pending: "bg-amber-100 text-amber-700",
-  under_review: "bg-[#003466]/10 text-[#003466]",
-  approved: "bg-green-100 text-green-700",
-  in_progress: "bg-[#003466]/10 text-[#003466]",
-  implemented: "bg-[#003466]/15 text-[#003466]",
-  rejected: "bg-[#E42525]/10 text-[#E42525]",
-};
-
-const categoryLabels: Record<string, string> = {
-  automation: "Automation",
-  cost_optimization: "Cost Optimization",
-  efficiency: "Efficiency",
-  risk_reduction: "Risk Reduction",
-  innovation: "Innovation",
-  process_improvement: "Process Improvement",
-};
-
-const effortColors: Record<string, string> = {
-  low: "bg-[#2E75B6]/10 text-[#2E75B6]",
-  medium: "bg-[#003466]/10 text-[#003466]",
-  high: "bg-[#E42525]/10 text-[#E42525]",
-};
-
-// Roles that can see ALL ideas across the org (practice_lead reviews them)
-const IDEAS_ALL_ROLES = ["admin", "executive", "practice_lead"];
-
-export default function IdeasPage() {
-  const { token, user } = useAuth();
-  const canSeeAll = IDEAS_ALL_ROLES.includes(user?.role ?? "");
-  const [ideas, setIdeas] = useState<IdeaWithRelations[]>([]);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (statusFilter) params.set("status", statusFilter);
-    const qs = params.toString() ? `?${params.toString()}` : "";
-
-    api<IdeaWithRelations[]>(`/api/ideas${qs}`, { token })
-      .then((data) => {
-        // delivery_manager and sales only see their own submissions
-        if (!canSeeAll && user?.id) {
-          setIdeas(data.filter((i) => i.submitted_by === user.id));
-        } else {
-          setIdeas(data);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [token, search, statusFilter, canSeeAll, user?.id]);
-
+export default function IdeasDisabledPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Value Ideas</h1>
-          <p className="text-muted-foreground">
-            Innovation, automation, and process improvement ideas.
-          </p>
-        </div>
-        <Link href="/ideas/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Idea
-          </Button>
-        </Link>
-      </div>
-
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search ideas..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select
-          value={statusFilter}
-          onValueChange={(val: string | null) => setStatusFilter(val || "")}
-        >
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Statuses</SelectItem>
-            <SelectItem value="submitted">Submitted</SelectItem>
-            <SelectItem value="routing_pending">Routing Pending</SelectItem>
-            <SelectItem value="under_review">Under Review</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="implemented">Implemented</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Card>
+    <div className="max-w-lg space-y-4">
+      <Card className="border-[#EDE7E6]">
         <CardHeader>
-          <CardTitle className="text-base">
-            {canSeeAll ? "All Value Ideas" : "My Value Ideas"}
-          </CardTitle>
+          <CardTitle className="text-[#232222]">Value Ideas</CardTitle>
           <CardDescription>
-            {ideas.length} idea{ideas.length !== 1 ? "s" : ""}
+            This area is turned off. The portal currently supports leads only.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading…
-            </p>
-          ) : ideas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Lightbulb className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No ideas yet. Submit your first value idea.
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Effort</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Est. Saving</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ideas.map((idea) => (
-                  <TableRow key={idea.idea_id}>
-                    <TableCell>
-                      <Link
-                        href={`/ideas/${idea.idea_id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {idea.title}
-                      </Link>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        by{" "}
-                        {idea.submitter?.full_name ?? "Unknown"}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {idea.account?.account_name ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {categoryLabels[idea.idea_category] || idea.idea_category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={effortColors[idea.estimated_effort]}
-                      >
-                        {idea.estimated_effort}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={statusColors[idea.status]}
-                      >
-                        {idea.status.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {idea.estimated_saving
-                        ? `$${Number(idea.estimated_saving).toLocaleString()}`
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <Link
+            href="/leads"
+            className="text-sm font-semibold text-[#B12B35] hover:underline"
+          >
+            Go to Leads
+          </Link>
         </CardContent>
       </Card>
     </div>

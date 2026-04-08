@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
-  Lightbulb,
+  // Lightbulb, // Value Ideas nav disabled
   Target,
   ClipboardList,
   Trophy,
@@ -41,7 +41,7 @@ const ADMIN_NAV = [
       { title: "Dashboard",       href: "/",              icon: LayoutDashboard },
       { title: "Accounts",        href: "/accounts",      icon: Building2 },
       { title: "Leads",           href: "/leads",         icon: Target },
-      { title: "Value Ideas",     href: "/ideas",         icon: Lightbulb },
+      // { title: "Value Ideas",     href: "/ideas",         icon: Lightbulb },
       { title: "My Assignments",  href: "/assignments",   icon: ClipboardList },
     ],
   },
@@ -72,7 +72,7 @@ const EXECUTIVE_NAV = [
     items: [
       { title: "Dashboard",      href: "/",            icon: LayoutDashboard },
       { title: "Leads",          href: "/leads",       icon: Target },
-      { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
+      // { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
       { title: "My Assignments", href: "/assignments", icon: ClipboardList },
     ],
   },
@@ -99,7 +99,7 @@ const USER_NAV = [
     items: [
       { title: "Dashboard",      href: "/",            icon: LayoutDashboard },
       { title: "Leads",          href: "/leads",       icon: Target },
-      { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
+      // { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
       { title: "My Assignments", href: "/assignments", icon: ClipboardList },
     ],
   },

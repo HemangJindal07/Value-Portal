@@ -5,6 +5,8 @@ from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
 from app.schemas.account import AccountCreate, AccountUpdate, AccountResponse
 from app.services.notification_service import send_notification
+from app.services.account_stakeholders_sync import refresh_du_dh_and_renumber
+from postgrest.exceptions import APIError
 
 logger = logging.getLogger("accounts")
 
@@ -168,7 +170,26 @@ async def update_account(
         .eq("account_id", str(account_id))
         .execute()
     )
-    return result.data[0]
+    updated = result.data[0]
+
+    if any(
+        k in update_data
+        for k in ("practice_leader_id", "account_owner_id")
+    ):
+        try:
+            refresh_du_dh_and_renumber(supabase, str(account_id))
+        except APIError as exc:
+            payload = getattr(exc, "args", [None])[0]
+            if isinstance(payload, dict) and payload.get("code") == "PGRST205":
+                logger.warning(
+                    "[ACCOUNT] Stakeholder sync skipped — apply migration 011_account_stakeholders.sql"
+                )
+            else:
+                logger.exception("[ACCOUNT] Stakeholder refresh failed: %s", exc)
+        except Exception as exc:
+            logger.exception("[ACCOUNT] Stakeholder refresh failed: %s", exc)
+
+    return updated
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)

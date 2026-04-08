@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Lightbulb } from "lucide-react";
+import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { AssignmentWithRelations, LeadWithRelations, IdeaWithRelations } from "@/types";
+import type { AssignmentWithRelations, LeadWithRelations } from "@/types";
 
 const roleLabels: Record<string, string> = {
   account_owner: "Delivery Head (DH)",
@@ -199,7 +199,7 @@ function AssignmentCard({
   const href =
     assignment.submission_type === "lead"
       ? `/leads/${assignment.submission_id}`
-      : `/ideas/${assignment.submission_id}`;
+      : "#"; // Value Ideas UI disabled — legacy idea assignments: no detail page
 
   const isPending = assignment.action_taken === "pending";
 
@@ -216,6 +216,7 @@ function AssignmentCard({
               >
                 {assignment.submission_type === "lead" ? "Lead" : "Idea"}
               </Badge>
+              {assignment.submission_type === "lead" ? (
               <Link
                 href={href}
                 className="text-sm font-medium hover:underline flex items-center gap-1 truncate"
@@ -223,6 +224,11 @@ function AssignmentCard({
                 {assignment.submission_title ?? "Untitled"}
                 <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
               </Link>
+              ) : (
+              <span className="text-sm font-medium text-muted-foreground flex items-center gap-1 truncate" title="Value Ideas are disabled">
+                {assignment.submission_title ?? "Untitled (legacy idea)"}
+              </span>
+              )}
             </div>
 
             {/* Row 2: meta */}
@@ -352,13 +358,12 @@ const submissionStatusColors: Record<string, string> = {
 
 function MySubmissionsTab({
   leads,
-  ideas,
   loading,
 }: {
   leads: LeadWithRelations[];
-  ideas: IdeaWithRelations[];
   loading: boolean;
 }) {
+  // Value Ideas: idea rows commented out — leads-only portal
   const combined = [
     ...leads.map((l) => ({
       id: l.lead_id,
@@ -368,15 +373,6 @@ function MySubmissionsTab({
       account: l.account?.account_name ?? "—",
       href: `/leads/${l.lead_id}`,
       created_at: l.created_at,
-    })),
-    ...ideas.map((i) => ({
-      id: i.idea_id,
-      type: "idea" as const,
-      title: i.title,
-      status: i.status,
-      account: i.account?.account_name ?? "—",
-      href: `/ideas/${i.idea_id}`,
-      created_at: i.created_at,
     })),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -393,19 +389,13 @@ function MySubmissionsTab({
       <div className="text-center py-16 text-muted-foreground mt-4">
         <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
         <p className="text-sm">No submissions yet.</p>
-        <p className="text-xs mt-1">Submit a lead or value idea to start tracking.</p>
+        <p className="text-xs mt-1">Submit a lead to start tracking.</p>
         <div className="flex gap-3 justify-center mt-4">
           <Link
             href="/leads/new"
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#B12B35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#9a2330] transition-colors"
           >
             <Target className="h-4 w-4" /> New Lead
-          </Link>
-          <Link
-            href="/ideas/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#003466] px-4 py-2 text-sm font-semibold text-white hover:bg-[#003466]/90 transition-colors"
-          >
-            <Lightbulb className="h-4 w-4" /> New Idea
           </Link>
         </div>
       </div>
@@ -457,7 +447,6 @@ export default function AssignmentsPage() {
   const [myAssignments, setMyAssignments] = useState<AssignmentWithRelations[]>([]);
   const [allAssignments, setAllAssignments] = useState<AssignmentWithRelations[]>([]);
   const [myLeads, setMyLeads] = useState<LeadWithRelations[]>([]);
-  const [myIdeas, setMyIdeas] = useState<IdeaWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
@@ -472,14 +461,10 @@ export default function AssignmentsPage() {
         const all = await api<AssignmentWithRelations[]>("/api/assignments/all", { token });
         setAllAssignments(all);
       } else {
-        // Fetch the user's own submitted leads and ideas for the tracker tab
-        const [leads, ideas] = await Promise.all([
-          api<LeadWithRelations[]>("/api/leads", { token }),
-          api<IdeaWithRelations[]>("/api/ideas", { token }),
-        ]);
+        const leads = await api<LeadWithRelations[]>("/api/leads", { token });
+        // const ideas = await api<IdeaWithRelations[]>("/api/ideas", { token }); // Value Ideas disabled
         if (user?.id) {
           setMyLeads(leads.filter((l) => l.submitted_by === user.id));
-          setMyIdeas(ideas.filter((i) => i.submitted_by === user.id));
         }
       }
     } catch (err: unknown) {
@@ -547,9 +532,9 @@ export default function AssignmentsPage() {
           {!isAdmin && (
             <TabsTrigger value="submissions">
               My Submissions
-              {(myLeads.length + myIdeas.length) > 0 && (
+              {myLeads.length > 0 && (
                 <span className="ml-1.5 text-xs bg-[#B12B35]/10 text-[#B12B35] px-1.5 py-0.5 rounded-full">
-                  {myLeads.length + myIdeas.length}
+                  {myLeads.length}
                 </span>
               )}
             </TabsTrigger>
@@ -582,12 +567,11 @@ export default function AssignmentsPage() {
           )}
         </TabsList>
 
-        {/* My Submissions tab — shows the user's leads + ideas with current status */}
+        {/* My Submissions tab — user's leads only (Value Ideas disabled) */}
         {!isAdmin && (
           <TabsContent value="submissions">
             <MySubmissionsTab
               leads={myLeads}
-              ideas={myIdeas}
               loading={loading}
             />
           </TabsContent>

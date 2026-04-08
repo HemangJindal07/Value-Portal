@@ -306,6 +306,9 @@ async def start_routing(
         "system",
     )
 
+    if submission_type == "lead":
+        _update_submission_status(supabase, "lead", submission_id, "under_review")
+
     # Fetch full submission details for notifications + email
     sub = _get_submission(supabase, submission_type, submission_id)
     title       = sub.get("title", "")
@@ -424,9 +427,17 @@ async def advance_routing(
         # No further steps — final approval
         _update_submission_status(supabase, sub_type, sub_id, "approved")
         if submitter_id:
+            if sub_type == "lead":
+                final_msg = (
+                    f'Your lead "{title}" has been fully approved through the review chain.'
+                )
+            else:
+                final_msg = (
+                    f'Congratulations! Your {sub_type} "{title}" has been fully approved.'
+                )
             _send_notification(
                 supabase, submitter_id, sub_type, sub_id,
                 "status_update",
-                f'Congratulations! Your {sub_type} "{title}" has been fully approved.',
+                final_msg,
             )
         logger.info("[ROUTE] Final approval for %s %s", sub_type, sub_id)

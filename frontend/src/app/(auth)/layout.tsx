@@ -46,18 +46,18 @@ export default function AuthLayout({
             Value Portal
           </p>
           <h1 className="text-[2.6rem] font-bold text-white leading-[1.15] mb-3">
-            Got an idea?
+            Capture every lead.
             <br />
             <span className="text-white/80">Log it. Track it.</span>
             <br />
-            Build it.
+            Win more.
           </h1>
           <p className="text-white/70 text-[15px] leading-relaxed max-w-xs mb-8">
             A centralised platform for delivery teams to capture, track, and
             measure the business value they generate at client accounts.
           </p>
 
-          {/* Lightbulb / chart illustration */}
+          {/* Hero illustration (lightbulb icon is decorative only) */}
           <div className="relative mb-8 flex items-center justify-center">
             <div className="relative w-48 h-32">
               {/* Upward trend line SVG */}
@@ -81,7 +81,7 @@ export default function AuthLayout({
               </div>
               {/* Floating mini-cards */}
               <div className="absolute top-0 right-0 bg-white/15 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium backdrop-blur-sm">
-                +42 ideas
+                +42 leads
               </div>
               <div className="absolute bottom-0 left-0 bg-white/15 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium backdrop-blur-sm">
                 £2.4M value
@@ -92,7 +92,7 @@ export default function AuthLayout({
           {/* Feature icon trio — matches Template 1 */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: Crosshair, label: "Capture", desc: "Log leads & ideas instantly" },
+              { icon: Crosshair, label: "Capture", desc: "Log leads instantly" },
               { icon: Layers,    label: "Track",   desc: "Full pipeline visibility" },
               { icon: TrendingUp,label: "Build",   desc: "Measure real business impact" },
             ].map((f) => (

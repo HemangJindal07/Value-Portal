@@ -76,7 +76,7 @@ export function Topbar() {
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search leads, ideas, accounts..."
+          placeholder="Search leads, accounts..."
           className="pl-9 h-9 bg-[#F9F9F9] border-[#C5C5C5] focus:border-[#B12B35] focus:ring-[#B12B35]/20"
         />
       </div>

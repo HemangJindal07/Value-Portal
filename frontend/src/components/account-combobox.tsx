@@ -139,7 +139,7 @@ export function AccountCombobox({
 
       {/* Hint shown while user hasn't typed enough */}
       {open && query.trim().length > 0 && query.trim().length < MIN_CHARS && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-input bg-popover px-2.5 py-2 text-xs text-muted-foreground shadow-md">
+        <div className="absolute z-[100] mt-1 w-full rounded-lg border border-[#C5C5C5] bg-white px-2.5 py-2 text-xs text-[#5D5D5D] shadow-lg">
           Type {MIN_CHARS - query.trim().length} more character
           {MIN_CHARS - query.trim().length > 1 ? "s" : ""} to search…
         </div>
@@ -147,15 +147,15 @@ export function AccountCombobox({
 
       {showDropdown && (
         <ul
-          className="absolute z-50 mt-1 max-h-60 min-w-full w-max max-w-[480px] overflow-auto rounded-lg border border-input bg-popover py-1 text-popover-foreground shadow-lg"
+          className="absolute z-[100] mt-1 max-h-60 min-w-full w-full overflow-auto rounded-lg border border-[#C5C5C5] bg-white py-1 text-[#232222] shadow-xl"
           role="listbox"
         >
           {loading ? (
-            <li className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground">
+            <li className="flex items-center gap-2 px-3 py-2.5 text-sm text-[#5D5D5D]">
               <Loader2 className="h-3 w-3 animate-spin" /> Searching…
             </li>
           ) : results.length === 0 ? (
-            <li className="px-3 py-2.5 text-sm text-muted-foreground">
+            <li className="px-3 py-2.5 text-sm text-[#5D5D5D]">
               No accounts found for &ldquo;{query}&rdquo;.
             </li>
           ) : (
@@ -165,17 +165,17 @@ export function AccountCombobox({
                 role="option"
                 aria-selected={value === a.account_id}
                 className={cn(
-                  "cursor-pointer px-3 py-2.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                  value === a.account_id && "bg-accent text-accent-foreground"
+                  "cursor-pointer px-3 py-2.5 text-sm outline-none hover:bg-[#F9F9F9]",
+                  value === a.account_id && "bg-[#F9F9F9]"
                 )}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   handleSelect(a);
                 }}
               >
-                <span className="font-medium">{a.account_name}</span>
+                <span className="font-medium text-[#232222]">{a.account_name}</span>
                 {(a.industry || a.region) && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
+                  <div className="text-xs text-[#5D5D5D] mt-0.5">
                     {[a.industry, a.region].filter(Boolean).join(" · ")}
                   </div>
                 )}

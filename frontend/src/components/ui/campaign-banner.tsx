@@ -35,16 +35,16 @@ export function CampaignBanner() {
           Value Portal
         </p>
         <p className="text-white font-bold text-base leading-tight">
-          Got an Idea?&nbsp;
+          Got a lead?&nbsp;
           <span className="text-white/80 font-normal">
             Log it, track it, and measure the impact.
           </span>
         </p>
       </div>
 
-      {/* CTA */}
+      {/* CTA — Value Ideas disabled: point to leads */}
       <Link
-        href="/ideas/new"
+        href="/leads/new"
         className="relative shrink-0 inline-flex items-center gap-2 bg-white text-[#B12B35] font-semibold text-sm px-4 py-2 rounded-lg hover:bg-[#F9F9F9] transition-colors"
       >
         Log It Now

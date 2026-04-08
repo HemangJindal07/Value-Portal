@@ -206,7 +206,7 @@ export default function AccountDetailPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
-            Leads and Value Ideas submitted for this account follow this approval chain:
+            Leads submitted for this account follow this approval chain:
           </p>
           <div className="divide-y">
             <StakeholderRow step={1} label="Delivery Head (DH) — First Review" user={dh} />
@@ -229,7 +229,7 @@ export default function AccountDetailPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Leads and ideas linked to this account will appear here.
+            Leads linked to this account will appear here.
           </p>
         </CardContent>
       </Card>

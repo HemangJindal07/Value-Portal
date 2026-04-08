@@ -182,11 +182,11 @@ function VerticalRoutingTab({ token }: { token: string }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Delivery Unit (DU)</Label>
-                    <UserCombobox token={token} value={editDuId} onChange={setEditDuId} placeholder="Select DU head..." />
+                    <UserCombobox token={token} value={editDuId || null} onChange={(id) => setEditDuId(id ?? "")} placeholder="Select DU head..." />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Delivery Head (DH)</Label>
-                    <UserCombobox token={token} value={editDhId} onChange={setEditDhId} placeholder="Select DH..." />
+                    <UserCombobox token={token} value={editDhId || null} onChange={(id) => setEditDhId(id ?? "")} placeholder="Select DH..." />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -251,11 +251,11 @@ function VerticalRoutingTab({ token }: { token: string }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Delivery Unit (DU)</Label>
-              <UserCombobox token={token} value={addDuId} onChange={setAddDuId} placeholder="Select DU head..." />
+              <UserCombobox token={token} value={addDuId || null} onChange={(id) => setAddDuId(id ?? "")} placeholder="Select DU head..." />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Delivery Head (DH)</Label>
-              <UserCombobox token={token} value={addDhId} onChange={setAddDhId} placeholder="Select DH..." />
+              <UserCombobox token={token} value={addDhId || null} onChange={(id) => setAddDhId(id ?? "")} placeholder="Select DH..." />
             </div>
           </div>
           <div className="flex gap-2">
@@ -469,7 +469,7 @@ function RegionSalesTab({ token }: { token: string }) {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Sales Person *</Label>
-            <UserCombobox token={token} value={addUserId} onChange={setAddUserId} placeholder="Select sales person..." />
+            <UserCombobox token={token} value={addUserId || null} onChange={(id) => setAddUserId(id ?? "")} placeholder="Select sales person..." />
           </div>
 
           <div className="flex gap-2">
