@@ -8,6 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -44,16 +60,142 @@ function getDaysRemaining(dueDate: string | null): { label: string; urgent: bool
   return { label: `${diff}d remaining`, urgent: false };
 }
 
+// 3-tier aging color: green 0-3 days · amber 4-7 days · red 7+ days
+function getAgingBorder(assignmentDate: string | null | undefined): string {
+  if (!assignmentDate) return "border-l-4 border-l-[#C5C5C5]";
+  const daysPending = Math.floor(
+    (Date.now() - new Date(assignmentDate).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (daysPending <= 3) return "border-l-4 border-l-green-500";
+  if (daysPending <= 7) return "border-l-4 border-l-amber-500";
+  return "border-l-4 border-l-red-500";
+}
+
+// ── Review Decision Dialog ─────────────────────────────────────────────────
+type ReviewPending = {
+  assignmentId: string;
+  submissionType: "lead" | "idea";
+  action: "approved" | "rejected";
+};
+
+function ReviewDecisionDialog({
+  pending,
+  onClose,
+  onConfirm,
+  submitting,
+}: {
+  pending: ReviewPending | null;
+  onClose: () => void;
+  onConfirm: (assignmentId: string, action: string, notes: string) => void;
+  submitting: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  const [decision, setDecision] = useState<string>("");
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (pending) {
+      setReason("");
+      setDecision(pending.action);
+    }
+  }, [pending]);
+
+  if (!pending) return null;
+
+  const isLead = pending.submissionType === "lead";
+  const decisionOptions = isLead
+    ? [
+        { value: "approved", label: "Qualified — move to next stage" },
+        { value: "rejected", label: "Disqualified — does not meet criteria" },
+      ]
+    : [
+        { value: "approved", label: "Approved — proceed with idea" },
+        { value: "rejected", label: "Rejected — not viable at this time" },
+      ];
+
+  const canSubmit = decision && reason.trim().length >= 10;
+
+  return (
+    <Dialog open={!!pending} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-[#232222]">
+            {pending.action === "approved" ? "Approve Submission" : "Reject Submission"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="decision" className="text-sm font-medium text-[#232222]">
+              Decision <span className="text-red-500">*</span>
+            </Label>
+            <Select value={decision} onValueChange={(v) => { if (v !== null) setDecision(v); }}>
+              <SelectTrigger id="decision" className="border-[#C5C5C5]">
+                <SelectValue placeholder="Select a decision…" />
+              </SelectTrigger>
+              <SelectContent>
+                {decisionOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="reason" className="text-sm font-medium text-[#232222]">
+              Reason / Comments <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              id="reason"
+              placeholder="Provide a clear reason for this decision (min 10 characters)…"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+              className="border-[#C5C5C5] resize-none text-sm"
+            />
+            <p className="text-[11px] text-[#5D5D5D]">
+              {reason.trim().length}/10 min characters
+              {reason.trim().length < 10 && reason.length > 0 && (
+                <span className="text-red-400 ml-1">— please add more detail</span>
+              )}
+            </p>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={submitting} className="border-[#C5C5C5]">
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSubmit || submitting}
+            onClick={() => onConfirm(pending.assignmentId, decision, reason.trim())}
+            className={
+              decision === "rejected"
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-green-600 hover:bg-green-700 text-white"
+            }
+          >
+            {submitting ? "Submitting…" : decision === "rejected" ? "Confirm Rejection" : "Confirm Approval"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AssignmentCard({
   assignment,
   onAction,
+  onOpenReview,
   actioning,
 }: {
   assignment: AssignmentWithRelations;
-  onAction: (id: string, action: string) => void;
+  onAction: (id: string, action: string, notes?: string) => void;
+  onOpenReview: (pending: ReviewPending) => void;
   actioning: string | null;
 }) {
   const due = getDaysRemaining(assignment.due_date);
+  const agingBorder = getAgingBorder(assignment.assignment_date);
   const href =
     assignment.submission_type === "lead"
       ? `/leads/${assignment.submission_id}`
@@ -62,7 +204,7 @@ function AssignmentCard({
   const isPending = assignment.action_taken === "pending";
 
   return (
-    <Card className="hover:bg-muted/30 transition-colors">
+    <Card className={`hover:bg-muted/30 transition-colors overflow-hidden ${agingBorder}`}>
       <CardContent className="py-4 px-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0 space-y-2">
@@ -87,7 +229,7 @@ function AssignmentCard({
             <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
               <span>{assignment.account_name ?? "—"}</span>
               <span>·</span>
-              <span>Your role: <span className="text-foreground font-medium">{roleLabels[assignment.assigned_role]}</span></span>
+              <span>Your role: <span className="text-foreground font-medium">{roleLabels[assignment.assigned_role] ?? assignment.assigned_role}</span></span>
               {assignment.submission_status && (
                 <>
                   <span>·</span>
@@ -97,7 +239,7 @@ function AssignmentCard({
             </div>
 
             {/* Row 3: due date + action taken */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <span
                 className={`text-xs flex items-center gap-1 ${due.urgent ? "text-red-400" : "text-muted-foreground"}`}
               >
@@ -136,7 +278,13 @@ function AssignmentCard({
                 size="sm"
                 className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
                 disabled={actioning === assignment.assignment_id}
-                onClick={() => onAction(assignment.assignment_id, "approved")}
+                onClick={() =>
+                  onOpenReview({
+                    assignmentId: assignment.assignment_id,
+                    submissionType: assignment.submission_type as "lead" | "idea",
+                    action: "approved",
+                  })
+                }
               >
                 <CheckCircle2 className="h-3 w-3" />
                 Approve
@@ -146,7 +294,13 @@ function AssignmentCard({
                 variant="outline"
                 className="h-7 text-xs gap-1 text-red-400 border-red-400/30 hover:bg-red-500/10"
                 disabled={actioning === assignment.assignment_id}
-                onClick={() => onAction(assignment.assignment_id, "rejected")}
+                onClick={() =>
+                  onOpenReview({
+                    assignmentId: assignment.assignment_id,
+                    submissionType: assignment.submission_type as "lead" | "idea",
+                    action: "rejected",
+                  })
+                }
               >
                 <XCircle className="h-3 w-3" />
                 Reject
@@ -306,6 +460,7 @@ export default function AssignmentsPage() {
   const [myIdeas, setMyIdeas] = useState<IdeaWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<string | null>(null);
+  const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
 
   const fetchAssignments = useCallback(async () => {
     if (!token) return;
@@ -338,16 +493,17 @@ export default function AssignmentsPage() {
     fetchAssignments();
   }, [fetchAssignments]);
 
-  const handleAction = async (assignmentId: string, action: string) => {
+  const handleAction = async (assignmentId: string, action: string, notes?: string) => {
     if (!token) return;
     setActioning(assignmentId);
     try {
       await api(`/api/assignments/${assignmentId}`, {
         method: "PATCH",
-        body: { action_taken: action },
+        body: { action_taken: action, ...(notes ? { notes } : {}) },
         token,
       });
       toast.success(`Marked as ${action}`);
+      setReviewPending(null);
       await fetchAssignments();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Action failed");
@@ -361,6 +517,13 @@ export default function AssignmentsPage() {
 
   return (
     <div className="space-y-6">
+      <ReviewDecisionDialog
+        pending={reviewPending}
+        onClose={() => setReviewPending(null)}
+        onConfirm={handleAction}
+        submitting={actioning !== null}
+      />
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -445,6 +608,7 @@ export default function AssignmentsPage() {
                 key={a.assignment_id}
                 assignment={a}
                 onAction={handleAction}
+                onOpenReview={setReviewPending}
                 actioning={actioning}
               />
             ))
@@ -464,6 +628,7 @@ export default function AssignmentsPage() {
                 key={a.assignment_id}
                 assignment={a}
                 onAction={handleAction}
+                onOpenReview={setReviewPending}
                 actioning={actioning}
               />
             ))
@@ -484,6 +649,7 @@ export default function AssignmentsPage() {
                   key={a.assignment_id}
                   assignment={a}
                   onAction={handleAction}
+                  onOpenReview={setReviewPending}
                   actioning={actioning}
                 />
               ))

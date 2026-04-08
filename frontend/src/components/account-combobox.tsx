@@ -120,7 +120,7 @@ export function AccountCombobox({
           required={required && !value}
           disabled={disabled}
           className={cn(
-            "flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 pr-8 text-sm transition-colors outline-none",
+            "flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 pr-9 text-sm transition-colors outline-none",
             "placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
             "disabled:cursor-not-allowed disabled:opacity-50",
             "dark:bg-input/30"
@@ -147,15 +147,15 @@ export function AccountCombobox({
 
       {showDropdown && (
         <ul
-          className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-input bg-popover py-1 text-popover-foreground shadow-md"
+          className="absolute z-50 mt-1 max-h-60 min-w-full w-max max-w-[480px] overflow-auto rounded-lg border border-input bg-popover py-1 text-popover-foreground shadow-lg"
           role="listbox"
         >
           {loading ? (
-            <li className="flex items-center gap-2 px-2.5 py-2 text-sm text-muted-foreground">
+            <li className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" /> Searching…
             </li>
           ) : results.length === 0 ? (
-            <li className="px-2.5 py-2 text-sm text-muted-foreground">
+            <li className="px-3 py-2.5 text-sm text-muted-foreground">
               No accounts found for &ldquo;{query}&rdquo;.
             </li>
           ) : (
@@ -165,7 +165,7 @@ export function AccountCombobox({
                 role="option"
                 aria-selected={value === a.account_id}
                 className={cn(
-                  "cursor-pointer px-2.5 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                  "cursor-pointer px-3 py-2.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                   value === a.account_id && "bg-accent text-accent-foreground"
                 )}
                 onMouseDown={(e) => {
@@ -173,11 +173,11 @@ export function AccountCombobox({
                   handleSelect(a);
                 }}
               >
-                {a.account_name}
+                <span className="font-medium">{a.account_name}</span>
                 {(a.industry || a.region) && (
-                  <span className="ml-2 text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {[a.industry, a.region].filter(Boolean).join(" · ")}
-                  </span>
+                  </div>
                 )}
               </li>
             ))

@@ -55,10 +55,9 @@ export default function NewAccountPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  // Stakeholder IDs
-  const [dhId, setDhId] = useState<string | null>(null);
+  // Stakeholder IDs — DU reviews first, DH reviews second
   const [duId, setDuId] = useState<string | null>(null);
-  const [salesId, setSalesId] = useState<string | null>(null);
+  const [dhId, setDhId] = useState<string | null>(null);
 
   // Region (controlled so we can read it on submit)
   const [region, setRegion] = useState<string>("");
@@ -81,7 +80,7 @@ export default function NewAccountPage() {
       account_status: status || "prospect",
       account_owner_id: dhId || null,
       practice_leader_id: duId || null,
-      sales_lead_id: salesId || null,
+      sales_lead_id: null,
     };
 
     try {
@@ -142,7 +141,7 @@ export default function NewAccountPage() {
               </div>
               <div className="space-y-2">
                 <Label>Region / Country</Label>
-                <Select value={region} onValueChange={setRegion}>
+                <Select value={region} onValueChange={(v) => setRegion(v ?? "")}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select region…" />
                   </SelectTrigger>
@@ -184,7 +183,7 @@ export default function NewAccountPage() {
             {/* Status */}
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={(v) => setStatus(v ?? "prospect")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -198,52 +197,39 @@ export default function NewAccountPage() {
 
             {/* ── Stakeholder Mapping ─────────────────────────────────── */}
             <div className="pt-2 border-t">
-              <p className="text-sm font-medium mb-3">Stakeholder Mapping</p>
+              <p className="text-sm font-medium mb-1">Stakeholder Mapping</p>
               <p className="text-xs text-muted-foreground mb-4">
-                Submissions for this account will be routed in the order:
-                <span className="font-medium text-foreground"> DH → DU → Sales</span>.
+                Leads and ideas for this account route in order:
+                <span className="font-medium text-foreground"> DU → DH</span>.
+                After DH approval, any additional reviewers set up in Stakeholder Mapping will receive the submission.
                 Search by typing at least 3 characters.
               </p>
 
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>
-                    Delivery Head (DH)
+                    Delivery Unit (DU)
                     <span className="ml-1 text-xs text-muted-foreground">— first reviewer</span>
+                  </Label>
+                  <UserCombobox
+                    value={duId}
+                    onChange={(id) => setDuId(id)}
+                    token={token ?? ""}
+                    placeholder="Search for Delivery Unit…"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    Delivery Head (DH)
+                    <span className="ml-1 text-xs text-muted-foreground">— second reviewer</span>
                   </Label>
                   <UserCombobox
                     value={dhId}
                     onChange={(id) => setDhId(id)}
                     token={token ?? ""}
                     placeholder="Search for Delivery Head…"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Delivery Unit Manager (DU)
-                    <span className="ml-1 text-xs text-muted-foreground">— second reviewer</span>
-                  </Label>
-                  <UserCombobox
-                    value={duId}
-                    onChange={(id) => setDuId(id)}
-                    token={token ?? ""}
-                    placeholder="Search for DU Manager…"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Sales Executive
-                    <span className="ml-1 text-xs text-muted-foreground">— final reviewer</span>
-                  </Label>
-                  <UserCombobox
-                    value={salesId}
-                    onChange={(id) => setSalesId(id)}
-                    token={token ?? ""}
-                    placeholder="Search for Sales Executive…"
                     disabled={loading}
                   />
                 </div>

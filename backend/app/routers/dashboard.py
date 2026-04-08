@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
@@ -330,3 +330,122 @@ async def pipeline_report(
         "leads": [enrich(l, "lead_id")  for l in leads_data],
         "ideas": [enrich(i, "idea_id") for i in ideas_data],
     }
+
+
+@router.get("/stakeholder-completeness")
+async def stakeholder_completeness(
+    current_user: dict = Depends(require_role("admin", "executive")),
+):
+    """
+    Returns how many accounts have at least one stakeholder mapped,
+    and which account names are still unmapped (for admin detail view).
+    """
+    supabase = get_supabase_admin()
+
+    accounts_res = (
+        supabase.table("accounts")
+        .select("account_id, account_name")
+        .execute()
+    )
+    all_accounts = accounts_res.data or []
+    total = len(all_accounts)
+
+    mapped_res = (
+        supabase.table("account_stakeholders")
+        .select("account_id")
+        .execute()
+    )
+    mapped_ids = {str(row["account_id"]) for row in (mapped_res.data or [])}
+    mapped = len(mapped_ids)
+
+    unmapped_names = [
+        a["account_name"]
+        for a in all_accounts
+        if str(a["account_id"]) not in mapped_ids
+    ]
+
+    return {
+        "total_accounts":    total,
+        "mapped_accounts":   mapped,
+        "unmapped_accounts": unmapped_names[:15],
+        "completion_pct":    round(mapped / total * 100) if total else 0,
+    }
+
+
+@router.get("/monthly-trend")
+async def monthly_trend(
+    current_user: dict = Depends(require_role("admin", "executive")),
+):
+    """
+    Real month-by-month pipeline trend for the last 12 months.
+    Returns: label, pipeline_value, won_value, submissions per month.
+    """
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+
+    # Build ordered 12-month slot map  (oldest → newest)
+    slots: dict[str, dict] = {}
+    for i in range(11, -1, -1):
+        total = now.year * 12 + (now.month - 1) - i
+        y = total // 12
+        m = total % 12 + 1
+        key = f"{y}-{m:02d}"
+        slots[key] = {
+            "label": datetime(y, m, 1).strftime("%b %y"),
+            "pipeline_value": 0.0,
+            "won_value": 0.0,
+            "submissions": 0,
+        }
+
+    # Oldest month boundary for DB filter
+    oldest_key = next(iter(slots))
+    oldest_y, oldest_m = int(oldest_key[:4]), int(oldest_key[5:])
+    cutoff = datetime(oldest_y, oldest_m, 1, tzinfo=timezone.utc).isoformat()
+
+    # ── Leads ──────────────────────────────────────────────────────────────────
+    leads_res = (
+        supabase.table("leads")
+        .select("created_at, estimated_value, status")
+        .gte("created_at", cutoff)
+        .execute()
+    )
+    for lead in leads_res.data or []:
+        try:
+            dt = datetime.fromisoformat(lead["created_at"].replace("Z", "+00:00"))
+            key = f"{dt.year}-{dt.month:02d}"
+            if key not in slots:
+                continue
+            slots[key]["submissions"] += 1
+            val = float(lead.get("estimated_value") or 0)
+            if lead["status"] not in ("rejected", "lost", "routing_pending"):
+                slots[key]["pipeline_value"] += val
+            if lead["status"] == "won":
+                slots[key]["won_value"] += val
+        except Exception:
+            pass
+
+    # ── Ideas ──────────────────────────────────────────────────────────────────
+    ideas_res = (
+        supabase.table("value_ideas")
+        .select("created_at")
+        .gte("created_at", cutoff)
+        .execute()
+    )
+    for idea in ideas_res.data or []:
+        try:
+            dt = datetime.fromisoformat(idea["created_at"].replace("Z", "+00:00"))
+            key = f"{dt.year}-{dt.month:02d}"
+            if key in slots:
+                slots[key]["submissions"] += 1
+        except Exception:
+            pass
+
+    return [
+        {
+            "label":          s["label"],
+            "pipeline_value": round(s["pipeline_value"], 0),
+            "won_value":      round(s["won_value"], 0),
+            "submissions":    s["submissions"],
+        }
+        for s in slots.values()
+    ]

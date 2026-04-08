@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import {
@@ -8,11 +8,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Target, Lightbulb, Trophy, Users, ClipboardList, ArrowRight, ShieldCheck,
+  Target, Lightbulb, Trophy, ClipboardList, ArrowRight, ShieldCheck,
   TrendingUp, BadgePercent, AlertTriangle, Banknote, Clock, Globe, BarChart3,
-  Building2,
+  Building2, GitMerge, Activity, ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import type { LeadWithRelations, IdeaWithRelations } from "@/types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -34,6 +37,23 @@ type Activity = {
   to_status: string;
   changed_by: string;
   changed_at: string;
+};
+
+type StakeholderCompleteness = {
+  total_accounts: number;
+  mapped_accounts: number;
+  unmapped_accounts: string[];
+  completion_pct: number;
+};
+
+type LeaderboardEntry = {
+  rank: number;
+  user_id: string;
+  total_points: number;
+  leads_submitted: number;
+  ideas_submitted: number;
+  deals_won: number;
+  user: { full_name: string; email: string; role: string };
 };
 
 // ── Shared helpers ─────────────────────────────────────────────────────────
@@ -103,22 +123,24 @@ function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, numb
 }
 
 function StatCard({
-  title, value, desc, icon: Icon, iconColor, iconBg, href,
+  title, value, desc, icon: Icon, iconColor, iconBg, href, accent,
 }: {
   title: string; value: string | number; desc?: string;
   icon: React.ElementType; iconColor: string; iconBg: string; href?: string;
+  accent?: string;
 }) {
   const inner = (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#C5C5C5] bg-white h-full">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+    <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#EDE7E6] bg-white h-full overflow-hidden">
+      {accent && <div className="h-1 w-full" style={{ background: accent }} />}
+      <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
         <CardTitle className="text-sm font-medium text-[#5D5D5D]">{title}</CardTitle>
-        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconBg}`}>
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconBg}`}>
           <Icon className={`h-4 w-4 ${iconColor}`} />
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-[#232222]">{String(value)}</div>
-        {desc && <p className="text-xs text-[#5D5D5D] mt-0.5">{desc}</p>}
+        <div className="text-3xl font-bold text-[#232222] tracking-tight">{String(value)}</div>
+        {desc && <p className="text-xs text-[#5D5D5D] mt-1">{desc}</p>}
       </CardContent>
     </Card>
   );
@@ -159,89 +181,1021 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
+// ── Funnel Chart — proper visual funnel, no text truncation ─────────────
+
+function FunnelChart({
+  stages,
+}: {
+  stages: { label: string; count: number; color: string }[];
+}) {
+  const total = stages[0]?.count || 1;
+
+  return (
+    <div className="space-y-2 py-1">
+      {stages.map((stage, i) => {
+        // Width shrinks proportionally: min 36%, max 100%
+        const proportion = Math.max(stage.count / total, 0);
+        const widthPct = Math.round(36 + proportion * 64);
+        const marginPct = (100 - widthPct) / 2;
+
+        // Conversion rate from previous stage
+        const prevCount = i === 0 ? total : stages[i - 1].count;
+        const convRate = prevCount > 0 ? Math.round((stage.count / prevCount) * 100) : 0;
+
+        // % of total (top of funnel)
+        const ofTotal = total > 0 ? Math.round((stage.count / total) * 100) : 0;
+
+        return (
+          <div key={i} className="group">
+            {/* Row: label left, count + % right — always readable */}
+            <div className="flex items-center justify-between mb-1 px-0.5">
+              <div className="flex items-center gap-2">
+                <div
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ background: stage.color }}
+                />
+                <span className="text-[12px] font-semibold text-[#232222]">
+                  {stage.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {i > 0 && (
+                  <span className="text-[11px] text-[#5D5D5D]">
+                    {convRate}% conv.
+                  </span>
+                )}
+                <span
+                  className="text-[13px] font-bold"
+                  style={{ color: stage.color }}
+                >
+                  {stage.count}
+                </span>
+              </div>
+            </div>
+
+            {/* Funnel bar — centered, narrows with data */}
+            <div
+              className="relative h-9 transition-all duration-700"
+              style={{
+                marginLeft:  `${marginPct}%`,
+                marginRight: `${marginPct}%`,
+              }}
+            >
+              <div
+                className="h-full w-full rounded-md flex items-center justify-center"
+                style={{ background: stage.color }}
+              >
+                <span className="text-[11px] font-semibold text-white opacity-90">
+                  {ofTotal}% of total
+                </span>
+              </div>
+            </div>
+
+            {/* Connector arrow between stages */}
+            {i < stages.length - 1 && (
+              <div className="flex justify-center my-1">
+                <svg width="20" height="8" viewBox="0 0 20 8">
+                  <polygon points="0,0 20,0 10,8" fill={stage.color} opacity="0.3" />
+                </svg>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Monthly trend type ────────────────────────────────────────────────────
+
+type MonthlyPoint = {
+  label: string;         // "Jan 25"
+  pipeline_value: number;
+  won_value: number;
+  submissions: number;
+};
+
+// ── Hover-enabled dual-line chart ────────────────────────────────────────
+
+function MonthlyTrendChart({ data }: { data: MonthlyPoint[] }) {
+  const [hovered, setHovered] = useState<number>(-1);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  if (!data.length) {
+    return <p className="text-sm text-muted-foreground py-4 text-center">No trend data yet.</p>;
+  }
+
+  const W = 520; const H = 120; const padL = 10; const padR = 10; const padT = 14; const padB = 28;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const maxY = Math.max(...data.map((d) => Math.max(d.pipeline_value, d.won_value)), 1);
+  const xPos = (i: number) => padL + (data.length === 1 ? chartW / 2 : (i / (data.length - 1)) * chartW);
+  const yPos = (v: number) => padT + chartH - (v / maxY) * chartH;
+
+  const pipelinePath = data.map((d, i) => `${i === 0 ? "M" : "L"} ${xPos(i)} ${yPos(d.pipeline_value)}`).join(" ");
+  const wonPath      = data.map((d, i) => `${i === 0 ? "M" : "L"} ${xPos(i)} ${yPos(d.won_value)}`).join(" ");
+  const pipelineFill =
+    `M ${xPos(0)} ${padT + chartH} ` +
+    data.map((d, i) => `L ${xPos(i)} ${yPos(d.pipeline_value)}`).join(" ") +
+    ` L ${xPos(data.length - 1)} ${padT + chartH} Z`;
+
+  const fmt = (v: number) =>
+    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(2)}M`
+    : v >= 1_000   ? `$${(v / 1_000).toFixed(0)}K`
+    : `$${v}`;
+
+  const slotW = chartW / data.length;
+  const hd = hovered >= 0 ? data[hovered] : null;
+
+  return (
+    <div className="w-full">
+      {/* Legend */}
+      <div className="flex items-center gap-5 mb-3">
+        <div className="flex items-center gap-1.5">
+          <div className="h-[3px] w-6 rounded-full bg-[#B12B35]" />
+          <span className="text-[11px] text-[#5D5D5D]">Pipeline Value</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-[3px] w-6 rounded-full bg-[#22c55e]"
+               style={{ background: "linear-gradient(90deg,#22c55e 60%,transparent 60%)", backgroundSize: "8px 3px", backgroundRepeat: "repeat-x" }} />
+          <span className="text-[11px] text-[#5D5D5D]">Won Value</span>
+        </div>
+        {hd && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-[#232222] bg-[#F9F9F9] border border-[#EDE7E6] rounded px-2 py-0.5">
+              {hd.label}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Tooltip (renders above chart when a month is hovered) */}
+      {hd && (
+        <div className="mb-2 flex items-stretch gap-3 rounded-xl border border-[#EDE7E6] bg-[#FAFAFA] px-4 py-2.5 text-xs">
+          <div className="flex-1 text-center">
+            <p className="font-bold text-[#B12B35] text-sm">{fmt(hd.pipeline_value)}</p>
+            <p className="text-[#5D5D5D]">Pipeline</p>
+          </div>
+          <div className="w-px bg-[#EDE7E6]" />
+          <div className="flex-1 text-center">
+            <p className="font-bold text-green-600 text-sm">{fmt(hd.won_value)}</p>
+            <p className="text-[#5D5D5D]">Won</p>
+          </div>
+          <div className="w-px bg-[#EDE7E6]" />
+          <div className="flex-1 text-center">
+            <p className="font-bold text-[#2E75B6] text-sm">{hd.submissions}</p>
+            <p className="text-[#5D5D5D]">Submissions</p>
+          </div>
+        </div>
+      )}
+
+      {/* SVG Chart */}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        style={{ height: 120 }}
+        onMouseLeave={() => setHovered(-1)}
+      >
+        <defs>
+          <linearGradient id="pipeGrad2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#B12B35" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="#B12B35" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {[0.25, 0.5, 0.75, 1].map((f) => (
+          <line key={f}
+            x1={padL} x2={W - padR}
+            y1={padT + chartH * (1 - f)} y2={padT + chartH * (1 - f)}
+            stroke="#EDE7E6" strokeWidth={f === 1 ? 1 : 0.5} strokeDasharray={f === 1 ? undefined : "3,3"}
+          />
+        ))}
+
+        {/* Pipeline fill */}
+        <path d={pipelineFill} fill="url(#pipeGrad2)" />
+
+        {/* Pipeline line */}
+        <path d={pipelinePath} fill="none" stroke="#B12B35" strokeWidth="2"
+              strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Won line (dashed) */}
+        <path d={wonPath} fill="none" stroke="#22c55e" strokeWidth="2"
+              strokeLinejoin="round" strokeLinecap="round" strokeDasharray="5,3" />
+
+        {/* Hovered vertical rule + dots */}
+        {hovered >= 0 && (
+          <>
+            <line
+              x1={xPos(hovered)} x2={xPos(hovered)}
+              y1={padT} y2={padT + chartH}
+              stroke="#232222" strokeWidth="1" strokeDasharray="3,2" opacity="0.25"
+            />
+            <circle cx={xPos(hovered)} cy={yPos(data[hovered].pipeline_value)}
+              r="4.5" fill="#B12B35" stroke="#fff" strokeWidth="1.5" />
+            <circle cx={xPos(hovered)} cy={yPos(data[hovered].won_value)}
+              r="3.5" fill="#22c55e" stroke="#fff" strokeWidth="1.5" />
+          </>
+        )}
+
+        {/* Endpoint dots (when not hovering) */}
+        {hovered < 0 && (
+          <>
+            <circle cx={xPos(data.length - 1)} cy={yPos(data[data.length - 1].pipeline_value)}
+              r="3.5" fill="#B12B35" stroke="#fff" strokeWidth="1.5" />
+            <circle cx={xPos(data.length - 1)} cy={yPos(data[data.length - 1].won_value)}
+              r="3" fill="#22c55e" stroke="#fff" strokeWidth="1.5" />
+          </>
+        )}
+
+        {/* X-axis month labels */}
+        {data.map((d, i) => {
+          if (i % 2 !== 0 && i !== data.length - 1) return null;
+          return (
+            <text key={i} x={xPos(i)} y={H - 4}
+              textAnchor="middle" fontSize="8" fill={hovered === i ? "#232222" : "#9CA3AF"}
+              fontWeight={hovered === i ? "700" : "400"}>
+              {d.label}
+            </text>
+          );
+        })}
+
+        {/* Invisible hover zones — one per month column */}
+        {data.map((_, i) => (
+          <rect
+            key={i}
+            x={xPos(i) - slotW / 2}
+            y={padT}
+            width={slotW}
+            height={chartH}
+            fill="transparent"
+            style={{ cursor: "crosshair" }}
+            onMouseEnter={() => setHovered(i)}
+          />
+        ))}
+      </svg>
+
+      {/* Summary row */}
+      <div className="mt-1 grid grid-cols-3 gap-2 pt-3 border-t border-[#EDE7E6]">
+        <div className="text-center">
+          <p className="text-sm font-bold text-[#232222]">{fmt(data.reduce((s, d) => s + d.pipeline_value, 0))}</p>
+          <p className="text-[11px] text-[#5D5D5D]">Total Pipeline</p>
+        </div>
+        <div className="text-center border-x border-[#EDE7E6]">
+          <p className="text-sm font-bold text-[#232222]">{fmt(data.reduce((s, d) => s + d.won_value, 0))}</p>
+          <p className="text-[11px] text-[#5D5D5D]">Total Won</p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-bold text-[#232222]">{data.reduce((s, d) => s + d.submissions, 0)}</p>
+          <p className="text-[11px] text-[#5D5D5D]">Submissions</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Submissions bar chart with hover tooltip ─────────────────────────────
+
+function MonthlySubmissionsChart({ data }: { data: MonthlyPoint[] }) {
+  const [hovered, setHovered] = useState<number>(-1);
+
+  if (!data.length) return null;
+
+  const maxS  = Math.max(...data.map((d) => d.submissions), 1);
+  const W = 520; const H = 90; const padL = 8; const padR = 8; const padB = 22; const padT = 8;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const gap    = chartW / data.length;
+  const barW   = Math.max(gap * 0.6, 4);
+
+  const fmt = (v: number) =>
+    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M`
+    : v >= 1_000   ? `$${(v / 1_000).toFixed(0)}K`
+    : `$${v}`;
+
+  const hd = hovered >= 0 ? data[hovered] : null;
+
+  return (
+    <div className="w-full">
+      {/* Tooltip row — appears when a bar is hovered */}
+      <div
+        className="mb-2 overflow-hidden transition-all duration-150"
+        style={{ maxHeight: hd ? 56 : 0, opacity: hd ? 1 : 0 }}
+      >
+        {hd && (
+          <div className="flex items-stretch gap-3 rounded-xl border border-[#EDE7E6] bg-[#FAFAFA] px-4 py-2.5 text-xs">
+            <div className="flex-1 text-center">
+              <p className="font-bold text-[#2E75B6] text-sm">{hd.submissions}</p>
+              <p className="text-[#5D5D5D]">Submissions</p>
+            </div>
+            <div className="w-px bg-[#EDE7E6]" />
+            <div className="flex-1 text-center">
+              <p className="font-bold text-[#B12B35] text-sm">{fmt(hd.pipeline_value)}</p>
+              <p className="text-[#5D5D5D]">Pipeline Value</p>
+            </div>
+            <div className="w-px bg-[#EDE7E6]" />
+            <div className="flex-1 text-center">
+              <p className="font-bold text-green-600 text-sm">{fmt(hd.won_value)}</p>
+              <p className="text-[#5D5D5D]">Won Value</p>
+            </div>
+            <div className="w-px bg-[#EDE7E6]" />
+            <div className="flex-1 text-center">
+              <p className="font-bold text-[#232222] text-sm">{hd.label}</p>
+              <p className="text-[#5D5D5D]">Month</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bar chart */}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        style={{ height: 90 }}
+        onMouseLeave={() => setHovered(-1)}
+      >
+        {data.map((d, i) => {
+          const bH    = Math.max((d.submissions / maxS) * chartH, d.submissions > 0 ? 3 : 0);
+          const bX    = padL + i * gap + (gap - barW) / 2;
+          const bY    = padT + chartH - bH;
+          const isHov = hovered === i;
+          const isEmpty = d.submissions === 0;
+
+          return (
+            <g
+              key={i}
+              style={{ cursor: isEmpty ? "default" : "pointer" }}
+              onMouseEnter={() => setHovered(i)}
+            >
+              {/* Hover highlight column (full height, subtle) */}
+              {isHov && (
+                <rect
+                  x={padL + i * gap}
+                  y={padT}
+                  width={gap}
+                  height={chartH}
+                  fill="#2E75B6"
+                  opacity="0.06"
+                  rx="2"
+                />
+              )}
+
+              {/* Bar */}
+              <rect
+                x={bX}
+                y={bY}
+                width={barW}
+                height={Math.max(bH, 2)}
+                rx="3"
+                fill={isEmpty ? "#EDE7E6" : isHov ? "#003466" : "#2E75B6"}
+                opacity={isHov ? 1 : 0.82}
+                style={{ transition: "fill 0.12s, opacity 0.12s" }}
+              />
+
+              {/* Count label above bar when hovered */}
+              {isHov && !isEmpty && (
+                <text
+                  x={bX + barW / 2}
+                  y={bY - 3}
+                  textAnchor="middle"
+                  fontSize="8.5"
+                  fontWeight="700"
+                  fill="#003466"
+                >
+                  {d.submissions}
+                </text>
+              )}
+
+              {/* X-axis month labels — every 2nd, always show last */}
+              {(i % 2 === 0 || i === data.length - 1) && (
+                <text
+                  x={bX + barW / 2}
+                  y={H - 4}
+                  textAnchor="middle"
+                  fontSize="7.5"
+                  fill={isHov ? "#232222" : "#9CA3AF"}
+                  fontWeight={isHov ? "700" : "400"}
+                >
+                  {d.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ── Section divider ────────────────────────────────────────────────────────
+
+function SectionLabel({ icon: Icon, label, color }: { icon: React.ElementType; label: string; color: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-2">
+      <Icon className="h-4 w-4" style={{ color }} />
+      <span className="text-xs font-semibold uppercase tracking-widest" style={{ color }}>
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-[#EDE7E6]" />
+    </div>
+  );
+}
+
+// ── Mini Leaderboard widget ───────────────────────────────────────────────
+
+function MiniLeaderboard({ token }: { token: string }) {
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [open, setOpen] = useState(false);
+  const [allEntries, setAllEntries] = useState<LeaderboardEntry[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+
+  useEffect(() => {
+    api<LeaderboardEntry[]>("/api/scores/leaderboard?limit=5", { token })
+      .then((data) => setEntries(Array.isArray(data) ? data.slice(0, 5) : []))
+      .catch(() => {});
+  }, [token]);
+
+  const openModal = async () => {
+    setOpen(true);
+    if (allEntries.length === 0) {
+      setLoadingAll(true);
+      try {
+        const data = await api<LeaderboardEntry[]>("/api/scores/leaderboard?limit=100", { token });
+        setAllEntries(Array.isArray(data) ? data : []);
+      } catch { /* silent */ }
+      finally { setLoadingAll(false); }
+    }
+  };
+
+  const RANK_COLORS = ["text-amber-500", "text-[#5D5D5D]", "text-[#B12B35]"];
+
+  const renderRow = (e: LeaderboardEntry, compact = true) => (
+    <div
+      key={e.user_id}
+      className={`flex items-center gap-3 py-2.5 border-b border-[#EDE7E6] last:border-0 ${compact ? "text-sm" : "text-sm px-6"}`}
+    >
+      <span className={`w-6 text-center font-bold text-xs ${RANK_COLORS[e.rank - 1] || "text-[#C5C5C5]"}`}>
+        {e.rank <= 3 ? ["🥇","🥈","🥉"][e.rank - 1] : e.rank}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-[#232222] truncate">{e.user.full_name || e.user.email}</p>
+        <p className="text-[11px] text-[#5D5D5D] capitalize">{e.user.role?.replace(/_/g, " ")}</p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="font-bold text-[#B12B35] text-sm">{e.total_points.toLocaleString()}</p>
+        <p className="text-[11px] text-[#5D5D5D]">pts</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <Card
+        className="border-[#EDE7E6] bg-white cursor-pointer hover:shadow-md transition-shadow"
+        onClick={openModal}
+      >
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              Leaderboard
+            </CardTitle>
+            <button className="text-xs font-medium text-[#B12B35] hover:underline flex items-center gap-1">
+              View all <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          <CardDescription>Top contributors by value points</CardDescription>
+        </CardHeader>
+        <CardContent className="pb-3">
+          {entries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No scores yet.</p>
+          ) : (
+            <div>{entries.map((e) => renderRow(e, true))}</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-[#EDE7E6] shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-[#232222]">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              Full Leaderboard
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 pb-4">
+            {loadingAll ? (
+              <p className="text-sm text-muted-foreground text-center py-10">Loading…</p>
+            ) : allEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">No scores yet.</p>
+            ) : (
+              <div>
+                {allEntries.map((e) => renderRow(e, false))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ── Stakeholder Completeness Card ─────────────────────────────────────────
+
+function StakeholderCompletenessCard({
+  token, showList,
+}: {
+  token: string; showList: boolean;
+}) {
+  const [data, setData] = useState<StakeholderCompleteness | null>(null);
+
+  useEffect(() => {
+    api<StakeholderCompleteness>("/api/dashboard/stakeholder-completeness", { token })
+      .then(setData)
+      .catch(() => {});
+  }, [token]);
+
+  if (!data) return null;
+
+  const pct = data.completion_pct;
+  const barColor = pct >= 90 ? "#22c55e" : pct >= 60 ? "#2E75B6" : "#B12B35";
+
+  return (
+    <Card className="border-[#EDE7E6] bg-white">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+          <GitMerge className="h-4 w-4 text-[#2E75B6]" />
+          Stakeholder Mapping
+        </CardTitle>
+        <CardDescription>Accounts with reviewers mapped</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Stat row */}
+        <div className="flex items-end gap-2">
+          <span className="text-3xl font-bold text-[#232222]">{data.mapped_accounts}</span>
+          <span className="text-sm text-[#5D5D5D] mb-1">of {data.total_accounts} accounts</span>
+          <span className="ml-auto text-2xl font-bold" style={{ color: barColor }}>{pct}%</span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-2 w-full rounded-full bg-[#EDE7E6] overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: barColor }} />
+        </div>
+
+        {/* Unmapped list — admin only */}
+        {showList && data.unmapped_accounts.length > 0 && (
+          <div className="pt-2">
+            <p className="text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wide mb-2">
+              Accounts missing reviewers ({data.unmapped_accounts.length})
+            </p>
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {data.unmapped_accounts.map((name) => (
+                <div key={name} className="flex items-center gap-2 rounded-md bg-[#F9F9F9] px-3 py-1.5 text-xs">
+                  <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+                  <span className="text-[#232222] truncate">{name}</span>
+                </div>
+              ))}
+            </div>
+            <Link
+              href="/admin/stakeholder-mapping"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#B12B35] hover:underline"
+            >
+              Fix mappings <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+        )}
+
+        {!showList && data.unmapped_accounts.length > 0 && (
+          <p className="text-xs text-[#5D5D5D]">
+            {data.total_accounts - data.mapped_accounts} account{data.total_accounts - data.mapped_accounts !== 1 ? "s" : ""} need{data.total_accounts - data.mapped_accounts === 1 ? "s" : ""} reviewer mapping
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Admin dashboard ────────────────────────────────────────────────────────
 
-function AdminDashboard({ token, userName }: { token: string; userName: string }) {
+function AdminDashboard({ token }: { token: string; userName: string }) {
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
-  const [myScore, setMyScore] = useState(0);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const [s, a, score, an] = await Promise.all([
+      const [s, a, an] = await Promise.all([
         api<OrgStats>("/api/dashboard/stats", { token }),
         api<Activity[]>("/api/dashboard/recent-activity?limit=8", { token }),
-        api<{ total_points: number }>("/api/scores/me", { token }),
         api<AdminAnalytics>("/api/dashboard/admin-analytics", { token }),
       ]);
       setStats(s);
       setActivity(a);
-      setMyScore(score.total_points || 0);
       setAnalytics(an);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, [token]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
   const s = stats ?? { total_leads: 0, total_ideas: 0, total_accounts: 0, active_users: 0, leads_by_status: {}, ideas_by_status: {}, pending_assignments: 0 };
+  const an = analytics;
+  const routingExceptions = an ? an.routing_pending_leads + an.routing_pending_ideas : 0;
 
   return (
     <div className="space-y-6">
+
+      {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck className="h-4 w-4 text-[#B12B35]" />
-            <span className="text-xs font-semibold text-[#B12B35] uppercase tracking-wider">Admin Dashboard</span>
+            <span className="text-[11px] font-semibold text-[#B12B35] uppercase tracking-widest">
+              Admin Dashboard
+            </span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[#232222]">
-            Welcome, {userName.split(" ")[0]}
+            Lead Dashboard
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Organisation-wide overview — leads, ideas, accounts and activity.
+          <p className="text-sm text-[#5D5D5D] mt-1 max-w-xl">
+            We believe best value cases accelerate team performance &amp; aid high&#8209;level follow-up across all accounts.
           </p>
         </div>
-        <Badge className="bg-[#232222] text-white border-0 text-xs">Full Access</Badge>
+        <Badge className="bg-[#232222] text-white border-0 text-[11px] px-3 py-1">Full Access</Badge>
       </div>
 
-      {/* Primary KPIs */}
+      {/* ── 4 Primary KPIs ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Leads"    value={s.total_leads}    desc={`${s.leads_by_status["qualified"] || 0} qualified`}   icon={Target}       iconColor="text-[#B12B35]" iconBg="bg-[#B12B35]/10" href="/leads" />
-        <StatCard title="Value Ideas"    value={s.total_ideas}    desc={`${s.ideas_by_status["implemented"] || 0} implemented`} icon={Lightbulb}   iconColor="text-[#003466]" iconBg="bg-[#003466]/10" href="/ideas" />
-        <StatCard title="Total Accounts" value={s.total_accounts} desc="Client accounts"                                        icon={Users}        iconColor="text-[#2E75B6]" iconBg="bg-[#2E75B6]/10" href="/accounts" />
-        <StatCard title="Active Users"   value={s.active_users}   desc="Portal contributors"                                    icon={Users}        iconColor="text-[#003466]" iconBg="bg-[#003466]/10" href="/admin/users" />
+        <StatCard
+          title="Total Leads"
+          value={s.total_leads}
+          desc={`${s.leads_by_status["qualified"] || 0} qualified · ${s.leads_by_status["won"] || 0} won`}
+          icon={Target}
+          iconColor="text-[#B12B35]"
+          iconBg="bg-[#B12B35]/10"
+          accent="#B12B35"
+          href="/leads"
+        />
+        <StatCard
+          title="Total Value Ideas"
+          value={s.total_ideas}
+          desc={`${s.ideas_by_status["implemented"] || 0} implemented`}
+          icon={Lightbulb}
+          iconColor="text-[#003466]"
+          iconBg="bg-[#003466]/10"
+          accent="#003466"
+          href="/ideas"
+        />
+        <StatCard
+          title="Routing Exceptions"
+          value={routingExceptions}
+          desc={`${an?.routing_pending_leads ?? 0} leads · ${an?.routing_pending_ideas ?? 0} ideas unrouted`}
+          icon={AlertTriangle}
+          iconColor="text-amber-500"
+          iconBg="bg-amber-50"
+          accent="#f59e0b"
+          href="/admin/exception-queue"
+        />
+        <StatCard
+          title="Pending Reviews"
+          value={s.pending_assignments}
+          desc="Awaiting stakeholder action"
+          icon={ClipboardList}
+          iconColor="text-[#2E75B6]"
+          iconBg="bg-[#2E75B6]/10"
+          accent="#2E75B6"
+          href="/assignments"
+        />
       </div>
 
-      {/* Secondary row */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard title="My Score"          value={myScore.toLocaleString()} desc="Points earned"       icon={Trophy}       iconColor="text-[#B12B35]" iconBg="bg-[#B12B35]/10" href="/leaderboard" />
-        <StatCard title="Pending Reviews"   value={s.pending_assignments}    desc="Awaiting action"     icon={ClipboardList} iconColor="text-[#003466]" iconBg="bg-[#003466]/10" href="/assignments" />
-        <StatCard title="Ideas Implemented" value={s.ideas_by_status["implemented"] || 0} desc="Delivered" icon={Lightbulb} iconColor="text-[#2E75B6]" iconBg="bg-[#2E75B6]/10" href="/ideas" />
-      </div>
-
-      {/* Charts */}
+      {/* ── Pipeline Health + Routing Issues ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-[#C5C5C5] bg-white">
-          <CardHeader><CardTitle className="text-base text-[#232222]">Lead Pipeline</CardTitle><CardDescription>All leads by status</CardDescription></CardHeader>
-          <CardContent><StatusBarChart data={s.leads_by_status} color="#B12B35" /></CardContent>
+        {/* Lead Pipeline Health */}
+        <Card className="border-[#EDE7E6] bg-white">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <Activity className="h-4 w-4 text-[#B12B35]" />
+              Lead Pipeline Health
+            </CardTitle>
+            <CardDescription>All leads by current status</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <StatusBarChart data={s.leads_by_status} color="#B12B35" />
+            <div className="pt-3 border-t border-[#EDE7E6] mt-4">
+              <p className="text-[11px] text-[#5D5D5D] font-medium uppercase tracking-wider mb-2">Ideas Pipeline</p>
+              <StatusBarChart data={s.ideas_by_status} color="#003466" />
+            </div>
+          </CardContent>
         </Card>
-        <Card className="border-[#C5C5C5] bg-white">
-          <CardHeader><CardTitle className="text-base text-[#232222]">Ideas Pipeline</CardTitle><CardDescription>All value ideas by stage</CardDescription></CardHeader>
-          <CardContent><StatusBarChart data={s.ideas_by_status} color="#003466" /></CardContent>
+
+        {/* Routing & Mapping Issues */}
+        <Card className="border-[#EDE7E6] bg-white">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <GitMerge className="h-4 w-4 text-amber-500" />
+              Routing and Mapping Issues
+            </CardTitle>
+            <CardDescription>Submissions that could not be auto-routed</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {routingExceptions === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center mb-3">
+                  <ShieldCheck className="h-5 w-5 text-green-500" />
+                </div>
+                <p className="text-sm font-medium text-[#232222]">All submissions routed</p>
+                <p className="text-xs text-[#5D5D5D] mt-1">No pending routing exceptions</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary tiles */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-[#B12B35]/5 border border-[#B12B35]/10 p-3">
+                    <p className="text-2xl font-bold text-[#B12B35]">{an?.routing_pending_leads ?? 0}</p>
+                    <p className="text-xs text-[#5D5D5D] mt-0.5">Leads unrouted</p>
+                  </div>
+                  <div className="rounded-xl bg-[#003466]/5 border border-[#003466]/10 p-3">
+                    <p className="text-2xl font-bold text-[#003466]">{an?.routing_pending_ideas ?? 0}</p>
+                    <p className="text-xs text-[#5D5D5D] mt-0.5">Ideas unrouted</p>
+                  </div>
+                </div>
+
+                {/* What's causing this */}
+                <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Common causes</p>
+                  <div className="space-y-1.5">
+                    {[
+                      "Account has no stakeholders mapped",
+                      "No vertical routing rule for industry",
+                      "No region→sales mapping configured",
+                    ].map((cause) => (
+                      <div key={cause} className="flex items-start gap-2 text-xs text-amber-800">
+                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" />
+                        <span>{cause}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Link
+                    href="/admin/exception-queue"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#B12B35] px-3 py-2 text-xs font-semibold text-white hover:bg-[#9a2330] transition-colors"
+                  >
+                    View Exception Queue <ChevronRight className="h-3 w-3" />
+                  </Link>
+                  <Link
+                    href="/admin/stakeholder-mapping"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-[#EDE7E6] bg-white px-3 py-2 text-xs font-semibold text-[#5D5D5D] hover:border-[#B12B35]/30 transition-colors"
+                  >
+                    Fix Mappings
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
         </Card>
       </div>
 
-      {/* Activity feed */}
-      <Card className="border-[#C5C5C5] bg-white">
-        <CardHeader>
-          <CardTitle className="text-base text-[#232222]">Recent Activity</CardTitle>
-          <CardDescription>Latest status changes across the organisation</CardDescription>
-        </CardHeader>
-        <CardContent>
+      {/* ── Analytics Section ── */}
+      {an && (
+        <>
+          <SectionLabel icon={BarChart3} label="Analytics" color="#B12B35" />
+
+          {/* Ratio KPIs */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="border-[#EDE7E6] bg-white overflow-hidden">
+              <div className="h-1 bg-[#B12B35]" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Qualification Rate</CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#B12B35]/10">
+                  <BadgePercent className="h-4 w-4 text-[#B12B35]" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-[#232222]">{an.qualification_ratio}%</div>
+                <p className="text-xs text-[#5D5D5D] mt-1">leads reaching qualified+</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#EDE7E6] bg-white overflow-hidden">
+              <div className="h-1 bg-green-500" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Win Rate</CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50">
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-[#232222]">{an.win_rate}%</div>
+                <p className="text-xs text-[#5D5D5D] mt-1">{an.won_count}W / {an.lost_count}L closed deals</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#EDE7E6] bg-white overflow-hidden">
+              <div className="h-1 bg-[#003466]" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Pipeline Value</CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#003466]/10">
+                  <Banknote className="h-4 w-4 text-[#003466]" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-[#232222]">
+                  ${an.pipeline_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+                <p className="text-xs text-[#5D5D5D] mt-1">
+                  ${an.won_value.toLocaleString(undefined, { maximumFractionDigits: 0 })} won
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#EDE7E6] bg-white overflow-hidden">
+              <div className="h-1 bg-[#2E75B6]" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Active Accounts</CardTitle>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2E75B6]/10">
+                  <Building2 className="h-4 w-4 text-[#2E75B6]" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-[#232222]">{s.total_accounts}</div>
+                <p className="text-xs text-[#5D5D5D] mt-1">{s.active_users} portal contributors</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Region · Vertical · Top Accounts */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="border-[#EDE7E6] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-[#2E75B6]" /> Leads by Region
+                </CardTitle>
+                <CardDescription>Geographic pipeline distribution</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {an.leads_by_region.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No region data yet.</p>
+                ) : (() => {
+                  const maxR = Math.max(...an.leads_by_region.map((r) => r.count), 1);
+                  return (
+                    <div className="space-y-3">
+                      {an.leads_by_region.map((r) => (
+                        <div key={r.region}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-[#232222] truncate max-w-[65%]">{r.region}</span>
+                            <span className="text-[#5D5D5D] text-xs font-semibold">{r.count}</span>
+                          </div>
+                          <MiniBar value={r.count} max={maxR} color="#2E75B6" />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#EDE7E6] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-[#B12B35]" /> Leads by Vertical
+                </CardTitle>
+                <CardDescription>Industry / practice coverage</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {an.leads_by_vertical.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No vertical data yet.</p>
+                ) : (() => {
+                  const maxV = Math.max(...an.leads_by_vertical.map((v) => v.count), 1);
+                  return (
+                    <div className="space-y-3">
+                      {an.leads_by_vertical.map((v) => (
+                        <div key={v.vertical}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-[#232222] truncate max-w-[65%]">{v.vertical}</span>
+                            <span className="text-[#5D5D5D] text-xs font-semibold">{v.count}</span>
+                          </div>
+                          <MiniBar value={v.count} max={maxV} color="#B12B35" />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#EDE7E6] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[#003466]" /> Top Accounts
+                </CardTitle>
+                <CardDescription>By total leads + ideas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {an.top_accounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No account data yet.</p>
+                ) : (
+                  <div className="divide-y divide-[#EDE7E6]">
+                    {an.top_accounts.map((a) => (
+                      <div key={a.account_name} className="flex items-center justify-between py-2 text-sm">
+                        <span className="font-medium text-[#232222] truncate max-w-[55%]">{a.account_name}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20">{a.leads}L</Badge>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#003466]/10 text-[#003466] border-[#003466]/20">{a.ideas}I</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Reviewer Turnaround */}
+          <Card className="border-[#EDE7E6] bg-white">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+                <Clock className="h-4 w-4 text-[#5D5D5D]" /> Reviewer Turnaround
+              </CardTitle>
+              <CardDescription>Average days from assignment to action, per reviewer role</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {an.turnaround.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No completed reviews yet — turnaround data will appear once assignments are acted on.</p>
+              ) : (() => {
+                const maxDays = Math.max(...an.turnaround.map((t) => t.avg_days), 1);
+                return (
+                  <div className="space-y-4">
+                    {an.turnaround.map((t) => (
+                      <div key={t.role}>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="font-medium text-[#232222] capitalize">{t.role.replace(/_/g, " ")}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-[#5D5D5D]">{t.count} reviews</span>
+                            <span className="font-bold text-[#232222] w-16 text-right">
+                              {t.avg_days < 1 ? `${Math.round(t.avg_days * 24)}h` : `${t.avg_days}d`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-[#EDE7E6] overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.round((t.avg_days / maxDays) * 100)}%`,
+                              background: t.avg_days <= 2 ? "#22c55e" : t.avg_days <= 5 ? "#2E75B6" : "#B12B35",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* ── User/Account Management + Completeness + Leaderboard ── */}
+      <SectionLabel icon={Building2} label="Management & Engagement" color="#2E75B6" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Active Users"
+          value={s.active_users}
+          desc="Portal contributors"
+          icon={ShieldCheck}
+          iconColor="text-[#2E75B6]"
+          iconBg="bg-[#2E75B6]/10"
+          accent="#2E75B6"
+          href="/admin/users"
+        />
+        <StatCard
+          title="Total Accounts"
+          value={s.total_accounts}
+          desc="Client accounts tracked"
+          icon={Building2}
+          iconColor="text-[#003466]"
+          iconBg="bg-[#003466]/10"
+          accent="#003466"
+          href="/accounts"
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <StakeholderCompletenessCard token={token} showList={true} />
+        <MiniLeaderboard token={token} />
+      </div>
+
+      {/* ── Recent Activity ── */}
+      <SectionLabel icon={Activity} label="Recent Activity" color="#5D5D5D" />
+      <Card className="border-[#EDE7E6] bg-white">
+        <CardContent className="pt-4">
           {activity.length === 0 ? (
             <p className="text-sm text-muted-foreground">No recent activity.</p>
           ) : (
@@ -266,99 +1220,390 @@ function AdminDashboard({ token, userName }: { token: string; userName: string }
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
 
-      {/* ── Analytics section (admin only) ── */}
-      {analytics && (
+// ── Executive / Leadership dashboard ──────────────────────────────────────
+
+function ExecutiveDashboard({ token, userName }: { token: string; userName: string }) {
+  const [stats, setStats] = useState<OrgStats | null>(null);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [topLeads, setTopLeads] = useState<LeadWithRelations[]>([]);
+  const [monthlyTrend, setMonthlyTrend] = useState<MonthlyPoint[]>([]);
+  const [activity, setActivity] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const [s, an, leads, trend, act] = await Promise.all([
+        api<OrgStats>("/api/dashboard/stats", { token }),
+        api<AdminAnalytics>("/api/dashboard/admin-analytics", { token }),
+        api<LeadWithRelations[]>("/api/leads?limit=5", { token }),
+        api<MonthlyPoint[]>("/api/dashboard/monthly-trend", { token }),
+        api<Activity[]>("/api/dashboard/recent-activity?limit=20", { token }),
+      ]);
+      setStats(s);
+      setAnalytics(an);
+      setTopLeads(Array.isArray(leads) ? leads.slice(0, 5) : []);
+      setMonthlyTrend(Array.isArray(trend) ? trend : []);
+      // Strategic highlights: only status transitions that matter to leadership
+      const STRATEGIC = ["qualified", "won", "approved", "implemented", "lost", "rejected"];
+      setActivity(
+        Array.isArray(act)
+          ? act.filter((a) => STRATEGIC.includes(a.to_status)).slice(0, 8)
+          : []
+      );
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [token]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
+
+  const s = stats ?? { total_leads: 0, total_ideas: 0, total_accounts: 0, active_users: 0, leads_by_status: {}, ideas_by_status: {}, pending_assignments: 0 };
+  const an = analytics;
+
+  // Funnel stages from combined leads + ideas
+  const funnelStages = [
+    {
+      label: "Submitted",
+      count: (s.leads_by_status["submitted"] || 0) + (s.ideas_by_status["submitted"] || 0),
+      color: "#2E75B6",
+    },
+    {
+      label: "Under Review",
+      count: (s.leads_by_status["under_review"] || 0) + (s.ideas_by_status["under_review"] || 0),
+      color: "#003466",
+    },
+    {
+      label: "Qualified / Approved",
+      count: (s.leads_by_status["qualified"] || 0) + (s.ideas_by_status["approved"] || 0),
+      color: "#B12B35",
+    },
+    {
+      label: "Won / Implemented",
+      count: (s.leads_by_status["won"] || 0) + (s.ideas_by_status["implemented"] || 0),
+      color: "#22c55e",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <BarChart3 className="h-4 w-4 text-[#003466]" />
+            <span className="text-[11px] font-semibold text-[#003466] uppercase tracking-widest">
+              Leadership Dashboard
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#232222]">
+            Leadership Dashboard
+          </h1>
+          <p className="text-sm text-[#5D5D5D] mt-1 max-w-xl">
+            We believe best value cases accelerate team performance &amp; aid high-level reviews.
+            Welcome, {userName.split(" ")[0]}.
+          </p>
+        </div>
+        <Badge className="bg-[#003466] text-white border-0 text-[11px] px-3 py-1">Leadership View</Badge>
+      </div>
+
+      {/* ── 4 Primary KPIs ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
+          <div className="h-1 bg-[#B12B35]" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Pipeline Value</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#B12B35]/10">
+              <Banknote className="h-4 w-4 text-[#B12B35]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-[#232222] tracking-tight">
+              ${(an?.pipeline_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </div>
+            <p className="text-xs text-[#5D5D5D] mt-1">
+              ${(an?.won_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} won to date
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
+          <div className="h-1 bg-[#2E75B6]" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Qualified Leads</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2E75B6]/10">
+              <Target className="h-4 w-4 text-[#2E75B6]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#232222] tracking-tight">
+              {s.leads_by_status["qualified"] || 0}
+            </div>
+            <p className="text-xs text-[#5D5D5D] mt-1">
+              of {s.total_leads} total leads
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
+          <div className="h-1 bg-green-500" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Win Rate</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50">
+              <TrendingUp className="h-4 w-4 text-green-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#232222] tracking-tight">
+              {an?.win_rate ?? 0}%
+            </div>
+            <p className="text-xs text-[#5D5D5D] mt-1">
+              {an?.won_count ?? 0}W / {an?.lost_count ?? 0}L closed
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
+          <div className="h-1 bg-[#003466]" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Conversion Rate</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#003466]/10">
+              <BadgePercent className="h-4 w-4 text-[#003466]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#232222] tracking-tight">
+              {an?.qualification_ratio ?? 0}%
+            </div>
+            <p className="text-xs text-[#5D5D5D] mt-1">leads reaching qualified+</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Opportunity Funnel + Monthly Value Realization ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Opportunity Funnel */}
+        <Card className="border-[#EDE7E6] bg-white">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <Activity className="h-4 w-4 text-[#B12B35]" />
+              Opportunity Funnel
+            </CardTitle>
+            <CardDescription>Leads &amp; ideas across all pipeline stages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FunnelChart stages={funnelStages} />
+            {/* Lost / dropped row below funnel */}
+            <div className="mt-4 pt-3 border-t border-[#EDE7E6] grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 text-xs">
+                <div className="h-2.5 w-2.5 rounded-sm bg-[#C5C5C5]" />
+                <span className="text-[#5D5D5D]">Lost</span>
+                <span className="font-semibold text-[#232222] ml-auto">{s.leads_by_status["lost"] || 0}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <div className="h-2.5 w-2.5 rounded-sm bg-[#EDE7E6]" />
+                <span className="text-[#5D5D5D]">Rejected</span>
+                <span className="font-semibold text-[#232222] ml-auto">{(s.leads_by_status["rejected"] || 0) + (s.ideas_by_status["rejected"] || 0)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Monthly Value Realization — real data */}
+        <Card className="border-[#EDE7E6] bg-white">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-[#B12B35]" />
+                  Monthly Value Realization
+                </CardTitle>
+                <CardDescription>Pipeline vs won value — last 12 months</CardDescription>
+              </div>
+              {monthlyTrend.length > 0 && (
+                <Badge variant="outline" className="text-[10px] text-[#5D5D5D] border-[#EDE7E6]">
+                  Live
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <MonthlyTrendChart data={monthlyTrend} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Monthly Submissions Volume ── */}
+      {monthlyTrend.length > 0 && (
+        <Card className="border-[#EDE7E6] bg-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-[#2E75B6]" />
+              Monthly Submission Volume
+            </CardTitle>
+            <CardDescription>Leads + ideas submitted per month (last 12 months)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MonthlySubmissionsChart data={monthlyTrend} />
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[11px] text-[#5D5D5D]">
+                Peak month: <span className="font-semibold text-[#232222]">
+                  {monthlyTrend.reduce((p, c) => c.submissions > p.submissions ? c : p, monthlyTrend[0]).label}
+                </span>
+              </span>
+              <span className="text-[11px] text-[#5D5D5D]">
+                Avg/month: <span className="font-semibold text-[#232222]">
+                  {Math.round(monthlyTrend.reduce((s, d) => s + d.submissions, 0) / monthlyTrend.length)}
+                </span>
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Top Opportunities Needing Attention ── */}
+      <Card className="border-[#EDE7E6] bg-white">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div>
+            <CardTitle className="text-base font-semibold text-[#232222]">
+              Top Opportunities Needing Attention
+            </CardTitle>
+            <CardDescription>Most recent leads — click to view details</CardDescription>
+          </div>
+          <Link
+            href="/leads"
+            className="text-xs font-medium text-[#B12B35] hover:underline flex items-center gap-1"
+          >
+            View all <ChevronRight className="h-3 w-3" />
+          </Link>
+        </CardHeader>
+        <CardContent className="p-0">
+          {topLeads.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-6 pb-4">No leads submitted yet.</p>
+          ) : (
+            <div className="divide-y divide-[#EDE7E6]">
+              {/* Table header */}
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-2 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
+                <span>Opportunity</span>
+                <span>Type</span>
+                <span>Lead updated</span>
+                <span className="text-right">Status</span>
+              </div>
+              {topLeads.map((lead, i) => (
+                <Link key={lead.lead_id} href={`/leads/${lead.lead_id}`}>
+                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-3 items-center hover:bg-[#F9F9F9] transition-colors text-sm">
+                    {/* Title + number */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] text-[#C5C5C5] font-mono w-5 shrink-0">{i + 1}</span>
+                      <span className="font-medium text-[#232222] truncate">{lead.title}</span>
+                    </div>
+                    {/* Lead type */}
+                    <div>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-2 py-0 capitalize bg-[#B12B35]/5 text-[#B12B35] border-[#B12B35]/20"
+                      >
+                        {(lead.lead_type || "lead").replace(/_/g, " ")}
+                      </Badge>
+                    </div>
+                    {/* Time ago */}
+                    <span className="text-xs text-[#5D5D5D]">
+                      {lead.updated_at ? timeAgo(lead.updated_at) : "—"}
+                    </span>
+                    {/* Status */}
+                    <div className="text-right">
+                      <Badge
+                        variant="outline"
+                        className={`capitalize text-[10px] px-1.5 py-0 ${STATUS_BADGE[lead.status] || "bg-[#C5C5C5]/20 text-[#5D5D5D]"}`}
+                      >
+                        {lead.status.replace(/_/g, " ")}
+                      </Badge>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Review Cycle Performance ── */}
+      <Card className="border-[#EDE7E6] bg-white">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div>
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <Clock className="h-4 w-4 text-[#003466]" />
+              Review Cycle Performance
+            </CardTitle>
+            <CardDescription>Escalation by stage — avg. days from assignment to action</CardDescription>
+          </div>
+          <Link
+            href="/reviews"
+            className="text-xs font-medium text-[#003466] hover:underline flex items-center gap-1"
+          >
+            View cycles <ChevronRight className="h-3 w-3" />
+          </Link>
+        </CardHeader>
+        <CardContent className="p-0">
+          {!an || an.turnaround.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-6 pb-4">
+              No completed reviews yet — performance data will appear once assignments are acted on.
+            </p>
+          ) : (
+            <div className="divide-y divide-[#EDE7E6]">
+              {/* Header row */}
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-2 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
+                <span>Reviewer Stage</span>
+                <span>Reviews</span>
+                <span>Avg. Days</span>
+                <span className="text-right">Health</span>
+              </div>
+              {an.turnaround.map((t) => {
+                const health = t.avg_days <= 2 ? { label: "On Track", color: "bg-green-100 text-green-700 border-green-200" }
+                  : t.avg_days <= 5 ? { label: "Moderate", color: "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20" }
+                  : { label: "Delayed", color: "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20" };
+                return (
+                  <div key={t.role} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-3 items-center text-sm">
+                    <span className="font-medium text-[#232222] capitalize">{t.role.replace(/_/g, " ")}</span>
+                    <span className="text-[#5D5D5D] text-xs">{t.count}</span>
+                    <span className="font-semibold text-[#232222]">
+                      {t.avg_days < 1 ? `${Math.round(t.avg_days * 24)}h` : `${t.avg_days}d`}
+                    </span>
+                    <div className="text-right">
+                      <Badge variant="outline" className={`text-[10px] px-2 py-0 ${health.color}`}>
+                        {health.label}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Breakdown ── */}
+      {an && (an.leads_by_region.length > 0 || an.leads_by_vertical.length > 0) && (
         <>
-          {/* Section header */}
-          <div className="flex items-center gap-2 pt-2">
-            <BarChart3 className="h-4 w-4 text-[#B12B35]" />
-            <span className="text-xs font-semibold text-[#B12B35] uppercase tracking-wider">Analytics</span>
-          </div>
-
-          {/* Ratio + Value KPIs */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-[#C5C5C5] bg-white">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Qualification Rate</CardTitle>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#B12B35]/10">
-                  <BadgePercent className="h-4 w-4 text-[#B12B35]" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-[#232222]">{analytics.qualification_ratio}%</div>
-                <p className="text-xs text-[#5D5D5D] mt-0.5">leads reaching qualified+</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-[#C5C5C5] bg-white">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Win Rate</CardTitle>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-[#232222]">{analytics.win_rate}%</div>
-                <p className="text-xs text-[#5D5D5D] mt-0.5">{analytics.won_count}W / {analytics.lost_count}L closed deals</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-[#C5C5C5] bg-white">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-[#5D5D5D]">Pipeline Value</CardTitle>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#003466]/10">
-                  <Banknote className="h-4 w-4 text-[#003466]" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-[#232222]">
-                  ${analytics.pipeline_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </div>
-                <p className="text-xs text-[#5D5D5D] mt-0.5">
-                  ${analytics.won_value.toLocaleString(undefined, { maximumFractionDigits: 0 })} won
-                </p>
-              </CardContent>
-            </Card>
-
-            <Link href="/admin/exception-queue">
-              <Card className="border-[#C5C5C5] bg-white hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-[#5D5D5D]">Exception Queue</CardTitle>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#232222]">
-                    {analytics.routing_pending_leads + analytics.routing_pending_ideas}
-                  </div>
-                  <p className="text-xs text-[#5D5D5D] mt-0.5">
-                    {analytics.routing_pending_leads}L / {analytics.routing_pending_ideas}I pending routing
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-
-          {/* Region · Vertical · Top Accounts */}
-          <div className="grid gap-4 lg:grid-cols-3">
-            {/* Region breakdown */}
-            <Card className="border-[#C5C5C5] bg-white">
+          <SectionLabel icon={Globe} label="Regional & Vertical Breakdown" color="#2E75B6" />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="border-[#EDE7E6] bg-white">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base text-[#232222] flex items-center gap-2">
+                <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
                   <Globe className="h-4 w-4 text-[#2E75B6]" /> Leads by Region
                 </CardTitle>
-                <CardDescription>Geographic pipeline distribution</CardDescription>
               </CardHeader>
               <CardContent>
-                {analytics.leads_by_region.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No region data yet.</p>
-                ) : (() => {
-                  const maxR = Math.max(...analytics.leads_by_region.map((r) => r.count), 1);
+                {(() => {
+                  const maxR = Math.max(...an.leads_by_region.map((r) => r.count), 1);
                   return (
                     <div className="space-y-3">
-                      {analytics.leads_by_region.map((r) => (
+                      {an.leads_by_region.map((r) => (
                         <div key={r.region}>
                           <div className="flex items-center justify-between text-sm">
                             <span className="font-medium text-[#232222] truncate max-w-[65%]">{r.region}</span>
@@ -372,23 +1617,18 @@ function AdminDashboard({ token, userName }: { token: string; userName: string }
                 })()}
               </CardContent>
             </Card>
-
-            {/* Vertical breakdown */}
-            <Card className="border-[#C5C5C5] bg-white">
+            <Card className="border-[#EDE7E6] bg-white">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base text-[#232222] flex items-center gap-2">
+                <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-[#B12B35]" /> Leads by Vertical
                 </CardTitle>
-                <CardDescription>Industry / practice coverage</CardDescription>
               </CardHeader>
               <CardContent>
-                {analytics.leads_by_vertical.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No vertical data yet.</p>
-                ) : (() => {
-                  const maxV = Math.max(...analytics.leads_by_vertical.map((v) => v.count), 1);
+                {(() => {
+                  const maxV = Math.max(...an.leads_by_vertical.map((v) => v.count), 1);
                   return (
                     <div className="space-y-3">
-                      {analytics.leads_by_vertical.map((v) => (
+                      {an.leads_by_vertical.map((v) => (
                         <div key={v.vertical}>
                           <div className="flex items-center justify-between text-sm">
                             <span className="font-medium text-[#232222] truncate max-w-[65%]">{v.vertical}</span>
@@ -402,85 +1642,62 @@ function AdminDashboard({ token, userName }: { token: string; userName: string }
                 })()}
               </CardContent>
             </Card>
-
-            {/* Top accounts */}
-            <Card className="border-[#C5C5C5] bg-white">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-[#232222] flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-[#003466]" /> Top Accounts
-                </CardTitle>
-                <CardDescription>By total leads + ideas submitted</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {analytics.top_accounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No account data yet.</p>
-                ) : (
-                  <div className="divide-y divide-[#EDE7E6]">
-                    {analytics.top_accounts.map((a) => (
-                      <div key={a.account_name} className="flex items-center justify-between py-2 text-sm">
-                        <span className="font-medium text-[#232222] truncate max-w-[55%]">{a.account_name}</span>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20">
-                            {a.leads}L
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#003466]/10 text-[#003466] border-[#003466]/20">
-                            {a.ideas}I
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
-
-          {/* Reviewer turnaround */}
-          <Card className="border-[#C5C5C5] bg-white">
-            <CardHeader>
-              <CardTitle className="text-base text-[#232222] flex items-center gap-2">
-                <Clock className="h-4 w-4 text-[#5D5D5D]" /> Reviewer Turnaround
-              </CardTitle>
-              <CardDescription>Average days from assignment to action, per reviewer role</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {analytics.turnaround.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No completed reviews yet — turnaround data will appear once assignments are acted on.</p>
-              ) : (() => {
-                const maxDays = Math.max(...analytics.turnaround.map((t) => t.avg_days), 1);
-                return (
-                  <div className="space-y-4">
-                    {analytics.turnaround.map((t) => (
-                      <div key={t.role}>
-                        <div className="flex items-center justify-between text-sm mb-1">
-                          <span className="font-medium text-[#232222] capitalize">{t.role.replace(/_/g, " ")}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs text-[#5D5D5D]">{t.count} reviews</span>
-                            <span className="font-bold text-[#232222] w-16 text-right">
-                              {t.avg_days < 1
-                                ? `${Math.round(t.avg_days * 24)}h`
-                                : `${t.avg_days}d`}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-[#EDE7E6] overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${Math.round((t.avg_days / maxDays) * 100)}%`,
-                              background: t.avg_days <= 2 ? "#22c55e" : t.avg_days <= 5 ? "#2E75B6" : "#B12B35",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
         </>
       )}
+
+      {/* ── Exception Queue Summary + Stakeholder Completeness + Leaderboard ── */}
+      <SectionLabel icon={ShieldCheck} label="Operations & Engagement" color="#5D5D5D" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Exception Queue summary card */}
+        <StatCard
+          title="Routing Exceptions"
+          value={an ? an.routing_pending_leads + an.routing_pending_ideas : 0}
+          desc="Submissions pending routing"
+          icon={AlertTriangle}
+          iconColor="text-amber-500"
+          iconBg="bg-amber-50"
+          accent="#f59e0b"
+          href="/admin/exception-queue"
+        />
+        {/* Placeholder to keep grid alignment */}
+        <div className="hidden lg:block" />
+        <div className="hidden lg:block" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <StakeholderCompletenessCard token={token} showList={false} />
+        <MiniLeaderboard token={token} />
+      </div>
+
+      {/* ── Strategic Highlights ── */}
+      <SectionLabel icon={Activity} label="Strategic Highlights" color="#003466" />
+      <Card className="border-[#EDE7E6] bg-white">
+        <CardContent className="pt-4">
+          {activity.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No key status transitions yet.</p>
+          ) : (
+            <div className="divide-y divide-[#EDE7E6]">
+              {activity.map((a, idx) => (
+                <div key={idx} className="flex items-start gap-3 py-3 text-sm">
+                  <div className="mt-2 h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_COLORS[a.to_status] || "#C5C5C5" }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate text-[#232222]">{a.title}</p>
+                    <p className="text-xs text-[#5D5D5D] mt-0.5 flex items-center flex-wrap gap-1">
+                      <span>{a.changed_by}</span>
+                      <span className="text-[#C5C5C5]">moved {a.type}</span>
+                      <Badge variant="outline" className={`capitalize text-[10px] px-1.5 py-0 ${STATUS_BADGE[a.from_status] || ""}`}>{a.from_status?.replace(/_/g, " ")}</Badge>
+                      <ArrowRight className="h-3 w-3 text-[#C5C5C5]" />
+                      <Badge variant="outline" className={`capitalize text-[10px] px-1.5 py-0 ${STATUS_BADGE[a.to_status] || ""}`}>{a.to_status?.replace(/_/g, " ")}</Badge>
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-[#C5C5C5] whitespace-nowrap pt-0.5">{timeAgo(a.changed_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -504,7 +1721,7 @@ function UserDashboard({
   const [data, setData] = useState<UserDashData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
       const [leadsRaw, ideasRaw, scoreRaw, assignmentsRaw] = await Promise.all([
         api<LeadWithRelations[]>("/api/leads", { token }),
@@ -513,7 +1730,6 @@ function UserDashboard({
         api<{ action_taken: string }[]>("/api/assignments/mine", { token }),
       ]);
 
-      // Filter strictly to this user's submissions
       const myLeads = leadsRaw.filter((l) => l.submitted_by === userId);
       const myIdeas = ideasRaw.filter((i) => i.submitted_by === userId);
 
@@ -543,7 +1759,7 @@ function UserDashboard({
     finally { setLoading(false); }
   }, [token, userId]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
@@ -556,19 +1772,20 @@ function UserDashboard({
           Welcome, {userName.split(" ")[0]}
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Here&apos;s a summary of your activity and contributions.
+          Track your leads, manage your ideas, and see your impact.
         </p>
       </div>
 
       {/* 4 personal KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          title="My Leads"
+          title="My Leads Submitted"
           value={d.myLeads}
           desc={`${d.leadsByStatus["qualified"] || 0} qualified`}
           icon={Target}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
+          accent="#B12B35"
           href="/leads"
         />
         <StatCard
@@ -578,31 +1795,24 @@ function UserDashboard({
           icon={Lightbulb}
           iconColor="text-[#003466]"
           iconBg="bg-[#003466]/10"
+          accent="#003466"
           href="/ideas"
         />
         <StatCard
-          title="Your Score"
+          title="My Score"
           value={d.myScore.toLocaleString()}
           desc="Value points earned"
           icon={Trophy}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
+          accent="#B12B35"
           href="/leaderboard"
-        />
-        <StatCard
-          title="Pending Reviews"
-          value={d.myPendingReviews}
-          desc="Your items under review"
-          icon={ClipboardList}
-          iconColor="text-[#2E75B6]"
-          iconBg="bg-[#2E75B6]/10"
-          href="/assignments"
         />
       </div>
 
       {/* My pipelines */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-[#C5C5C5] bg-white">
+        <Card className="border-[#EDE7E6] bg-white">
           <CardHeader>
             <CardTitle className="text-base text-[#232222]">My Lead Pipeline</CardTitle>
             <CardDescription>Your leads by current status</CardDescription>
@@ -621,7 +1831,7 @@ function UserDashboard({
           </CardContent>
         </Card>
 
-        <Card className="border-[#C5C5C5] bg-white">
+        <Card className="border-[#EDE7E6] bg-white">
           <CardHeader>
             <CardTitle className="text-base text-[#232222]">My Idea Pipeline</CardTitle>
             <CardDescription>Your value ideas by current status</CardDescription>
@@ -641,8 +1851,33 @@ function UserDashboard({
         </Card>
       </div>
 
+      {/* Pending Reviews */}
+      {d.myPendingReviews > 0 && (
+        <Card className="border-[#EDE7E6] bg-white border-l-4 border-l-[#B12B35]">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#B12B35]/10">
+                <ClipboardList className="h-4 w-4 text-[#B12B35]" />
+              </div>
+              <div>
+                <p className="font-semibold text-[#232222] text-sm">
+                  {d.myPendingReviews} assignment{d.myPendingReviews !== 1 ? "s" : ""} pending your review
+                </p>
+                <p className="text-xs text-[#5D5D5D]">Action required — stakeholders are waiting</p>
+              </div>
+            </div>
+            <Link
+              href="/assignments"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#B12B35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#9a2330] transition-colors shrink-0"
+            >
+              Review Now <ChevronRight className="h-3 w-3" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick actions */}
-      <Card className="border-[#C5C5C5] bg-white">
+      <Card className="border-[#EDE7E6] bg-white">
         <CardHeader>
           <CardTitle className="text-base text-[#232222]">Quick Actions</CardTitle>
           <CardDescription>Submit and track your contributions</CardDescription>
@@ -661,6 +1896,9 @@ function UserDashboard({
           </div>
         </CardContent>
       </Card>
+
+      {/* Mini leaderboard */}
+      <MiniLeaderboard token={token} />
     </div>
   );
 }
@@ -676,6 +1914,10 @@ export default function DashboardPage() {
 
   if (user.role === "admin") {
     return <AdminDashboard token={token} userName={user.full_name || user.email} />;
+  }
+
+  if (user.role === "executive") {
+    return <ExecutiveDashboard token={token} userName={user.full_name || user.email} />;
   }
 
   return <UserDashboard token={token} userName={user.full_name || user.email} userId={user.id} />;
