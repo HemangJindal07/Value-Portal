@@ -21,6 +21,7 @@ class AccountCreate(BaseModel):
     engagement_start: date | None = None
     engagement_end: date | None = None
     account_status: AccountStatus = AccountStatus.prospect
+    services: list[str] | None = None  # TX service verticals e.g. ["QE", "DE"]
 
 
 class AccountUpdate(BaseModel):
@@ -34,6 +35,7 @@ class AccountUpdate(BaseModel):
     engagement_start: date | None = None
     engagement_end: date | None = None
     account_status: AccountStatus | None = None
+    services: list[str] | None = None  # TX service verticals e.g. ["QE", "DE"]
 
 
 class AccountResponse(BaseModel):
