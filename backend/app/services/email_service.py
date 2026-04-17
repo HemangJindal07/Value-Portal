@@ -154,7 +154,7 @@ def _build_submission_html(
         <tr>
           <td style="background:#B12B35;padding:20px 28px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr>
-              <td><span style="color:#fff;font-size:18px;font-weight:700;">Value Portal</span>
+              <td><span style="color:#fff;font-size:18px;font-weight:700;">TX Catalyst</span>
                   <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span></td>
               <td align="right"><span style="background:rgba(255,255,255,0.15);color:#fff;font-size:11px;
                                padding:3px 10px;border-radius:20px;font-weight:600;">{type_label.upper()}</span></td>
@@ -204,13 +204,13 @@ def _build_submission_html(
           <td style="padding:8px 28px 28px;">
             <a href="{cta_url}" style="display:inline-block;background:#B12B35;color:#ffffff;
                       text-decoration:none;font-size:14px;font-weight:600;
-                      padding:11px 24px;border-radius:6px;">View in Value Portal →</a>
+                      padding:11px 24px;border-radius:6px;">View in TX Catalyst →</a>
           </td>
         </tr>
         <tr>
           <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
             <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
-              Automated notification from TestingXperts Value Portal. Do not reply.
+              Automated notification from TestingXperts TX Catalyst. Do not reply.
             </p>
           </td>
         </tr>
@@ -237,7 +237,7 @@ def _build_status_html(
 
     return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><title>Value Portal Notification</title></head>
+<head><meta charset="UTF-8"/><title>TX Catalyst Notification</title></head>
 <body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
     <tr><td align="center">
@@ -245,7 +245,7 @@ def _build_status_html(
              style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
         <tr>
           <td style="background:#B12B35;padding:20px 28px;">
-            <span style="color:#fff;font-size:18px;font-weight:700;">Value Portal</span>
+            <span style="color:#fff;font-size:18px;font-weight:700;">TX Catalyst</span>
             <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span>
           </td>
         </tr>
@@ -274,13 +274,13 @@ def _build_status_html(
           <td style="padding:8px 28px 28px;">
             <a href="{cta_url}" style="display:inline-block;background:#B12B35;color:#ffffff;
                       text-decoration:none;font-size:14px;font-weight:600;
-                      padding:11px 24px;border-radius:6px;">View in Value Portal →</a>
+                      padding:11px 24px;border-radius:6px;">View in TX Catalyst →</a>
           </td>
         </tr>
         <tr>
           <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
             <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
-              Automated notification from TestingXperts Value Portal. Do not reply.
+              Automated notification from TestingXperts TX Catalyst. Do not reply.
             </p>
           </td>
         </tr>
@@ -326,7 +326,7 @@ def send_submission_email(
         )
         return
 
-    subject = f"[Value Portal] New {submission_type.title()}: {title} — {account_name}"
+    subject = f"[TX Catalyst] New {submission_type.title()}: {title} — {account_name}"
     html = _build_submission_html(
         submission_type=submission_type,
         title=title,
@@ -360,9 +360,9 @@ def send_reviewer_assignment_email(
     type_label = submission_type.title()
     message = (
         f"A <strong>{type_label}</strong> has been routed to you for review as "
-        f"<strong>{role_label}</strong>. Please log in to the Value Portal to take action."
+        f"<strong>{role_label}</strong>. Please log in to the TX Catalyst to take action."
     )
-    subject = f"[Value Portal] Action Required — {type_label}: {title}"
+    subject = f"[TX Catalyst] Action Required — {type_label}: {title}"
     html = _build_status_html(
         recipient_name=reviewer_name,
         submission_type=submission_type,
@@ -399,20 +399,20 @@ def send_submitter_status_email(
             f"Great news! Your <strong>{type_label}</strong> has been "
             f"<strong>fully approved</strong> by all reviewers."
         )
-        subject = f"[Value Portal] ✓ {type_label} Approved: {title}"
+        subject = f"[TX Catalyst] ✓ {type_label} Approved: {title}"
     elif new_status == "rejected":
         message = (
             f"Your <strong>{type_label}</strong> was <strong>rejected</strong> "
             f"by {actor_name} ({actor_role}). Please log in to the portal for details."
         )
-        subject = f"[Value Portal] {type_label} Rejected: {title}"
+        subject = f"[TX Catalyst] {type_label} Rejected: {title}"
     else:
         # Intermediate approval step
         message = (
             f"Your <strong>{type_label}</strong> was approved by "
             f"<strong>{actor_name}</strong> ({actor_role}) and has moved to the next review stage."
         )
-        subject = f"[Value Portal] {type_label} Progressing: {title}"
+        subject = f"[TX Catalyst] {type_label} Progressing: {title}"
 
     html = _build_status_html(
         recipient_name=submitter_name,

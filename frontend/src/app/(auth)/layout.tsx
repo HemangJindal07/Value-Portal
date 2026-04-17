@@ -43,7 +43,7 @@ export default function AuthLayout({
         {/* Hero copy */}
         <div className="relative flex-1 flex flex-col justify-center py-8">
           <p className="text-white/70 text-xs font-semibold tracking-[0.2em] uppercase mb-4">
-            Value Portal
+            Tx Catalyst
           </p>
           <h1 className="text-[2.6rem] font-bold text-white leading-[1.15] mb-3">
             Capture every lead.
@@ -129,7 +129,7 @@ export default function AuthLayout({
             </div>
             <div>
               <p className="font-bold text-[#232222] text-sm leading-none">
-                Value Portal
+                Tx Catalyst
               </p>
               <p className="text-[11px] text-[#5D5D5D] mt-0.5">
                 TestingXperts

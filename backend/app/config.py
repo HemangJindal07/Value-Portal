@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_pass: str = ""
-    smtp_from_name: str = "Value Portal"
+    smtp_from_name: str = "TX Catalyst"
 
     frontend_url: str = "http://localhost:3000"
     environment: str = "development"

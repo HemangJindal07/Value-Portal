@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import date, datetime
 from uuid import UUID
@@ -33,9 +33,9 @@ class LeadCreate(BaseModel):
     description: str
     lead_type: LeadType
     account_id: UUID
-    estimated_value: float | None = None
+    estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
     currency: str = "USD"
-    probability: int | None = None
+    probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
     priority: Priority = Priority.medium
     supporting_docs: list[str] = []
@@ -45,9 +45,9 @@ class LeadUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     lead_type: LeadType | None = None
-    estimated_value: float | None = None
+    estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
     currency: str | None = None
-    probability: int | None = None
+    probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
     status: LeadStatus | None = None
     priority: Priority | None = None

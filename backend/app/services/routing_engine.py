@@ -316,7 +316,13 @@ async def start_routing(
     account_id: str,
     submitter_id: str,
 ) -> None:
-    """Called right after a lead or idea is created. Starts the routing chain."""
+    """
+    Called right after a lead or idea is created. Starts the routing chain.
+    Points are awarded here (inside the background task) so they only fire
+    when routing actually succeeds — not on routing_pending submissions.
+    """
+    from app.services.scoring import award_points
+
     aid = (_uuid_key(account_id) or str(account_id or "").strip()) if account_id else ""
     if not aid:
         logger.error("[ROUTE] start_routing called without account_id for %s %s", submission_type, submission_id)
@@ -350,6 +356,7 @@ async def start_routing(
                 f"no stakeholder or vertical routing config found for account {account_id}. "
                 "Please configure stakeholders or vertical routing.",
             )
+        # No points awarded — submission is stuck in routing_pending
         return
 
     first = stakeholders[0]
@@ -389,6 +396,14 @@ async def start_routing(
         submitter_id=actual_submitter_id,
         stakeholders=stakeholders,
     )
+
+    # ── Award submission points only after successful routing ─────────────────
+    event = "submitted"
+    try:
+        award_points(actual_submitter_id, submission_type, submission_id, event)
+        logger.info("[ROUTE] Points awarded to %s for %s %s", actual_submitter_id, submission_type, submission_id)
+    except Exception as exc:
+        logger.exception("[ROUTE] Failed to award points for %s %s: %s", submission_type, submission_id, exc)
 
     logger.info(
         "[ROUTE] Routed %s %s → step %s (%s / %s)",

@@ -218,4 +218,14 @@ async def delete_account(
     current_user: dict = Depends(require_role("admin")),
 ):
     supabase = get_supabase_admin()
+    # Use limit(1) instead of .single() to avoid a 500 when the row doesn't exist
+    existing = (
+        supabase.table("accounts")
+        .select("account_id")
+        .eq("account_id", str(account_id))
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Account not found")
     supabase.table("accounts").delete().eq("account_id", str(account_id)).execute()

@@ -15,7 +15,17 @@ async def list_users(
     current_user: dict = Depends(get_current_user),
 ):
     supabase = get_supabase_admin()
-    query = supabase.table("profiles").select("id, full_name, email, role")
+    caller_role = current_user["role"]
+
+    # Admin and executive get full profile details.
+    # All other roles get a minimal subset (id + full_name only) so that
+    # user-picker dropdowns still work without exposing sensitive data.
+    if caller_role in ("admin", "executive"):
+        select_fields = "id, full_name, email, role, department, is_active"
+    else:
+        select_fields = "id, full_name"
+
+    query = supabase.table("profiles").select(select_fields)
 
     if active_only:
         query = query.eq("is_active", True)
@@ -24,7 +34,7 @@ async def list_users(
     if search:
         query = query.ilike("full_name", f"%{search}%")
 
-    query = query.order("full_name").limit(20)
+    query = query.order("full_name").limit(50)
     result = query.execute()
     return result.data
 

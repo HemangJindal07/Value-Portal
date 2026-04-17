@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from uuid import UUID
@@ -6,6 +7,7 @@ from app.dependencies import get_current_user, require_role
 from app.schemas.assignment import AssignmentUpdate
 from app.services.routing_engine import advance_routing
 
+logger = logging.getLogger("assignments")
 router = APIRouter(prefix="/assignments", tags=["Assignments"])
 
 
@@ -170,7 +172,7 @@ async def update_assignment(
         .execute()
     )
 
-    print(f"[ASSIGN] ✏️  Assignment {assignment_id} → action_taken={payload.action_taken} by {current_user['full_name']}")
+    logger.info("[ASSIGN] Assignment %s action_taken=%s by %s", assignment_id, payload.action_taken, current_user.get("full_name"))
 
     # Advance the routing chain when the reviewer approves or rejects
     if payload.action_taken in ("approved", "rejected"):

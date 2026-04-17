@@ -33,6 +33,7 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
         .execute()
     )
 
+    # routing_pending = stuck, not real pipeline — excluded intentionally
     pipeline_result = (
         supabase.table("leads")
         .select("estimated_value")
@@ -134,7 +135,7 @@ async def admin_analytics(
     # ── 2. Qualification + win ratios ─────────────────────────────────────────
     non_draft = [l for l in leads if l["status"] != "draft"]
     total_leads = len(non_draft)
-    qualified_count = sum(1 for l in non_draft if l["status"] in ("qualified", "won", "lost", "approved"))
+    qualified_count = sum(1 for l in non_draft if l["status"] in ("qualified", "won", "lost"))
     won_count  = sum(1 for l in non_draft if l["status"] == "won")
     lost_count = sum(1 for l in non_draft if l["status"] == "lost")
 
@@ -149,9 +150,10 @@ async def admin_analytics(
     ideas = ideas_res.data or []
 
     # ── 4. Revenue / savings ──────────────────────────────────────────────────
+    # routing_pending = stuck, not real pipeline — excluded intentionally
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in non_draft if l["status"] in ("submitted", "routing_pending", "under_review", "qualified")
+        for l in non_draft if l["status"] in ("submitted", "under_review", "qualified")
     )
     won_value = sum(
         float(l.get("estimated_value") or 0) for l in non_draft if l["status"] == "won"

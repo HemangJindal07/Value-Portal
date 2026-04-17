@@ -40,7 +40,7 @@ export default function LoginPage() {
           Welcome 
         </h2>
         <p className="text-sm text-[#5D5D5D] mt-1">
-          Sign in to your Value Portal account.
+          Sign in to your Tx Catalyst account.
         </p>
       </div>
 
@@ -95,7 +95,7 @@ export default function LoginPage() {
         </div>
         <div className="relative flex justify-center text-xs">
           <span className="bg-[#F9F9F9] px-3 text-[#5D5D5D]">
-            New to Value Portal?
+            New to Tx Catalyst?
           </span>
         </div>
       </div>

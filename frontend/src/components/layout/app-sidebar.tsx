@@ -175,19 +175,19 @@ export function AppSidebar() {
       {/* ── Header — brand red background, white text ── */}
       <SidebarHeader className="bg-[#B12B35] px-4 py-4">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 border border-white/25 p-1">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
             <Image
               src="/txlogo.webp"
               alt="TestingXperts"
-              width={36}
-              height={36}
-              className="object-contain brightness-0 invert"
+              width={44}
+              height={44}
+              className="object-contain"
               priority
             />
           </div>
           <div>
             <p className="text-sm font-bold text-white leading-none tracking-tight">
-              Value Portal
+              Tx Catalyst
             </p>
             <p className="text-[11px] text-white/70 mt-0.5 tracking-wide">
               TestingXperts

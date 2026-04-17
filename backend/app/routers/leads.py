@@ -7,7 +7,7 @@ from app.services.routing_engine import start_routing
 from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
 from app.services.notification_service import notify_status_change
-from app.services.scoring import award_points
+from app.services.scoring import award_points  # used for qualified/won status changes
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -45,9 +45,37 @@ async def list_leads(
     current_user: dict = Depends(get_current_user),
 ):
     supabase = get_supabase_admin()
+    user_id = current_user["id"]
+    role = current_user["role"]
+
     query = supabase.table("leads").select(
         "*, account:accounts(account_id, account_name), submitter:profiles!submitted_by(id, full_name, email)"
     )
+
+    # Role-based scoping:
+    # - admin: sees all leads
+    # - executive: sees leads they submitted + leads they have an assignment on
+    # - all others (delivery_manager, sales, practice_lead): own submissions only
+    if role == "admin":
+        pass  # no filter — admin sees everything
+    elif role == "executive":
+        # Get submission IDs the executive has an assignment on
+        asgn_res = (
+            supabase.table("assignments")
+            .select("submission_id")
+            .eq("assigned_to", user_id)
+            .eq("submission_type", "lead")
+            .execute()
+        )
+        assigned_ids = [a["submission_id"] for a in (asgn_res.data or [])]
+        # Leads they submitted OR leads assigned to them
+        if assigned_ids:
+            query = query.or_(f"submitted_by.eq.{user_id},lead_id.in.({','.join(assigned_ids)})")
+        else:
+            query = query.eq("submitted_by", user_id)
+    else:
+        # delivery_manager, sales, practice_lead — own submissions only
+        query = query.eq("submitted_by", user_id)
 
     if status_filter:
         query = query.eq("status", status_filter)
@@ -105,12 +133,12 @@ async def create_lead(
     result = supabase.table("leads").insert(data).execute()
     lead = result.data[0]
 
+    # Points are awarded inside start_routing (only when routing succeeds,
+    # not when the lead ends up routing_pending)
     background_tasks.add_task(
         start_routing, "lead", str(lead["lead_id"]), str(lead["account_id"]), current_user["id"]
     )
     background_tasks.add_task(classify_lead, str(lead["lead_id"]))
-
-    award_points(current_user["id"], "lead", str(lead["lead_id"]), "submitted")
 
     return lead
 
