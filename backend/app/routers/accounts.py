@@ -61,14 +61,34 @@ async def get_account(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_account(
     payload: AccountCreate,
-    current_user: dict = Depends(
-        require_role("admin", "executive", "sales")
-    ),
+    # NOTE: role restriction commented out — any authenticated user can create an account
+    # was: current_user: dict = Depends(require_role("admin", "executive", "sales"))
+    current_user: dict = Depends(get_current_user),
 ):
     supabase = get_supabase_admin()
-    data = payload.model_dump(mode="json")
-    result = supabase.table("accounts").insert(data).execute()
+    # Exclude None values — avoids sending null FK UUIDs that could confuse Supabase
+    data = {k: v for k, v in payload.model_dump(mode="json").items() if v is not None}
+    logger.info(
+        "[ACCOUNT CREATE] user=%s role=%s | account_name=%r | fields=%s",
+        current_user.get("id"), current_user.get("role"),
+        data.get("account_name"), list(data.keys()),
+    )
+    try:
+        result = supabase.table("accounts").insert(data).execute()
+        logger.info("[ACCOUNT CREATE] Supabase response: data=%s", result.data)
+    except Exception as exc:
+        logger.exception("[ACCOUNT CREATE] Supabase insert raised exception: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to create account: {exc}")
+
+    if not result.data:
+        logger.error("[ACCOUNT CREATE] Insert returned empty data — no row created for: %s", data.get("account_name"))
+        raise HTTPException(status_code=500, detail="Account insert returned no data.")
+
     account = result.data[0]
+    logger.info(
+        "[ACCOUNT CREATE] ✅ SUCCESS — account_id=%s name=%r created by user=%s",
+        account.get("account_id"), account.get("account_name"), current_user.get("id"),
+    )
     account_id   = str(account["account_id"])
     account_name = account["account_name"]
 
@@ -101,7 +121,7 @@ async def create_account(
             ).execute()
             logger.info("[ACCOUNT] Inserted %d stakeholder(s) for account %s", len(stakeholder_rows), account_id)
         except Exception as exc:
-            logger.exception("[ACCOUNT] Failed to insert stakeholders for %s: %s", account_id, exc)
+            logger.exception("[ACCOUNT CREATE] Failed to insert stakeholders for %s: %s", account_id, exc)
 
     # ── Notify DU and DH of their assignment ─────────────────────────────────
     if du_id:

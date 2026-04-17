@@ -199,7 +199,7 @@ function AssignmentCard({
   const href =
     assignment.submission_type === "lead"
       ? `/leads/${assignment.submission_id}`
-      : "#"; // Value Ideas UI disabled — legacy idea assignments: no detail page
+      : `/ideas/${assignment.submission_id}`;
 
   const isPending = assignment.action_taken === "pending";
 
@@ -270,15 +270,11 @@ function AssignmentCard({
           {/* Action buttons — only shown for pending */}
           {isPending && (
             <div className="flex flex-col gap-1.5 shrink-0">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1"
-                disabled={actioning === assignment.assignment_id}
-                onClick={() => onAction(assignment.assignment_id, "reviewed")}
-              >
-                <Eye className="h-3 w-3" />
-                Review
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
+                <Link href={href} className="flex items-center gap-1">
+                  <Eye className="h-3 w-3" />
+                  Open
+                </Link>
               </Button>
               <Button
                 size="sm"

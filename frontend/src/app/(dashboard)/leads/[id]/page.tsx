@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,11 +29,14 @@ import { toast } from "sonner";
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500/10 text-gray-400",
   submitted: "bg-blue-500/10 text-blue-400",
+  routing_pending: "bg-orange-500/10 text-orange-700",
   under_review: "bg-amber-500/10 text-amber-400",
   qualified: "bg-green-500/10 text-green-400",
+  approved: "bg-emerald-600/10 text-emerald-700",
   won: "bg-emerald-500/10 text-emerald-400",
   lost: "bg-red-500/10 text-red-400",
   dropped: "bg-gray-500/10 text-gray-500",
+  rejected: "bg-red-600/15 text-red-700",
 };
 
 const priorityColors: Record<string, string> = {
@@ -59,11 +62,14 @@ function Field({ label, value }: { label: string; value: string | null }) {
 const leadStatuses = [
   "draft",
   "submitted",
+  "routing_pending",
   "under_review",
   "qualified",
+  "approved",
   "won",
   "lost",
   "dropped",
+  "rejected",
 ];
 
 export default function LeadDetailPage() {
@@ -86,12 +92,7 @@ export default function LeadDetailPage() {
       .finally(() => setLoading(false));
   }, [token, id, router]);
 
-  const canChangeStatus =
-    user &&
-    (user.role === "admin" ||
-      user.role === "executive" ||
-      user.role === "sales" ||
-      lead?.submitted_by === user.id);
+  const canChangeStatus = Boolean(lead?.can_update_status);
 
   const handleStatusChange = async () => {
     if (!token || !lead || !newStatus || newStatus === lead.status) return;
@@ -156,7 +157,7 @@ export default function LeadDetailPage() {
 
       {canChangeStatus && (
         <Card>
-          <CardContent className="flex items-center gap-4 py-4">
+          <CardContent className="flex flex-wrap items-center gap-4 py-4">
             <p className="text-sm font-medium text-muted-foreground">
               Change Status:
             </p>
@@ -181,8 +182,25 @@ export default function LeadDetailPage() {
               onClick={handleStatusChange}
             >
               <Save className="mr-2 h-4 w-4" />
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : "Apply"}
             </Button>
+            <p className="text-xs text-muted-foreground w-full">
+              Reviewers should use <strong>My Assignments</strong> → Approve or Reject
+              to move the chain forward; use this only when you need a manual status
+              correction (admin / assigned reviewer / sales after approval).
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!canChangeStatus && user?.id === lead.submitted_by && (
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Your submission status</span>{" "}
+              is shown above and updates as each reviewer acts on{" "}
+              <strong>My Assignments</strong>. You cannot change it here.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -192,8 +210,33 @@ export default function LeadDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Description</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             <p className="text-sm whitespace-pre-wrap">{lead.description}</p>
+
+            {lead.supporting_docs &&
+              lead.supporting_docs.length > 0 && (
+                <div className="rounded-lg border border-[#C5C5C5] bg-[#F9F9F9] p-4">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    Supporting documents
+                  </p>
+                  <ul className="space-y-2">
+                    {lead.supporting_docs.map((url) => (
+                      <li key={url}>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-[#2E75B6] hover:underline inline-flex items-center gap-1.5 break-all"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                          {url.split("/").pop() || url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
           </CardContent>
         </Card>
 

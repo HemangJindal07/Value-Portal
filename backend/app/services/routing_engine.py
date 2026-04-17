@@ -16,13 +16,31 @@ On rejection:   the submission status is set to "rejected" and the submitter is 
 
 import logging
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 from app.database.supabase import get_supabase_admin
-from app.services.email_service import send_submission_email
+from app.services.email_service import (
+    send_submission_email,
+    send_reviewer_assignment_email,
+    send_submitter_status_email,
+)
 
 logger = logging.getLogger("routing_engine")
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
+
+def _uuid_key(value) -> str:
+    """Normalize UUID values from PostgREST / drivers so assignment ↔ stakeholder joins match."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    try:
+        return str(UUID(s)).lower()
+    except (ValueError, TypeError):
+        return s.lower()
+
 
 def _due_date() -> str:
     return (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
@@ -30,10 +48,13 @@ def _due_date() -> str:
 
 def _get_stakeholders(supabase, account_id: str) -> list[dict]:
     """Return stakeholders for an account ordered by step_order, ascending."""
+    aid = _uuid_key(account_id) or str(account_id or "").strip()
+    if not aid:
+        return []
     result = (
         supabase.table("account_stakeholders")
         .select("id, user_id, role_label, step_order")
-        .eq("account_id", account_id)
+        .eq("account_id", aid)
         .order("step_order")
         .execute()
     )
@@ -145,6 +166,10 @@ def _create_assignment(
     role_label: str,
     assigned_by: str,
 ) -> None:
+    # assignments.assigned_by is constrained to ('system', 'manual') in migration 005_assignments.sql.
+    # Keep the value within that constraint to avoid breaking routing advancement.
+    if assigned_by not in ("system", "manual"):
+        assigned_by = "manual"
     supabase.table("assignments").insert({
         "submission_type": submission_type,
         "submission_id":   submission_id,
@@ -169,6 +194,23 @@ def _get_submission(supabase, submission_type: str, submission_id: str) -> dict:
     else:
         res = supabase.table("value_ideas").select("title, problem_statement, submitted_by, account_id").eq("idea_id", submission_id).single().execute()
     return res.data or {}
+
+
+def _get_profile(supabase, user_id: str) -> dict:
+    """Return {'full_name': ..., 'email': ...} for a user, or empty dict."""
+    if not user_id:
+        return {}
+    try:
+        res = (
+            supabase.table("profiles")
+            .select("full_name, email")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        return res.data or {}
+    except Exception:
+        return {}
 
 
 def _dispatch_submission_email(
@@ -222,6 +264,14 @@ def _dispatch_submission_email(
             )
             stakeholder_emails = [u["email"] for u in (users_res.data or []) if u.get("email")]
 
+        # ── TEST MODE: redirect stakeholder emails to override address ──────────
+        # Before go-live: delete these 6 lines (keep the real stakeholder_emails as-is)
+        from app.services.email_service import TEST_OVERRIDE_EMAIL
+        if stakeholder_emails:
+            logger.info("[ROUTE][TEST] Redirecting %s → %s", stakeholder_emails, TEST_OVERRIDE_EMAIL)
+            stakeholder_emails = [TEST_OVERRIDE_EMAIL]
+        # ── END TEST MODE ─────────────────────────────────────────────────────
+
         send_submission_email(
             submission_type=submission_type,
             submission_id=submission_id,
@@ -267,6 +317,12 @@ async def start_routing(
     submitter_id: str,
 ) -> None:
     """Called right after a lead or idea is created. Starts the routing chain."""
+    aid = (_uuid_key(account_id) or str(account_id or "").strip()) if account_id else ""
+    if not aid:
+        logger.error("[ROUTE] start_routing called without account_id for %s %s", submission_type, submission_id)
+        return
+    account_id = aid
+
     logger.info("[ROUTE] Starting for %s %s (account %s)", submission_type, submission_id, account_id)
     supabase = get_supabase_admin()
 
@@ -367,11 +423,23 @@ async def advance_routing(
 
     sub = _get_submission(supabase, sub_type, sub_id)
     submitter_id = sub.get("submitted_by", "")
-    account_id   = sub.get("account_id", "")
-    title        = sub.get("title", "")
+    account_raw = sub.get("account_id")
+    account_id = (_uuid_key(account_raw) or str(account_raw or "").strip()) if account_raw else ""
+    title = sub.get("title", "")
 
-    actor_res = supabase.table("profiles").select("full_name").eq("id", actor_id).single().execute()
-    actor_name = (actor_res.data or {}).get("full_name", "Reviewer")
+    # Fetch account name for email templates
+    try:
+        acct_res = supabase.table("accounts").select("account_name").eq("account_id", account_id).single().execute()
+        account_name = (acct_res.data or {}).get("account_name", "Unknown Account")
+    except Exception:
+        account_name = "Unknown Account"
+
+    actor_profile  = _get_profile(supabase, actor_id)
+    actor_name     = actor_profile.get("full_name", "Reviewer")
+
+    submitter_profile = _get_profile(supabase, submitter_id) if submitter_id else {}
+    submitter_name    = submitter_profile.get("full_name", "")
+    submitter_email   = submitter_profile.get("email", "")
 
     # ── Rejection ───────────────────────────────────────────────────────────
     if action == "rejected":
@@ -382,12 +450,29 @@ async def advance_routing(
                 "status_update",
                 f'Your {sub_type} "{title}" was rejected by {actor_name} ({current_label}).',
             )
+            # Email submitter about rejection
+            if submitter_email:
+                try:
+                    from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
+                    send_submitter_status_email(
+                        submitter_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with submitter_email
+                        submitter_name=submitter_name or submitter_email,
+                        submission_type=sub_type,
+                        submission_id=sub_id,
+                        title=title,
+                        account_name=account_name,
+                        new_status="rejected",
+                        actor_name=actor_name,
+                        actor_role=current_label,
+                    )
+                except Exception as exc:
+                    logger.exception("[ROUTE] Email failed on rejection: %s", exc)
         logger.info("[ROUTE] %s %s rejected by %s (%s)", sub_type, sub_id, actor_name, current_label)
         return
 
     # ── Approval ────────────────────────────────────────────────────────────
     if action == "approved":
-        # Notify submitter of this step's approval
+        # In-app + email to submitter about this step's approval
         if submitter_id:
             _send_notification(
                 supabase, submitter_id, sub_type, sub_id,
@@ -396,27 +481,96 @@ async def advance_routing(
             )
 
         # Find the current reviewer's index in the dynamic chain
+        if not account_id:
+            logger.error(
+                "[ROUTE] advance_routing: missing account_id on %s %s; cannot route to next reviewer",
+                sub_type,
+                sub_id,
+            )
+            return
+
         stakeholders = _get_stakeholders(supabase, account_id)
+        assignee_key = _uuid_key(current_user_id)
+
         current_idx = next(
-            (i for i, s in enumerate(stakeholders) if s["user_id"] == current_user_id),
+            (i for i, s in enumerate(stakeholders) if _uuid_key(s.get("user_id")) == assignee_key),
             None,
         )
 
+        if current_idx is None and stakeholders:
+            current_idx = next(
+                (
+                    i
+                    for i, s in enumerate(stakeholders)
+                    if str(s.get("user_id", "")).strip() == str(current_user_id).strip()
+                ),
+                None,
+            )
+
+        if current_idx is None:
+            logger.error(
+                "[ROUTE] Approved reviewer %s (assignment assignee) not found in account %s chain. "
+                "Chain length=%s steps=%s. Will not create next assignment or spuriously finalize — "
+                "check account_stakeholders.user_id matches assignments.assigned_to.",
+                assignee_key,
+                account_id,
+                len(stakeholders),
+                [
+                    (s.get("step_order"), _uuid_key(s.get("user_id")), s.get("role_label"))
+                    for s in stakeholders
+                ],
+            )
+            return
+
+        # Intermediate step approval — email submitter that it's progressing
+        if submitter_email:
+            try:
+                from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
+                send_submitter_status_email(
+                    submitter_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with submitter_email
+                    submitter_name=submitter_name or submitter_email,
+                    submission_type=sub_type,
+                    submission_id=sub_id,
+                    title=title,
+                    account_name=account_name,
+                    new_status="step_approved",
+                    actor_name=actor_name,
+                    actor_role=current_label,
+                )
+            except Exception as exc:
+                logger.exception("[ROUTE] Email failed on step approval: %s", exc)
+
         # Walk forward to find the next unactioned reviewer
-        if current_idx is not None and current_idx + 1 < len(stakeholders):
+        if current_idx + 1 < len(stakeholders):
             next_step = stakeholders[current_idx + 1]
             _create_assignment(
                 supabase,
                 sub_type, sub_id,
                 next_step["user_id"],
                 next_step["role_label"],
-                actor_id,
+                "manual",
             )
             _send_notification(
                 supabase, next_step["user_id"], sub_type, sub_id,
                 "approval",
                 f'A {sub_type} requires your review as {next_step["role_label"]}: "{title}".',
             )
+            # Email the next reviewer
+            next_profile = _get_profile(supabase, next_step["user_id"])
+            if next_profile.get("email"):
+                try:
+                    from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
+                    send_reviewer_assignment_email(
+                        reviewer_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with next_profile["email"]
+                        reviewer_name=next_profile.get("full_name") or next_profile["email"],
+                        role_label=next_step["role_label"],
+                        submission_type=sub_type,
+                        submission_id=sub_id,
+                        title=title,
+                        account_name=account_name,
+                    )
+                except Exception as exc:
+                    logger.exception("[ROUTE] Email failed for next reviewer: %s", exc)
             logger.info(
                 "[ROUTE] Advanced %s %s → step %s (%s / %s)",
                 sub_type, sub_id,
@@ -428,16 +582,29 @@ async def advance_routing(
         _update_submission_status(supabase, sub_type, sub_id, "approved")
         if submitter_id:
             if sub_type == "lead":
-                final_msg = (
-                    f'Your lead "{title}" has been fully approved through the review chain.'
-                )
+                final_msg = f'Your lead "{title}" has been fully approved through the review chain.'
             else:
-                final_msg = (
-                    f'Congratulations! Your {sub_type} "{title}" has been fully approved.'
-                )
+                final_msg = f'Congratulations! Your {sub_type} "{title}" has been fully approved.'
             _send_notification(
                 supabase, submitter_id, sub_type, sub_id,
                 "status_update",
                 final_msg,
             )
+            # Email submitter final approval
+            if submitter_email:
+                try:
+                    from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
+                    send_submitter_status_email(
+                        submitter_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with submitter_email
+                        submitter_name=submitter_name or submitter_email,
+                        submission_type=sub_type,
+                        submission_id=sub_id,
+                        title=title,
+                        account_name=account_name,
+                        new_status="approved",
+                        actor_name=actor_name,
+                        actor_role=current_label,
+                    )
+                except Exception as exc:
+                    logger.exception("[ROUTE] Email failed on final approval: %s", exc)
         logger.info("[ROUTE] Final approval for %s %s", sub_type, sub_id)

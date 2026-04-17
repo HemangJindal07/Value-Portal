@@ -3,13 +3,36 @@ from uuid import UUID
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
-from app.services.assignment_engine import auto_assign
+from app.services.routing_engine import start_routing
 from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
 from app.services.notification_service import notify_status_change
 from app.services.scoring import award_points
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
+
+
+def _user_can_update_lead_status(supabase, lead: dict, current_user: dict) -> bool:
+    """Who may use PATCH to change lead.status (UI: Change Status)."""
+    uid = current_user["id"]
+    role = current_user["role"]
+    if role in ("admin", "executive"):
+        return True
+    if lead.get("submitted_by") == uid:
+        return False
+    if role == "sales" and lead.get("status") in ("approved", "qualified"):
+        return True
+    pending = (
+        supabase.table("assignments")
+        .select("assignment_id")
+        .eq("submission_type", "lead")
+        .eq("submission_id", str(lead["lead_id"]))
+        .eq("assigned_to", uid)
+        .eq("action_taken", "pending")
+        .limit(1)
+        .execute()
+    )
+    return bool(pending.data)
 
 
 @router.get("")
@@ -60,7 +83,12 @@ async def get_lead(
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Lead not found")
-    return result.data
+
+    row = result.data
+    row["can_update_status"] = _user_can_update_lead_status(
+        supabase, row, current_user
+    )
+    return row
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -78,7 +106,7 @@ async def create_lead(
     lead = result.data[0]
 
     background_tasks.add_task(
-        auto_assign, "lead", str(lead["lead_id"]), str(lead["account_id"])
+        start_routing, "lead", str(lead["lead_id"]), str(lead["account_id"]), current_user["id"]
     )
     background_tasks.add_task(classify_lead, str(lead["lead_id"]))
 
@@ -115,10 +143,48 @@ async def update_lead(
 
     update_data = payload.model_dump(exclude_unset=True, mode="json")
     if not update_data:
-        return existing.data
+        out = existing.data.copy()
+        out["can_update_status"] = _user_can_update_lead_status(
+            supabase, existing.data, current_user
+        )
+        return out
 
     old_status = existing.data.get("status")
     new_status = update_data.get("status")
+
+    if new_status is not None and new_status != old_status:
+        if is_submitter and user_role not in ("admin", "executive"):
+            raise HTTPException(
+                status_code=403,
+                detail="Submitters cannot change lead status; use My Assignments to track review progress",
+            )
+        if user_role not in ("admin", "executive"):
+            allowed = False
+            if (
+                user_role == "sales"
+                and old_status in ("approved", "qualified")
+                and new_status
+                in ("qualified", "won", "lost", "dropped")
+            ):
+                allowed = True
+            if not allowed:
+                pending = (
+                    supabase.table("assignments")
+                    .select("assignment_id")
+                    .eq("submission_type", "lead")
+                    .eq("submission_id", str(lead_id))
+                    .eq("assigned_to", user_id)
+                    .eq("action_taken", "pending")
+                    .limit(1)
+                    .execute()
+                )
+                if pending.data:
+                    allowed = True
+            if not allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only assigned reviewers or sales (after approval) can change status",
+                )
 
     result = (
         supabase.table("leads")
@@ -154,7 +220,11 @@ async def update_lead(
                 event_map[new_status],
             )
 
-    return result.data[0]
+    updated_row = result.data[0]
+    updated_row["can_update_status"] = _user_can_update_lead_status(
+        supabase, updated_row, current_user
+    )
+    return updated_row
 
 
 @router.delete("/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)

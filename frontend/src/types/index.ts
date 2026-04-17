@@ -74,6 +74,8 @@ export interface Lead {
   value_score: number | null;
   created_at: string;
   updated_at: string;
+  /** Set by GET /api/leads/:id — who may use Change Status */
+  can_update_status?: boolean;
   // Joined fields
   account?: Account;
   submitter?: Profile;

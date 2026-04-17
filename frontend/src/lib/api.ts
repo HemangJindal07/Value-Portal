@@ -76,8 +76,20 @@ export async function api<T = unknown>(
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Request failed" }));
-    throw new Error(error.detail || `API error: ${res.status}`);
+    const detail = Array.isArray(error.detail)
+      ? error.detail.map((d: { msg?: string }) => d.msg ?? JSON.stringify(d)).join("; ")
+      : error.detail || `API error: ${res.status}`;
+    throw new Error(detail);
   }
 
-  return res.json();
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await res.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
