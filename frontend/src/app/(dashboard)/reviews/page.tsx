@@ -26,7 +26,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -158,12 +157,10 @@ export default function ReviewsPage() {
         </div>
         {isPrivileged && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Review Cycle
-              </Button>
-            </DialogTrigger>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Review Cycle
+            </Button>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Review Cycle</DialogTitle>
@@ -174,7 +171,7 @@ export default function ReviewsPage() {
                   <Select
                     value={form.cycle_type}
                     onValueChange={(v) =>
-                      setForm((f) => ({ ...f, cycle_type: v }))
+                      setForm((f) => ({ ...f, cycle_type: v ?? f.cycle_type }))
                     }
                   >
                     <SelectTrigger>

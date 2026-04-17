@@ -13,9 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { BarChart3, Download, Target, Lightbulb, Trophy, ClipboardList, GitBranch, ArrowRight, Users } from "lucide-react";
+import { BarChart3, Download, Target, Trophy, ClipboardList, GitBranch, ArrowRight, Users } from "lucide-react";
 import { toast } from "sonner";
-import type { LeadWithRelations, IdeaWithRelations } from "@/types";
+import type { LeadWithRelations } from "@/types";
 
 type ScoreEvent = {
   event_id: string;
@@ -27,7 +27,6 @@ type ScoreEvent = {
 
 type UserReportData = {
   myLeads: LeadWithRelations[];
-  myIdeas: IdeaWithRelations[];
   totalPoints: number;
   pendingReviews: number;
   scoreEvents: ScoreEvent[];
@@ -105,18 +104,9 @@ type PipelineLead = {
   current_assignee_role: string | null;
 };
 
-type PipelineIdea = {
-  idea_id: string;
-  title: string;
-  status: string;
-  idea_category: string;
-  estimated_saving: number | null;
-  created_at: string;
-  account: { account_name: string } | null;
-  submitter: { full_name: string } | null;
-  current_assignee: string | null;
-  current_assignee_role: string | null;
-};
+/* Value Ideas pipeline type disabled
+type PipelineIdea = { ... };
+*/
 
 const LEAD_TYPE_LABEL: Record<string, string> = {
   current_lead: "Current Lead",
@@ -133,12 +123,7 @@ function leadOutcome(status: string): { label: string; cls: string } | null {
   return null;
 }
 
-function ideaOutcome(status: string): { label: string; cls: string } | null {
-  if (status === "implemented") return { label: "Implemented",     cls: "bg-green-100 text-green-700" };
-  if (status === "approved")    return { label: "Approved",        cls: "bg-[#B12B35]/10 text-[#B12B35]" };
-  if (status === "rejected")    return { label: "Rejected",        cls: "bg-[#E42525]/10 text-[#E42525]" };
-  return null;
-}
+// function ideaOutcome(...) — Value Ideas disabled
 
 // ── Pipeline sub-components ────────────────────────────────────────────────
 
@@ -234,88 +219,7 @@ function LeadsPipelineTable({ leads, loading }: { leads: PipelineLead[]; loading
   );
 }
 
-function IdeasPipelineTable({ ideas, loading }: { ideas: PipelineIdea[]; loading: boolean }) {
-  if (loading) return <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>;
-  if (ideas.length === 0)
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <Lightbulb className="h-10 w-10 mb-3 opacity-30" />
-        <p className="text-sm">No value ideas to show.</p>
-      </div>
-    );
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Idea</TableHead>
-          <TableHead>Account</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead>
-            <span className="flex items-center gap-1"><Users className="h-3 w-3" />Assigned To</span>
-          </TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Outcome</TableHead>
-          <TableHead className="text-right">Est. Saving</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {ideas.map((idea) => {
-          const outcome = ideaOutcome(idea.status);
-          return (
-            <TableRow key={idea.idea_id}>
-              <TableCell>
-                <Link href={`/ideas/${idea.idea_id}`} className="font-medium hover:underline text-[#232222]">
-                  {idea.title}
-                </Link>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {idea.submitter?.full_name}
-                </p>
-              </TableCell>
-              <TableCell className="text-sm text-[#5D5D5D]">
-                {idea.account?.account_name ?? "—"}
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline" className="text-[10px] capitalize">
-                  {idea.idea_category.replace(/_/g, " ")}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {idea.current_assignee ? (
-                  <div>
-                    <p className="text-sm font-medium text-[#232222]">{idea.current_assignee}</p>
-                    <p className="text-[10px] text-muted-foreground">{idea.current_assignee_role}</p>
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground italic">—</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary" className={`capitalize text-[11px] ${STATUS_BADGE[idea.status] ?? "bg-[#C5C5C5]/20 text-[#5D5D5D]"}`}>
-                  {idea.status.replace(/_/g, " ")}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {outcome ? (
-                  <Badge variant="secondary" className={`text-[11px] ${outcome.cls}`}>
-                    {outcome.label}
-                  </Badge>
-                ) : (
-                  <span className="text-xs text-muted-foreground">In Progress</span>
-                )}
-              </TableCell>
-              <TableCell className="text-right text-sm font-medium text-[#232222]">
-                {idea.estimated_saving
-                  ? `$${Number(idea.estimated_saving).toLocaleString()}`
-                  : "—"}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
-  );
-}
+// IdeasPipelineTable removed — Value Ideas disabled
 
 // ── Reports page ───────────────────────────────────────────────────────────
 
@@ -325,7 +229,7 @@ export default function ReportsPage() {
   const { token, user } = useAuth();
   const [reportData, setReportData] = useState<UserReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pipeline, setPipeline] = useState<{ leads: PipelineLead[]; ideas: PipelineIdea[] } | null>(null);
+  const [pipeline, setPipeline] = useState<{ leads: PipelineLead[] } | null>(null);
   const [pipelineLoading, setPipelineLoading] = useState(true);
 
   const canSeeAll = PIPELINE_ALL_ROLES.includes(user?.role ?? "");
@@ -333,23 +237,19 @@ export default function ReportsPage() {
   const fetchData = useCallback(async () => {
     if (!token || !user?.id) return;
     try {
-      const [leadsRaw, ideasRaw, scoreRaw, assignmentsRaw] = await Promise.all([
+      const [leadsRaw, scoreRaw, assignmentsRaw] = await Promise.all([
         api<LeadWithRelations[]>("/api/leads", { token }),
-        api<IdeaWithRelations[]>("/api/ideas", { token }),
         api<{ total_points: number; events?: ScoreEvent[] }>("/api/scores/me", { token }),
         api<{ action_taken: string }[]>("/api/assignments/mine", { token }),
       ]);
 
-      // Filter strictly to this user's submissions
       const myLeads = leadsRaw.filter((l) => l.submitted_by === user.id);
-      const myIdeas = ideasRaw.filter((i) => i.submitted_by === user.id);
       const pendingReviews = Array.isArray(assignmentsRaw)
         ? assignmentsRaw.filter((a) => a.action_taken === "pending").length
         : 0;
 
       setReportData({
         myLeads,
-        myIdeas,
         totalPoints: scoreRaw.total_points || 0,
         pendingReviews,
         scoreEvents: scoreRaw.events || [],
@@ -366,11 +266,11 @@ export default function ReportsPage() {
     setPipelineLoading(true);
     try {
       const scope = canSeeAll ? "all" : "mine";
-      const data = await api<{ leads: PipelineLead[]; ideas: PipelineIdea[] }>(
+      const data = await api<{ leads: PipelineLead[]; ideas: unknown[] }>(
         `/api/dashboard/pipeline?scope=${scope}`,
         { token }
       );
-      setPipeline(data);
+      setPipeline({ leads: data.leads ?? [] });
     } catch {
       toast.error("Failed to load pipeline data.");
     } finally {
@@ -389,11 +289,6 @@ export default function ReportsPage() {
       acc[l.status] = (acc[l.status] || 0) + 1;
       return acc;
     }, {});
-    const ideasByStatus = reportData.myIdeas.reduce<Record<string, number>>((acc, i) => {
-      acc[i.status] = (acc[i.status] || 0) + 1;
-      return acc;
-    }, {});
-
     const rows = [
       ["My Report — Value Portal", ""],
       ["User",      user?.full_name || user?.email || ""],
@@ -402,15 +297,11 @@ export default function ReportsPage() {
       ["", ""],
       ["Metric", "Value"],
       ["My Total Leads",    String(reportData.myLeads.length)],
-      ["My Total Ideas",    String(reportData.myIdeas.length)],
       ["Pending Reviews",   String(reportData.pendingReviews)],
       ["My Score (Points)", String(reportData.totalPoints)],
       ["", ""],
       ["Lead Status Breakdown", "Count"],
       ...Object.entries(leadsByStatus).map(([k, v]) => [k.replace(/_/g, " "), String(v)]),
-      ["", ""],
-      ["Idea Status Breakdown", "Count"],
-      ...Object.entries(ideasByStatus).map(([k, v]) => [k.replace(/_/g, " "), String(v)]),
     ];
 
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -438,11 +329,6 @@ export default function ReportsPage() {
     acc[l.status] = (acc[l.status] || 0) + 1;
     return acc;
   }, {});
-  const ideasByStatus = reportData.myIdeas.reduce<Record<string, number>>((acc, i) => {
-    acc[i.status] = (acc[i.status] || 0) + 1;
-    return acc;
-  }, {});
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -484,81 +370,37 @@ export default function ReportsPage() {
             <FlowStep label="Status" />
             <FlowStep label="Qualified / Disqualified" />
             <FlowStep label="Win / Loss" />
-            <span className="ml-4 font-semibold text-[#232222]">Idea flow:</span>
-            <span>Submission</span>
-            <FlowStep label="Assigned To" />
-            <FlowStep label="Review Status" />
-            <FlowStep label="Approved / Rejected" />
-            <FlowStep label="Implemented" />
           </div>
 
-          <Tabs defaultValue="leads-pipeline">
-            <TabsList>
-              <TabsTrigger value="leads-pipeline" className="gap-2">
+          <Card className="border-[#C5C5C5] bg-white mt-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-[#232222] flex items-center gap-2">
                 <Target className="h-4 w-4" />
-                Leads
+                {canSeeAll ? "All Leads — Pipeline" : "My Leads — Pipeline"}
                 {pipeline && (
                   <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
                     {pipeline.leads.length}
                   </Badge>
                 )}
-              </TabsTrigger>
-              <TabsTrigger value="ideas-pipeline" className="gap-2">
-                <Lightbulb className="h-4 w-4" />
-                Value Ideas
-                {pipeline && (
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
-                    {pipeline.ideas.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="leads-pipeline" className="mt-4">
-              <Card className="border-[#C5C5C5] bg-white">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base text-[#232222]">
-                    {canSeeAll ? "All Leads — Pipeline" : "My Leads — Pipeline"}
-                  </CardTitle>
-                  <CardDescription>
-                    Lead → Assigned To → Status → Qualified/Disqualified → Win/Loss
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <LeadsPipelineTable
-                    leads={pipeline?.leads ?? []}
-                    loading={pipelineLoading}
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="ideas-pipeline" className="mt-4">
-              <Card className="border-[#C5C5C5] bg-white">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base text-[#232222]">
-                    {canSeeAll ? "All Value Ideas — Pipeline" : "My Value Ideas — Pipeline"}
-                  </CardTitle>
-                  <CardDescription>
-                    Idea → Assigned To → Review Status → Approved/Rejected → Implemented
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <IdeasPipelineTable
-                    ideas={pipeline?.ideas ?? []}
-                    loading={pipelineLoading}
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+              </CardTitle>
+              <CardDescription>
+                Lead → Assigned To → Status → Qualified/Disqualified → Win/Loss
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LeadsPipelineTable
+                leads={pipeline?.leads ?? []}
+                loading={pipelineLoading}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── My Report tab (existing content) ───────────────────────────── */}
         <TabsContent value="my-report" className="mt-4 space-y-6">
 
       {/* KPI cards — strictly user-scoped */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="border-[#C5C5C5] bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#5D5D5D]">My Leads</CardTitle>
@@ -570,21 +412,6 @@ export default function ReportsPage() {
             <div className="text-2xl font-bold text-[#232222]">{reportData.myLeads.length}</div>
             <p className="text-xs text-[#5D5D5D]">
               {leadsByStatus["won"] || 0} won · {leadsByStatus["qualified"] || 0} qualified
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#C5C5C5] bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#5D5D5D]">My Value Ideas</CardTitle>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#003466]/10">
-              <Lightbulb className="h-4 w-4 text-[#003466]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#232222]">{reportData.myIdeas.length}</div>
-            <p className="text-xs text-[#5D5D5D]">
-              {ideasByStatus["implemented"] || 0} implemented · {ideasByStatus["approved"] || 0} approved
             </p>
           </CardContent>
         </Card>
@@ -619,7 +446,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Funnel charts */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-1">
         <Card className="border-[#C5C5C5] bg-white">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-[#232222]">
@@ -632,29 +459,16 @@ export default function ReportsPage() {
             <StatusFunnel data={leadsByStatus} total={reportData.myLeads.length} color="#B12B35" />
           </CardContent>
         </Card>
-
-        <Card className="border-[#C5C5C5] bg-white">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2 text-[#232222]">
-              <BarChart3 className="h-4 w-4 text-[#003466]" />
-              My Idea Funnel
-            </CardTitle>
-            <CardDescription>Your {reportData.myIdeas.length} ideas by current status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <StatusFunnel data={ideasByStatus} total={reportData.myIdeas.length} color="#003466" />
-          </CardContent>
-        </Card>
       </div>
 
       {/* Recent submissions list */}
       <Card className="border-[#C5C5C5] bg-white">
         <CardHeader>
           <CardTitle className="text-base text-[#232222]">My Recent Submissions</CardTitle>
-          <CardDescription>All leads and value ideas submitted by you</CardDescription>
+          <CardDescription>All leads submitted by you</CardDescription>
         </CardHeader>
         <CardContent>
-          {reportData.myLeads.length === 0 && reportData.myIdeas.length === 0 ? (
+          {reportData.myLeads.length === 0 ? (
             <p className="text-sm text-muted-foreground">No submissions yet.</p>
           ) : (
             <Table>
@@ -677,15 +491,6 @@ export default function ReportsPage() {
                     status: l.status,
                     date: l.created_at,
                     href: `/leads/${l.lead_id}`,
-                  })),
-                  ...reportData.myIdeas.map((i) => ({
-                    id: i.idea_id,
-                    title: i.title,
-                    type: "Idea",
-                    account: i.account?.account_name ?? "—",
-                    status: i.status,
-                    date: i.created_at,
-                    href: `/ideas/${i.idea_id}`,
                   })),
                 ]
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

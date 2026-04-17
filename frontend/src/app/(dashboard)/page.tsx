@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Target, Lightbulb, Trophy, ClipboardList, ArrowRight, ShieldCheck,
+  Target, /* Lightbulb, */ Trophy, ClipboardList, ArrowRight, ShieldCheck,
   TrendingUp, BadgePercent, AlertTriangle, Banknote, Clock, Globe, BarChart3,
   Building2, GitMerge, Activity, ChevronRight,
 } from "lucide-react";
@@ -16,7 +16,8 @@ import Link from "next/link";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import type { LeadWithRelations, IdeaWithRelations } from "@/types";
+import type { LeadWithRelations } from "@/types";
+// import type { IdeaWithRelations } from "@/types"; // Value Ideas disabled
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -805,7 +806,8 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
 
   const s = stats ?? { total_leads: 0, total_ideas: 0, total_accounts: 0, active_users: 0, leads_by_status: {}, ideas_by_status: {}, pending_assignments: 0 };
   const an = analytics;
-  const routingExceptions = an ? an.routing_pending_leads + an.routing_pending_ideas : 0;
+  // Leads only: ignore routing_pending_ideas
+  const routingExceptions = an ? an.routing_pending_leads : 0;
 
   return (
     <div className="space-y-6">
@@ -841,20 +843,19 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
           accent="#B12B35"
           href="/leads"
         />
+        {/* Value Ideas KPI disabled — leads-only portal
         <StatCard
           title="Total Value Ideas"
           value={s.total_ideas}
-          desc={`${s.ideas_by_status["implemented"] || 0} implemented`}
+          desc={...}
           icon={Lightbulb}
-          iconColor="text-[#003466]"
-          iconBg="bg-[#003466]/10"
-          accent="#003466"
           href="/ideas"
         />
+        */}
         <StatCard
           title="Routing Exceptions"
           value={routingExceptions}
-          desc={`${an?.routing_pending_leads ?? 0} leads · ${an?.routing_pending_ideas ?? 0} ideas unrouted`}
+          desc={`${an?.routing_pending_leads ?? 0} leads unrouted`}
           icon={AlertTriangle}
           iconColor="text-amber-500"
           iconBg="bg-amber-50"
@@ -886,10 +887,12 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
           </CardHeader>
           <CardContent className="space-y-1">
             <StatusBarChart data={s.leads_by_status} color="#B12B35" />
+            {/* Ideas Pipeline disabled
             <div className="pt-3 border-t border-[#EDE7E6] mt-4">
               <p className="text-[11px] text-[#5D5D5D] font-medium uppercase tracking-wider mb-2">Ideas Pipeline</p>
               <StatusBarChart data={s.ideas_by_status} color="#003466" />
             </div>
+            */}
           </CardContent>
         </Card>
 
@@ -914,15 +917,14 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
             ) : (
               <div className="space-y-4">
                 {/* Summary tiles */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   <div className="rounded-xl bg-[#B12B35]/5 border border-[#B12B35]/10 p-3">
                     <p className="text-2xl font-bold text-[#B12B35]">{an?.routing_pending_leads ?? 0}</p>
                     <p className="text-xs text-[#5D5D5D] mt-0.5">Leads unrouted</p>
                   </div>
-                  <div className="rounded-xl bg-[#003466]/5 border border-[#003466]/10 p-3">
-                    <p className="text-2xl font-bold text-[#003466]">{an?.routing_pending_ideas ?? 0}</p>
-                    <p className="text-xs text-[#5D5D5D] mt-0.5">Ideas unrouted</p>
-                  </div>
+                  {/* Ideas unrouted tile disabled
+                  <div className="rounded-xl bg-[#003466]/5 ...">{an?.routing_pending_ideas ?? 0}</div>
+                  */}
                 </div>
 
                 {/* What's causing this */}
@@ -1095,19 +1097,19 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
                 <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-[#003466]" /> Top Accounts
                 </CardTitle>
-                <CardDescription>By total leads + ideas</CardDescription>
+                <CardDescription>By total leads submitted</CardDescription>
               </CardHeader>
               <CardContent>
                 {an.top_accounts.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No account data yet.</p>
                 ) : (
                   <div className="divide-y divide-[#EDE7E6]">
-                    {an.top_accounts.map((a) => (
-                      <div key={a.account_name} className="flex items-center justify-between py-2 text-sm">
+                    {an.top_accounts.map((a, idx) => (
+                      <div key={`${a.account_name}-${idx}`} className="flex items-center justify-between py-2 text-sm">
                         <span className="font-medium text-[#232222] truncate max-w-[55%]">{a.account_name}</span>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20">{a.leads}L</Badge>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-[#003466]/10 text-[#003466] border-[#003466]/20">{a.ideas}I</Badge>
+                          {/* <Badge ...>{a.ideas}I</Badge> — Value Ideas disabled */}
                         </div>
                       </div>
                     ))}
@@ -1265,26 +1267,26 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
   const s = stats ?? { total_leads: 0, total_ideas: 0, total_accounts: 0, active_users: 0, leads_by_status: {}, ideas_by_status: {}, pending_assignments: 0 };
   const an = analytics;
 
-  // Funnel stages from combined leads + ideas
+  // Funnel stages — leads only (ideas disabled)
   const funnelStages = [
     {
       label: "Submitted",
-      count: (s.leads_by_status["submitted"] || 0) + (s.ideas_by_status["submitted"] || 0),
+      count: s.leads_by_status["submitted"] || 0,
       color: "#2E75B6",
     },
     {
       label: "Under Review",
-      count: (s.leads_by_status["under_review"] || 0) + (s.ideas_by_status["under_review"] || 0),
+      count: s.leads_by_status["under_review"] || 0,
       color: "#003466",
     },
     {
-      label: "Qualified / Approved",
-      count: (s.leads_by_status["qualified"] || 0) + (s.ideas_by_status["approved"] || 0),
+      label: "Qualified",
+      count: s.leads_by_status["qualified"] || 0,
       color: "#B12B35",
     },
     {
-      label: "Won / Implemented",
-      count: (s.leads_by_status["won"] || 0) + (s.ideas_by_status["implemented"] || 0),
+      label: "Won",
+      count: s.leads_by_status["won"] || 0,
       color: "#22c55e",
     },
   ];
@@ -1394,7 +1396,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
               <Activity className="h-4 w-4 text-[#B12B35]" />
               Opportunity Funnel
             </CardTitle>
-            <CardDescription>Leads &amp; ideas across all pipeline stages</CardDescription>
+            <CardDescription>Leads across all pipeline stages</CardDescription>
           </CardHeader>
           <CardContent>
             <FunnelChart stages={funnelStages} />
@@ -1408,7 +1410,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
               <div className="flex items-center gap-2 text-xs">
                 <div className="h-2.5 w-2.5 rounded-sm bg-[#EDE7E6]" />
                 <span className="text-[#5D5D5D]">Rejected</span>
-                <span className="font-semibold text-[#232222] ml-auto">{(s.leads_by_status["rejected"] || 0) + (s.ideas_by_status["rejected"] || 0)}</span>
+                <span className="font-semibold text-[#232222] ml-auto">{s.leads_by_status["rejected"] || 0}</span>
               </div>
             </div>
           </CardContent>
@@ -1446,7 +1448,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
               <BarChart3 className="h-4 w-4 text-[#2E75B6]" />
               Monthly Submission Volume
             </CardTitle>
-            <CardDescription>Leads + ideas submitted per month (last 12 months)</CardDescription>
+            <CardDescription>Leads submitted per month (last 12 months)</CardDescription>
           </CardHeader>
           <CardContent>
             <MonthlySubmissionsChart data={monthlyTrend} />
@@ -1652,7 +1654,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
         {/* Exception Queue summary card */}
         <StatCard
           title="Routing Exceptions"
-          value={an ? an.routing_pending_leads + an.routing_pending_ideas : 0}
+          value={an ? an.routing_pending_leads : 0}
           desc="Submissions pending routing"
           icon={AlertTriangle}
           iconColor="text-amber-500"
@@ -1706,11 +1708,9 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
 
 type UserDashData = {
   myLeads: number;
-  myIdeas: number;
   myScore: number;
   myPendingReviews: number;
   leadsByStatus: Record<string, number>;
-  ideasByStatus: Record<string, number>;
 };
 
 function UserDashboard({
@@ -1723,23 +1723,17 @@ function UserDashboard({
 
   const load = useCallback(async () => {
     try {
-      const [leadsRaw, ideasRaw, scoreRaw, assignmentsRaw] = await Promise.all([
+      const [leadsRaw, scoreRaw, assignmentsRaw] = await Promise.all([
         api<LeadWithRelations[]>("/api/leads", { token }),
-        api<IdeaWithRelations[]>("/api/ideas", { token }),
+        // api<IdeaWithRelations[]>("/api/ideas", { token }), // Value Ideas disabled
         api<{ total_points: number }>("/api/scores/me", { token }),
         api<{ action_taken: string }[]>("/api/assignments/mine", { token }),
       ]);
 
       const myLeads = leadsRaw.filter((l) => l.submitted_by === userId);
-      const myIdeas = ideasRaw.filter((i) => i.submitted_by === userId);
 
       const leadsByStatus = myLeads.reduce<Record<string, number>>((acc, l) => {
         acc[l.status] = (acc[l.status] || 0) + 1;
-        return acc;
-      }, {});
-
-      const ideasByStatus = myIdeas.reduce<Record<string, number>>((acc, i) => {
-        acc[i.status] = (acc[i.status] || 0) + 1;
         return acc;
       }, {});
 
@@ -1749,11 +1743,9 @@ function UserDashboard({
 
       setData({
         myLeads: myLeads.length,
-        myIdeas: myIdeas.length,
         myScore: scoreRaw.total_points || 0,
         myPendingReviews,
         leadsByStatus,
-        ideasByStatus,
       });
     } catch { /* silent */ }
     finally { setLoading(false); }
@@ -1763,7 +1755,7 @@ function UserDashboard({
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
-  const d = data ?? { myLeads: 0, myIdeas: 0, myScore: 0, myPendingReviews: 0, leadsByStatus: {}, ideasByStatus: {} };
+  const d = data ?? { myLeads: 0, myScore: 0, myPendingReviews: 0, leadsByStatus: {} };
 
   return (
     <div className="space-y-6">
@@ -1772,7 +1764,7 @@ function UserDashboard({
           Welcome, {userName.split(" ")[0]}
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Track your leads, manage your ideas, and see your impact.
+          Track your leads and see your impact.
         </p>
       </div>
 
@@ -1788,16 +1780,9 @@ function UserDashboard({
           accent="#B12B35"
           href="/leads"
         />
-        <StatCard
-          title="My Value Ideas"
-          value={d.myIdeas}
-          desc={`${d.ideasByStatus["implemented"] || 0} implemented`}
-          icon={Lightbulb}
-          iconColor="text-[#003466]"
-          iconBg="bg-[#003466]/10"
-          accent="#003466"
-          href="/ideas"
-        />
+        {/* Value Ideas stat card disabled
+        <StatCard title="My Value Ideas" ... href="/ideas" />
+        */}
         <StatCard
           title="My Score"
           value={d.myScore.toLocaleString()}
@@ -1808,10 +1793,20 @@ function UserDashboard({
           accent="#B12B35"
           href="/leaderboard"
         />
+        <StatCard
+          title="Pending Reviews"
+          value={d.myPendingReviews}
+          desc="Assignments awaiting action"
+          icon={ClipboardList}
+          iconColor="text-[#2E75B6]"
+          iconBg="bg-[#2E75B6]/10"
+          accent="#2E75B6"
+          href="/assignments"
+        />
       </div>
 
-      {/* My pipelines */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* My lead pipeline only — Value Ideas pipeline disabled */}
+      <div className="grid gap-4 lg:grid-cols-1">
         <Card className="border-[#EDE7E6] bg-white">
           <CardHeader>
             <CardTitle className="text-base text-[#232222]">My Lead Pipeline</CardTitle>
@@ -1827,25 +1822,6 @@ function UserDashboard({
               </div>
             ) : (
               <StatusBarChart data={d.leadsByStatus} color="#B12B35" />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#EDE7E6] bg-white">
-          <CardHeader>
-            <CardTitle className="text-base text-[#232222]">My Idea Pipeline</CardTitle>
-            <CardDescription>Your value ideas by current status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {Object.keys(d.ideasByStatus).length === 0 ? (
-              <div className="py-6 text-center">
-                <p className="text-sm text-muted-foreground mb-3">No ideas submitted yet.</p>
-                <Link href="/ideas/new" className="inline-flex items-center gap-1.5 rounded-lg bg-[#003466] px-4 py-2 text-sm font-semibold text-white hover:bg-[#003466]/90 transition-colors">
-                  <Lightbulb className="h-4 w-4" /> Submit an Idea
-                </Link>
-              </div>
-            ) : (
-              <StatusBarChart data={d.ideasByStatus} color="#003466" />
             )}
           </CardContent>
         </Card>
@@ -1887,9 +1863,9 @@ function UserDashboard({
             <Link href="/leads/new" className="inline-flex items-center gap-2 rounded-lg border border-[#B12B35] bg-[#B12B35]/5 px-4 py-2 text-sm font-semibold text-[#B12B35] hover:bg-[#B12B35]/10 transition-colors">
               <Target className="h-4 w-4" /> Submit New Lead
             </Link>
-            <Link href="/ideas/new" className="inline-flex items-center gap-2 rounded-lg border border-[#003466] bg-[#003466]/5 px-4 py-2 text-sm font-semibold text-[#003466] hover:bg-[#003466]/10 transition-colors">
-              <Lightbulb className="h-4 w-4" /> Submit Value Idea
-            </Link>
+            {/* Submit Value Idea link disabled
+            <Link href="/ideas/new" ...>Submit Value Idea</Link>
+            */}
             <Link href="/assignments" className="inline-flex items-center gap-2 rounded-lg border border-[#C5C5C5] bg-white px-4 py-2 text-sm font-semibold text-[#5D5D5D] hover:border-[#B12B35]/40 transition-colors">
               <ClipboardList className="h-4 w-4" /> View My Assignments
             </Link>

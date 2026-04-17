@@ -9,7 +9,7 @@ import {
   GitMerge,
   Route,
   Target,
-  Lightbulb,
+  // Lightbulb, // Value Ideas tab disabled
   Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,10 +30,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
-import type { LeadWithRelations, IdeaWithRelations } from "@/types";
+import type { LeadWithRelations } from "@/types";
+// import type { IdeaWithRelations } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -165,128 +165,14 @@ function LeadsTable({
   );
 }
 
-// ── Ideas exception table ─────────────────────────────────────────────────────
-
-function IdeasTable({
-  ideas,
-  loading,
-}: {
-  ideas: IdeaWithRelations[];
-  loading: boolean;
-}) {
-  if (loading) {
-    return (
-      <div className="space-y-2">
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-14 w-full" />
-        ))}
-      </div>
-    );
-  }
-
-  if (ideas.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
-          <Lightbulb className="h-6 w-6 text-green-600" />
-        </div>
-        <p className="text-sm font-medium text-[#232222]">No pending ideas</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          All value ideas are routed correctly.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Idea Title</TableHead>
-          <TableHead>Account</TableHead>
-          <TableHead>Industry / Region</TableHead>
-          <TableHead>Submitted By</TableHead>
-          <TableHead>Waiting</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {ideas.map((idea) => (
-          <TableRow key={idea.idea_id} className="hover:bg-amber-50/50">
-            <TableCell>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="text-purple-700 border-purple-300 bg-purple-50 text-[10px] shrink-0"
-                >
-                  Idea
-                </Badge>
-                <span className="font-medium text-sm truncate max-w-[200px]">
-                  {idea.title}
-                </span>
-              </div>
-            </TableCell>
-            <TableCell className="text-sm">
-              {idea.account?.account_name ?? "—"}
-            </TableCell>
-            <TableCell>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-[#5D5D5D]">
-                  {idea.account?.industry ?? (
-                    <span className="text-[#B12B35] italic">No industry set</span>
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {idea.account?.region ?? (
-                    <span className="italic">No region set</span>
-                  )}
-                </span>
-              </div>
-            </TableCell>
-            <TableCell className="text-sm text-muted-foreground">
-              {idea.submitter?.full_name ?? "—"}
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1 text-amber-600 text-xs">
-                <Clock className="h-3 w-3" />
-                {timeAgo(idea.created_at)}
-              </div>
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex items-center justify-end gap-2">
-                <Link href={`/admin/stakeholder-mapping`}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs border-[#B12B35]/30 text-[#B12B35] hover:bg-[#B12B35]/5"
-                  >
-                    <GitMerge className="h-3 w-3 mr-1" />
-                    Fix Mapping
-                  </Button>
-                </Link>
-                <Link href={`/ideas/${idea.idea_id}`}>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs">
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    View
-                  </Button>
-                </Link>
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
+// ── Ideas exception table — DISABLED (Value Ideas off; restore from git if needed) ──
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ExceptionQueuePage() {
   const { token, user } = useAuth();
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
-  const [ideas, setIdeas] = useState<IdeaWithRelations[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
-  const [loadingIdeas, setLoadingIdeas] = useState(true);
 
   const loadLeads = useCallback(async () => {
     if (!token) return;
@@ -304,30 +190,12 @@ export default function ExceptionQueuePage() {
     }
   }, [token]);
 
-  const loadIdeas = useCallback(async () => {
-    if (!token) return;
-    setLoadingIdeas(true);
-    try {
-      const data = await api<IdeaWithRelations[]>(
-        "/api/ideas?status=routing_pending",
-        { token }
-      );
-      setIdeas(data);
-    } catch {
-      // silently handled
-    } finally {
-      setLoadingIdeas(false);
-    }
-  }, [token]);
-
   useEffect(() => {
     loadLeads();
-    loadIdeas();
-  }, [loadLeads, loadIdeas]);
+  }, [loadLeads]);
 
   const refresh = () => {
     loadLeads();
-    loadIdeas();
   };
 
   if (user?.role !== "admin") {
@@ -338,7 +206,7 @@ export default function ExceptionQueuePage() {
     );
   }
 
-  const total = leads.length + ideas.length;
+  const total = leads.length;
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -394,64 +262,26 @@ export default function ExceptionQueuePage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <Tabs defaultValue="leads">
-        <TabsList>
-          <TabsTrigger value="leads" className="gap-2">
+      {/* Leads only — Value Ideas exception tab removed */}
+      <Card className="mt-4">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
             <Target className="h-4 w-4" />
-            Leads
+            Leads — Routing Pending
             {leads.length > 0 && (
               <Badge className="ml-1 bg-amber-500 text-white text-[10px] h-4 px-1.5">
                 {leads.length}
               </Badge>
             )}
-          </TabsTrigger>
-          <TabsTrigger value="ideas" className="gap-2">
-            <Lightbulb className="h-4 w-4" />
-            Value Ideas
-            {ideas.length > 0 && (
-              <Badge className="ml-1 bg-amber-500 text-white text-[10px] h-4 px-1.5">
-                {ideas.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="leads" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Leads — Routing Pending
-              </CardTitle>
-              <CardDescription>
-                These leads were submitted but no routing chain could be
-                resolved. The submitter and the lead are not lost — only
-                unrouted.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LeadsTable leads={leads} loading={loadingLeads} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="ideas" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Value Ideas — Routing Pending
-              </CardTitle>
-              <CardDescription>
-                These value ideas were submitted but no routing chain could be
-                resolved.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <IdeasTable ideas={ideas} loading={loadingIdeas} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          </CardTitle>
+          <CardDescription>
+            These leads were submitted but no routing chain could be resolved.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LeadsTable leads={leads} loading={loadingLeads} />
+        </CardContent>
+      </Card>
 
       {/* Help footer */}
       <div className="flex items-start gap-3 p-4 rounded-lg bg-[#F9F9F9] border border-[#EDE7E6] text-sm text-[#5D5D5D]">

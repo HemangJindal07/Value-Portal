@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trophy, Medal, Award, Star, TrendingUp, Zap, Target, Lightbulb } from "lucide-react";
+import { Trophy, Medal, Award, Star, TrendingUp, Zap, Target } from "lucide-react";
 import { toast } from "sonner";
 
 type LeaderboardUser = {
@@ -105,12 +105,12 @@ export default function LeaderboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Leaderboard</h1>
         <p className="text-muted-foreground">
-          Top contributors, revenue leaders, and value champions.
+          Top contributors and revenue leaders (leads-focused scoring).
         </p>
       </div>
 
       {myScore && (
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Your Rank</CardTitle>
@@ -142,15 +142,9 @@ export default function LeaderboardPage() {
               <div className="text-2xl font-bold">{myScore.leads_submitted}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ideas</CardTitle>
-              <Lightbulb className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{myScore.ideas_submitted}</div>
-            </CardContent>
-          </Card>
+          {/* Value Ideas stats hidden — leads-only portal
+          <Card>Ideas …</Card>
+          */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Deals Won</CardTitle>
@@ -170,8 +164,8 @@ export default function LeaderboardPage() {
             All-Time Rankings
           </CardTitle>
           <CardDescription>
-            Points are earned by submitting leads & ideas, and when they get
-            qualified, approved, implemented, or won.
+            Points are earned by submitting leads and when they progress (e.g.
+            qualified or won).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -181,7 +175,7 @@ export default function LeaderboardPage() {
             </p>
           ) : entries.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
-              No scores yet. Start submitting leads and ideas to earn points!
+              No scores yet. Start submitting leads to earn points!
             </p>
           ) : (
             <Table>
@@ -192,9 +186,7 @@ export default function LeaderboardPage() {
                   <TableHead>Role</TableHead>
                   <TableHead className="text-right">Points</TableHead>
                   <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">Ideas</TableHead>
                   <TableHead className="text-right">Deals Won</TableHead>
-                  <TableHead className="text-right">Implemented</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -250,13 +242,7 @@ export default function LeaderboardPage() {
                         {entry.leads_submitted}
                       </TableCell>
                       <TableCell className="text-right">
-                        {entry.ideas_submitted}
-                      </TableCell>
-                      <TableCell className="text-right">
                         {entry.deals_won}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {entry.ideas_implemented}
                       </TableCell>
                     </TableRow>
                   );

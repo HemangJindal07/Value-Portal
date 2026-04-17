@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Users } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Pencil, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +14,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
-import type { Account } from "@/types";
+import type { Account, Lead } from "@/types";
 import Link from "next/link";
 
 const statusColors: Record<string, string> = {
@@ -79,6 +79,7 @@ export default function AccountDetailPage() {
   const [dh, setDh] = useState<UserProfile | null>(null);
   const [du, setDu] = useState<UserProfile | null>(null);
   const [sales, setSales] = useState<UserProfile | null>(null);
+  const [accountLeads, setAccountLeads] = useState<Lead[]>([]);
 
   useEffect(() => {
     if (!token || !id) return;
@@ -113,6 +114,13 @@ export default function AccountDetailPage() {
       .catch(() => router.push("/accounts"))
       .finally(() => setLoading(false));
   }, [token, id, router]);
+
+  useEffect(() => {
+    if (!token || !id) return;
+    api<Lead[]>(`/api/leads?account_id=${encodeURIComponent(id)}`, { token })
+      .then(setAccountLeads)
+      .catch(() => setAccountLeads([]));
+  }, [token, id]);
 
   if (loading) {
     return (
@@ -155,9 +163,11 @@ export default function AccountDetailPage() {
             )}
           </div>
         </div>
-        <Button variant="outline" size="sm">
-          <Pencil className="mr-2 h-3 w-3" />
-          Edit
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/accounts/${id}/edit`}>
+            <Pencil className="mr-2 h-3 w-3" />
+            Edit
+          </Link>
         </Button>
       </div>
 
@@ -206,13 +216,20 @@ export default function AccountDetailPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
-            Leads and Value Ideas submitted for this account follow this approval chain:
+            Leads submitted for this account follow this approval chain:
           </p>
           <div className="divide-y">
-            <StakeholderRow step={1} label="Delivery Head (DH) — First Review" user={dh} />
-            <StakeholderRow step={2} label="Delivery Unit Manager (DU) — Second Review" user={du} />
-            <StakeholderRow step={3} label="Sales Executive — Final Approval" user={sales} />
+            <StakeholderRow step={1} label="Delivery Unit (DU) — first in chain" user={du} />
+            <StakeholderRow step={2} label="Delivery Head (DH) — second in chain" user={dh} />
+            <StakeholderRow step={3} label="Sales Executive (legacy field)" user={sales} />
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            The live routing order is defined in{" "}
+            <Link href="/admin/stakeholder-mapping" className="text-[#2E75B6] hover:underline">
+              Stakeholder Mapping
+            </Link>
+            . Add all reviewers there (including executives) so each step receives an assignment.
+          </p>
           {!account.account_owner_id && !account.practice_leader_id && !account.sales_lead_id && (
             <p className="mt-3 text-xs text-amber-600 bg-amber-50 rounded px-3 py-2">
               No stakeholders mapped — submissions will be placed in &quot;Routing Pending&quot; status until stakeholders are assigned.
@@ -225,12 +242,60 @@ export default function AccountDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Activity</CardTitle>
+          <CardTitle className="text-base">Leads & attachments</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Leads and ideas linked to this account will appear here.
-          </p>
+        <CardContent className="space-y-4">
+          {accountLeads.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No leads for this account yet.
+            </p>
+          ) : (
+            <ul className="space-y-4">
+              {accountLeads.map((l) => (
+                <li
+                  key={l.lead_id}
+                  className="rounded-lg border border-border p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/leads/${l.lead_id}`}
+                      className="font-medium text-[#2E75B6] hover:underline inline-flex items-center gap-1"
+                    >
+                      {l.title}
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                    <Badge variant="secondary" className="text-xs capitalize">
+                      {l.status.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                  {l.supporting_docs && l.supporting_docs.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 shrink-0">
+                        <FileText className="h-3 w-3" />
+                        Documents:
+                      </span>
+                      {l.supporting_docs.map((url) => (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#2E75B6] hover:underline inline-flex items-center gap-1 max-w-full break-all"
+                        >
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                          {decodeURIComponent(url.split("/").pop() || url)}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      No attachment on file.
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

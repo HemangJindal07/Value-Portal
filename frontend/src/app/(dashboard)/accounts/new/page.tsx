@@ -199,7 +199,7 @@ export default function NewAccountPage() {
             <div className="pt-2 border-t">
               <p className="text-sm font-medium mb-1">Stakeholder Mapping</p>
               <p className="text-xs text-muted-foreground mb-4">
-                Leads and ideas for this account route in order:
+                Leads for this account route in order:
                 <span className="font-medium text-foreground"> DU → DH</span>.
                 After DH approval, any additional reviewers set up in Stakeholder Mapping will receive the submission.
                 Search by typing at least 3 characters.

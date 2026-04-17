@@ -1,14 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import auth, accounts, users, leads, ideas, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing
+# Value Ideas API disabled — leads-only portal (re-enable: add `ideas` back to import + router below)
+from app.routers import auth, accounts, users, leads, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing
+# from app.routers import ideas
 
 settings = get_settings()
 
 app = FastAPI(
     title="Value Portal API",
     version="0.1.0",
-    description="Backend API for the Value Portal — lead tracking, idea management, and AI-powered classification.",
+    description="Backend API for the Value Portal — lead tracking and AI-powered classification.",
 )
 
 app.add_middleware(
@@ -27,7 +29,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(accounts.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
-app.include_router(ideas.router, prefix="/api")
+# app.include_router(ideas.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(tracking.router, prefix="/api")

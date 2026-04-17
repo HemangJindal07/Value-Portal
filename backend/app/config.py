@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     portal_url: str = "http://localhost:3000"
 
+    # ── SMTP email settings ────────────────────────────────────────────────────
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
+    smtp_from_name: str = "Value Portal"
+
     frontend_url: str = "http://localhost:3000"
     environment: str = "development"
 

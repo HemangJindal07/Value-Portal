@@ -287,8 +287,8 @@ export default function StakeholderMappingPage() {
     try {
       const data = await api<Stakeholder[]>(`/api/stakeholders?account_id=${accountId}`, { token });
       setStakeholders(data);
-    } catch {
-      toast.error("Failed to load stakeholders.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to load stakeholders.");
     } finally {
       setLoading(false);
     }
@@ -379,14 +379,15 @@ export default function StakeholderMappingPage() {
       </div>
 
       {/* Account selector */}
-      <Card>
+      {/* Allow combobox dropdown to overflow outside the card */}
+      <Card className="overflow-visible">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Select Account</CardTitle>
           <CardDescription>
             Search for an account to view and manage its reviewer chain.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-visible">
           <AccountCombobox
             name="account_id"
             value={accountId ?? ""}
@@ -482,7 +483,7 @@ export default function StakeholderMappingPage() {
         <CardContent className="pt-4 pb-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">How routing works</p>
           <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-            <li>When a user submits a lead or idea, it is assigned to <strong>Step 1</strong> reviewer.</li>
+            <li>When a user submits a lead, it is assigned to <strong>Step 1</strong> reviewer.</li>
             <li>On approval, it automatically moves to <strong>Step 2</strong>, then Step 3, and so on.</li>
             <li>On rejection at any step, the submitter is notified and the chain stops.</li>
             <li>After the final step approves, the submission is marked <strong>Approved</strong>.</li>

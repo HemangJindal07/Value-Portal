@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,14 +29,6 @@ function getInitials(name: string) {
     .toUpperCase()
     .slice(0, 2);
 }
-
-const roleLabels: Record<string, string> = {
-  delivery_manager: "Delivery Manager",
-  sales: "Sales",
-  practice_lead: "Practice Lead",
-  admin: "Admin",
-  executive: "Executive",
-};
 
 export function Topbar() {
   const { user, token, signOut } = useAuth();
@@ -76,7 +67,7 @@ export function Topbar() {
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search leads, ideas, accounts..."
+          placeholder="Search leads, accounts..."
           className="pl-9 h-9 bg-[#F9F9F9] border-[#C5C5C5] focus:border-[#B12B35] focus:ring-[#B12B35]/20"
         />
       </div>
@@ -114,12 +105,6 @@ export function Topbar() {
                       {user.full_name}
                     </p>
                     <p className="text-xs text-[#5D5D5D]">{user.email}</p>
-                    <Badge
-                      variant="secondary"
-                      className="w-fit text-xs mt-1 bg-[#B12B35]/10 text-[#B12B35] border-0"
-                    >
-                      {roleLabels[user.role] || user.role}
-                    </Badge>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
