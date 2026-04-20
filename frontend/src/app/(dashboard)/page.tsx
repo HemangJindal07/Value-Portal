@@ -1709,7 +1709,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
 type UserDashData = {
   myLeads: number;
   myScore: number;
-  myPendingReviews: number;
+  myUnderReview: number;
   leadsByStatus: Record<string, number>;
 };
 
@@ -1723,11 +1723,10 @@ function UserDashboard({
 
   const load = useCallback(async () => {
     try {
-      const [leadsRaw, scoreRaw, assignmentsRaw] = await Promise.all([
+      const [leadsRaw, scoreRaw] = await Promise.all([
         api<LeadWithRelations[]>("/api/leads", { token }),
         // api<IdeaWithRelations[]>("/api/ideas", { token }), // Value Ideas disabled
         api<{ total_points: number }>("/api/scores/me", { token }),
-        api<{ action_taken: string }[]>("/api/assignments/mine", { token }),
       ]);
 
       const myLeads = leadsRaw.filter((l) => l.submitted_by === userId);
@@ -1737,14 +1736,12 @@ function UserDashboard({
         return acc;
       }, {});
 
-      const myPendingReviews = Array.isArray(assignmentsRaw)
-        ? assignmentsRaw.filter((a) => a.action_taken === "pending").length
-        : 0;
+      const myUnderReview = myLeads.filter((l) => l.status === "under_review").length;
 
       setData({
         myLeads: myLeads.length,
         myScore: scoreRaw.total_points || 0,
-        myPendingReviews,
+        myUnderReview,
         leadsByStatus,
       });
     } catch { /* silent */ }
@@ -1755,7 +1752,7 @@ function UserDashboard({
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
-  const d = data ?? { myLeads: 0, myScore: 0, myPendingReviews: 0, leadsByStatus: {} };
+  const d = data ?? { myLeads: 0, myScore: 0, myUnderReview: 0, leadsByStatus: {} };
 
   return (
     <div className="space-y-6">
@@ -1794,14 +1791,14 @@ function UserDashboard({
           href="/leaderboard"
         />
         <StatCard
-          title="Pending Reviews"
-          value={d.myPendingReviews}
-          desc="Assignments awaiting action"
+          title="Under Review"
+          value={d.myUnderReview}
+          desc="Leads being reviewed now"
           icon={ClipboardList}
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"
           accent="#2E75B6"
-          href="/assignments"
+          href="/leads"
         />
       </div>
 
@@ -1827,30 +1824,6 @@ function UserDashboard({
         </Card>
       </div>
 
-      {/* Pending Reviews */}
-      {d.myPendingReviews > 0 && (
-        <Card className="border-[#EDE7E6] bg-white border-l-4 border-l-[#B12B35]">
-          <CardContent className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#B12B35]/10">
-                <ClipboardList className="h-4 w-4 text-[#B12B35]" />
-              </div>
-              <div>
-                <p className="font-semibold text-[#232222] text-sm">
-                  {d.myPendingReviews} assignment{d.myPendingReviews !== 1 ? "s" : ""} pending your review
-                </p>
-                <p className="text-xs text-[#5D5D5D]">Action required — stakeholders are waiting</p>
-              </div>
-            </div>
-            <Link
-              href="/assignments"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#B12B35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#9a2330] transition-colors shrink-0"
-            >
-              Review Now <ChevronRight className="h-3 w-3" />
-            </Link>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Quick actions */}
       <Card className="border-[#EDE7E6] bg-white">

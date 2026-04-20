@@ -45,8 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const supabase = createClient();
 
-    // getUser() validates the token with Supabase and refreshes if expired,
-    // then getSession() gives us the fresh access_token to use with the API.
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -74,6 +72,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
+
+  // ── Auto-logout after 1 hour of inactivity ──────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    const IDLE_TIMEOUT = 60 * 60 * 1000; // 1 hour
+    let timer: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        setUser(null);
+        setToken(null);
+        window.location.href = "/login";
+      }, IDLE_TIMEOUT);
+    };
+
+    const events = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"];
+    events.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, resetTimer));
+    };
+  }, [user]);
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();

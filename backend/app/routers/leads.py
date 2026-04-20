@@ -8,6 +8,7 @@ from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
 from app.services.notification_service import notify_status_change
 from app.services.scoring import award_points  # used for qualified/won status changes
+from app.services.sanitize import sanitize_dict
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -113,6 +114,24 @@ async def get_lead(
         raise HTTPException(status_code=404, detail="Lead not found")
 
     row = result.data
+    uid = current_user["id"]
+    role = current_user["role"]
+
+    if role not in ("admin", "executive"):
+        is_submitter = row.get("submitted_by") == uid
+        has_assignment = bool(
+            supabase.table("assignments")
+            .select("assignment_id")
+            .eq("submission_type", "lead")
+            .eq("submission_id", str(lead_id))
+            .eq("assigned_to", uid)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not is_submitter and not has_assignment:
+            raise HTTPException(status_code=403, detail="Not authorized to view this lead")
+
     row["can_update_status"] = _user_can_update_lead_status(
         supabase, row, current_user
     )
@@ -127,6 +146,7 @@ async def create_lead(
 ):
     supabase = get_supabase_admin()
     data = payload.model_dump(mode="json")
+    sanitize_dict(data, ["title", "description"])
     data["submitted_by"] = current_user["id"]
     data["status"] = "submitted"
 
@@ -170,6 +190,7 @@ async def update_lead(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     update_data = payload.model_dump(exclude_unset=True, mode="json")
+    sanitize_dict(update_data, ["title", "description"])
     if not update_data:
         out = existing.data.copy()
         out["can_update_status"] = _user_can_update_lead_status(
@@ -253,6 +274,87 @@ async def update_lead(
         supabase, updated_row, current_user
     )
     return updated_row
+
+
+@router.get("/{lead_id}/routing")
+async def get_lead_routing(
+    lead_id: UUID,
+    current_user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase_admin()
+    lead_res = (
+        supabase.table("leads")
+        .select("submitted_by, account_id, status")
+        .eq("lead_id", str(lead_id))
+        .single()
+        .execute()
+    )
+    if not lead_res.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    lead = lead_res.data
+    uid = current_user["id"]
+    role = current_user["role"]
+
+    if role not in ("admin", "executive") and lead["submitted_by"] != uid:
+        has_assignment = bool(
+            supabase.table("assignments")
+            .select("assignment_id")
+            .eq("submission_type", "lead")
+            .eq("submission_id", str(lead_id))
+            .eq("assigned_to", uid)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not has_assignment:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    account_id = lead.get("account_id")
+    if not account_id:
+        return {"steps": [], "lead_status": lead["status"]}
+
+    stakeholders = (
+        supabase.table("account_stakeholders")
+        .select("user_id, role_label, step_order")
+        .eq("account_id", str(account_id))
+        .order("step_order")
+        .execute()
+    ).data or []
+
+    assignments = (
+        supabase.table("assignments")
+        .select("assigned_to, action_taken, action_date, assigned_role")
+        .eq("submission_type", "lead")
+        .eq("submission_id", str(lead_id))
+        .execute()
+    ).data or []
+
+    assignment_map = {a["assigned_to"]: a for a in assignments}
+
+    user_ids = list({s["user_id"] for s in stakeholders})
+    profiles_map: dict[str, str] = {}
+    if user_ids:
+        profiles = (
+            supabase.table("profiles")
+            .select("id, full_name")
+            .in_("id", user_ids)
+            .execute()
+        ).data or []
+        profiles_map = {p["id"]: p["full_name"] for p in profiles}
+
+    steps = []
+    for s in stakeholders:
+        asgn = assignment_map.get(s["user_id"])
+        steps.append({
+            "step_order": s["step_order"],
+            "role_label": s["role_label"],
+            "reviewer_name": profiles_map.get(s["user_id"], "Unknown"),
+            "action_taken": asgn["action_taken"] if asgn else None,
+            "action_date": asgn.get("action_date") if asgn else None,
+        })
+
+    return {"steps": steps, "lead_status": lead["status"]}
 
 
 @router.delete("/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)

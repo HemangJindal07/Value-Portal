@@ -6,6 +6,7 @@ from app.dependencies import get_current_user, require_role
 from app.schemas.account import AccountCreate, AccountUpdate, AccountResponse
 from app.services.notification_service import send_notification
 from app.services.account_stakeholders_sync import refresh_du_dh_and_renumber
+from app.services.sanitize import sanitize_dict
 from postgrest.exceptions import APIError
 
 logger = logging.getLogger("accounts")
@@ -68,6 +69,7 @@ async def create_account(
     supabase = get_supabase_admin()
     # Exclude None values — avoids sending null FK UUIDs that could confuse Supabase
     data = {k: v for k, v in payload.model_dump(mode="json").items() if v is not None}
+    sanitize_dict(data, ["account_name", "industry", "region"])
     logger.info(
         "[ACCOUNT CREATE] user=%s role=%s | account_name=%r | fields=%s",
         current_user.get("id"), current_user.get("role"),
@@ -183,6 +185,7 @@ async def update_account(
     update_data = payload.model_dump(exclude_unset=True, mode="json")
     if not update_data:
         return acct
+    sanitize_dict(update_data, ["account_name", "industry", "region"])
 
     result = (
         supabase.table("accounts")

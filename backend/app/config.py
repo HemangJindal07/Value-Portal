@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     smtp_pass: str = ""
     smtp_from_name: str = "TX Catalyst"
 
+    cron_secret: str = ""  # set CRON_SECRET in .env; must match X-Cron-Secret header
     frontend_url: str = "http://localhost:3000"
     environment: str = "development"
 

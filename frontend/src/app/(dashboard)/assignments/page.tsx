@@ -438,7 +438,7 @@ function MySubmissionsTab({
 
 export default function AssignmentsPage() {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isOrgRole = user?.role === "admin" || user?.role === "executive";
 
   const [myAssignments, setMyAssignments] = useState<AssignmentWithRelations[]>([]);
   const [allAssignments, setAllAssignments] = useState<AssignmentWithRelations[]>([]);
@@ -453,7 +453,7 @@ export default function AssignmentsPage() {
       const mine = await api<AssignmentWithRelations[]>("/api/assignments/mine", { token });
       setMyAssignments(mine);
 
-      if (isAdmin) {
+      if (isOrgRole) {
         const all = await api<AssignmentWithRelations[]>("/api/assignments/all", { token });
         setAllAssignments(all);
       } else {
@@ -468,7 +468,7 @@ export default function AssignmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, isAdmin, user?.id]);
+  }, [token, isOrgRole, user?.id]);
 
   useEffect(() => {
     fetchAssignments();
@@ -522,10 +522,10 @@ export default function AssignmentsPage() {
         )}
       </div>
 
-      <Tabs defaultValue={isAdmin ? "pending" : "submissions"}>
+      <Tabs defaultValue={isOrgRole ? "pending" : "submissions"}>
         <TabsList>
           {/* My Submissions tracker — end users only */}
-          {!isAdmin && (
+          {!isOrgRole && (
             <TabsTrigger value="submissions">
               My Submissions
               {myLeads.length > 0 && (
@@ -551,7 +551,7 @@ export default function AssignmentsPage() {
               </span>
             )}
           </TabsTrigger>
-          {isAdmin && (
+          {isOrgRole && (
             <TabsTrigger value="all">
               Organisation
               {allAssignments.length > 0 && (
@@ -564,7 +564,7 @@ export default function AssignmentsPage() {
         </TabsList>
 
         {/* My Submissions tab — user's leads only (Value Ideas disabled) */}
-        {!isAdmin && (
+        {!isOrgRole && (
           <TabsContent value="submissions">
             <MySubmissionsTab
               leads={myLeads}
@@ -615,7 +615,7 @@ export default function AssignmentsPage() {
           )}
         </TabsContent>
 
-        {isAdmin && (
+        {isOrgRole && (
           <TabsContent value="all" className="mt-4 space-y-3">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
