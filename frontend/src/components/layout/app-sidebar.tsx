@@ -172,25 +172,26 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="bg-white border-r border-[#EDE7E6]">
-      {/* ── Header — brand red background, white text ── */}
-      <SidebarHeader className="bg-[#B12B35] px-4 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 border border-white/25 p-1">
+      {/* ── Header — brand red, white logo card + white text ── */}
+      <SidebarHeader className="bg-[#B12B35] px-3 py-3.5">
+        <Link href="/" className="flex items-center gap-2.5">
+          {/* White pill wrapping the logo so its white bg blends in */}
+          <div className="shrink-0 rounded-lg bg-white px-2 py-1.5 shadow-sm">
             <Image
-              src="/txlogo.webp"
+              src="/txlogo-full.webp"
               alt="TestingXperts"
-              width={36}
-              height={36}
-              className="object-contain brightness-0 invert"
+              width={110}
+              height={26}
+              className="h-[26px] w-auto object-contain block"
               priority
             />
           </div>
-          <div>
-            <p className="text-sm font-bold text-white leading-none tracking-tight">
-              Value Portal
-            </p>
-            <p className="text-[11px] text-white/70 mt-0.5 tracking-wide">
-              TestingXperts
+          {/* Divider */}
+          <div className="w-px h-7 bg-white/30 shrink-0" />
+          {/* Product name */}
+          <div className="min-w-0">
+            <p className="text-white text-[13px] font-extrabold leading-none tracking-wider">
+              Tx-Catalyst
             </p>
           </div>
         </Link>

@@ -1,4 +1,7 @@
+import logging
 from app.database.supabase import get_supabase_admin
+
+logger = logging.getLogger("tracking")
 
 
 def record_status_change(
@@ -23,6 +26,6 @@ def record_status_change(
             "changed_by": changed_by,
             "reason": reason,
         }).execute()
-        print(f"[TRACK] 📋 Status change recorded: {submission_type} {submission_id} → {from_status} → {to_status}")
+        logger.info("[TRACK] Status change recorded: %s %s %s → %s", submission_type, submission_id, from_status, to_status)
     except Exception as exc:
-        print(f"[TRACK] ❌ Failed to record status change for {submission_type} {submission_id}: {exc}")
+        logger.exception("[TRACK] Failed to record status change for %s %s: %s", submission_type, submission_id, exc)

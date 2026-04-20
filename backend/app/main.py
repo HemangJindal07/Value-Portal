@@ -8,9 +8,9 @@ from app.routers import auth, accounts, users, leads, ai, assignments, tracking,
 settings = get_settings()
 
 app = FastAPI(
-    title="Value Portal API",
+    title="TX Catalyst API",
     version="0.1.0",
-    description="Backend API for the Value Portal — lead tracking and AI-powered classification.",
+    description="Backend API for TX Catalyst — lead tracking and AI-powered classification.",
 )
 
 app.add_middleware(

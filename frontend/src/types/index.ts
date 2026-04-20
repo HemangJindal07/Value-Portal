@@ -36,6 +36,7 @@ export interface Account {
   engagement_start: string | null;
   engagement_end: string | null;
   account_status: AccountStatus;
+  services: string[] | null;
   created_at: string;
 }
 

@@ -18,39 +18,35 @@ export default function AuthLayout({
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/10" />
         </div>
 
-        {/* TX Logo + name */}
-        <div className="relative flex items-center gap-3 mb-auto">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white p-1.5">
+        {/* TX Logo + app name */}
+        <div className="relative mb-auto flex flex-col gap-3">
+          <div className="bg-white px-4 py-2.5 inline-block shadow-sm" style={{ borderRadius: "8px" }}>
             <Image
-              src="/txlogo.webp"
+              src="/txlogo-full.webp"
               alt="TestingXperts"
-              width={40}
-              height={40}
-              className="object-contain"
+              width={180}
+              height={42}
+              className="h-[42px] w-auto object-contain block"
               priority
             />
           </div>
-          <div>
-            <p className="text-white font-bold text-base leading-none tracking-tight">
-              TestingXperts
+          <div className="flex items-center gap-2">
+            <div className="h-px w-5 bg-white/40" />
+            <p className="text-white text-lg font-extrabold tracking-[0.12em] uppercase">
+              Tx-Catalyst
             </p>
-            <p className="text-white/60 text-xs mt-0.5 tracking-wide">
-              Passion For Perfection
-            </p>
+            <div className="h-px flex-1 bg-white/20" />
           </div>
         </div>
 
         {/* Hero copy */}
         <div className="relative flex-1 flex flex-col justify-center py-8">
-          <p className="text-white/70 text-xs font-semibold tracking-[0.2em] uppercase mb-4">
-            Value Portal
-          </p>
           <h1 className="text-[2.6rem] font-bold text-white leading-[1.15] mb-3">
-            Capture every lead.
+            Capture Every Lead.
             <br />
             <span className="text-white/80">Log it. Track it.</span>
             <br />
-            Win more.
+            Win More.
           </h1>
           <p className="text-white/70 text-[15px] leading-relaxed max-w-xs mb-8">
             A centralised platform for delivery teams to capture, track, and
@@ -117,24 +113,17 @@ export default function AuthLayout({
       <div className="flex-1 flex flex-col items-center justify-center bg-[#F9F9F9] px-6 py-12">
         <div className="w-full max-w-[420px]">
           {/* Mobile-only logo */}
-          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-[#EDE7E6] shadow-sm p-1">
-              <Image
-                src="/txlogo.webp"
-                alt="TestingXperts"
-                width={28}
-                height={28}
-                className="object-contain"
-              />
-            </div>
-            <div>
-              <p className="font-bold text-[#232222] text-sm leading-none">
-                Value Portal
-              </p>
-              <p className="text-[11px] text-[#5D5D5D] mt-0.5">
-                TestingXperts
-              </p>
-            </div>
+          <div className="flex flex-col gap-1 mb-8 lg:hidden">
+            <Image
+              src="/txlogo-full.webp"
+              alt="TestingXperts"
+              width={200}
+              height={48}
+              className="h-10 w-auto object-contain object-left"
+            />
+            <p className="text-[10px] font-bold text-[#B12B35] tracking-[0.18em] uppercase">
+              Tx&nbsp;Catalyst&nbsp;Portal
+            </p>
           </div>
 
           {children}

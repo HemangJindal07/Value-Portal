@@ -37,6 +37,26 @@ class ImpactUpdate(BaseModel):
     verified: bool | None = None
 
 
+def _compute_submissions_reviewed(supabase, start_date: str, end_date: str) -> int:
+    """
+    Count leads + ideas whose status changed to a terminal/reviewed state
+    (qualified, approved, won, rejected, lost) within the cycle's date range.
+    This gives an accurate count of submissions actually reviewed during the cycle.
+    """
+    try:
+        history_res = (
+            supabase.table("status_history")
+            .select("submission_id", count="exact")
+            .in_("to_status", ["qualified", "approved", "won", "rejected", "lost"])
+            .gte("changed_at", f"{start_date}T00:00:00+00:00")
+            .lte("changed_at", f"{end_date}T23:59:59+00:00")
+            .execute()
+        )
+        return history_res.count or 0
+    except Exception:
+        return 0
+
+
 @router.get("/review-cycles")
 async def list_review_cycles(current_user: dict = Depends(get_current_user)):
     supabase = get_supabase_admin()
@@ -46,7 +66,18 @@ async def list_review_cycles(current_user: dict = Depends(get_current_user)):
         .order("start_date", desc=True)
         .execute()
     )
-    return result.data or []
+    cycles = result.data or []
+
+    # Backfill submissions_reviewed from status_history for accurate counts
+    for cycle in cycles:
+        computed = _compute_submissions_reviewed(
+            supabase,
+            str(cycle.get("start_date", "")),
+            str(cycle.get("end_date", "")),
+        )
+        cycle["submissions_reviewed"] = computed
+
+    return cycles
 
 
 @router.post("/review-cycles", status_code=201)
