@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, FileText, Save } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Save, CheckCircle2, XCircle, Clock, CircleDot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -80,6 +80,13 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [newStatus, setNewStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [routingSteps, setRoutingSteps] = useState<{
+    step_order: number;
+    role_label: string;
+    reviewer_name: string;
+    action_taken: string | null;
+    action_date: string | null;
+  }[]>([]);
 
   useEffect(() => {
     if (!token || !id) return;
@@ -90,6 +97,10 @@ export default function LeadDetailPage() {
       })
       .catch(() => router.push("/leads"))
       .finally(() => setLoading(false));
+
+    api<{ steps: typeof routingSteps }>(`/api/leads/${id}/routing`, { token })
+      .then((data) => setRoutingSteps(data.steps))
+      .catch(() => {});
   }, [token, id, router]);
 
   const canChangeStatus = Boolean(lead?.can_update_status);
@@ -267,20 +278,88 @@ export default function LeadDetailPage() {
             {lead.ai_category && (
               <>
                 <Separator />
-                <Field label="AI Category" value={lead.ai_category} />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">AI Insights</p>
+                <Field label="Category" value={lead.ai_category.replace(/_/g, " ")} />
                 <Field
-                  label="AI Confidence"
+                  label="Confidence"
                   value={
                     lead.ai_confidence
                       ? `${(lead.ai_confidence * 100).toFixed(0)}%`
                       : null
                   }
                 />
+                {lead.ai_suggested_priority && (
+                  <Field label="Suggested Priority" value={lead.ai_suggested_priority} />
+                )}
+                {lead.ai_win_probability != null && lead.ai_win_probability > 0 && (
+                  <Field label="Win Probability" value={`${(lead.ai_win_probability * 100).toFixed(0)}%`} />
+                )}
+                {lead.ai_summary && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">AI Recommendation</p>
+                    <p className="text-sm text-foreground">{lead.ai_summary}</p>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {routingSteps.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Routing Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="relative">
+              {routingSteps.map((step, i) => {
+                const isApproved = step.action_taken === "approved";
+                const isRejected = step.action_taken === "rejected";
+                const isPending = step.action_taken === "pending";
+                const isWaiting = !step.action_taken;
+                const isLast = i === routingSteps.length - 1;
+
+                return (
+                  <div key={step.step_order} className="flex gap-3 relative">
+                    {!isLast && (
+                      <div className={`absolute left-[13px] top-7 w-0.5 h-[calc(100%-8px)] ${
+                        isApproved ? "bg-green-400" : "bg-gray-200"
+                      }`} />
+                    )}
+                    <div className="shrink-0 mt-0.5 z-10">
+                      {isApproved && <CheckCircle2 className="h-[26px] w-[26px] text-green-500" />}
+                      {isRejected && <XCircle className="h-[26px] w-[26px] text-red-500" />}
+                      {isPending && <Clock className="h-[26px] w-[26px] text-amber-500 animate-pulse" />}
+                      {isWaiting && <CircleDot className="h-[26px] w-[26px] text-gray-300" />}
+                    </div>
+                    <div className={`pb-6 ${isLast ? "pb-0" : ""}`}>
+                      <p className="text-sm font-medium">
+                        Step {step.step_order}: {step.role_label}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {step.reviewer_name}
+                        {isApproved && (
+                          <span className="text-green-600 ml-2">
+                            Approved {step.action_date ? `on ${new Date(step.action_date).toLocaleDateString()}` : ""}
+                          </span>
+                        )}
+                        {isRejected && (
+                          <span className="text-red-600 ml-2">
+                            Rejected {step.action_date ? `on ${new Date(step.action_date).toLocaleDateString()}` : ""}
+                          </span>
+                        )}
+                        {isPending && <span className="text-amber-600 ml-2">Awaiting review</span>}
+                        {isWaiting && <span className="text-gray-400 ml-2">Waiting</span>}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <ActivitySection submissionType="lead" submissionId={id} />
     </div>

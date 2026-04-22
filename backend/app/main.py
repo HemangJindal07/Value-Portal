@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 # Value Ideas API disabled — leads-only portal (re-enable: add `ideas` back to import + router below)
@@ -48,7 +48,12 @@ async def health_check():
 
 
 @app.post("/api/cron/reminders")
-async def run_reminder_check():
+async def run_reminder_check(request: Request):
     from app.services.reminder_engine import check_reminders_and_escalations
+    secret = request.headers.get("X-Cron-Secret", "")
+    expected = settings.cron_secret
+    if not expected or secret != expected:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Invalid cron secret")
     stats = check_reminders_and_escalations()
     return {"status": "ok", **stats}

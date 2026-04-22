@@ -72,6 +72,9 @@ export interface Lead {
   supporting_docs: string[];
   ai_category: string | null;
   ai_confidence: number | null;
+  ai_summary: string | null;
+  ai_suggested_priority: string | null;
+  ai_win_probability: number | null;
   value_score: number | null;
   created_at: string;
   updated_at: string;

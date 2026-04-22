@@ -15,37 +15,26 @@ VALID_CATEGORIES = {
     "renewal_risk",
 }
 
-CLASSIFICATION_PROMPT = """You are an expert sales analyst. Analyze the following lead submitted by a delivery team and return a JSON classification.
+CLASSIFICATION_PROMPT = """Analyze this sales lead and return a JSON classification.
 
-LEAD DETAILS:
 Title: {title}
 Description: {description}
-User-Selected Type: {lead_type}
-Estimated Value: {estimated_value}
+Type: {lead_type}
+Value: {estimated_value}
 Probability: {probability}%
 Priority: {priority}
 
-Classify this lead and return ONLY a valid JSON object with exactly these three fields:
-
+Return ONLY valid JSON:
 {{
-  "ai_category": "<one of: cross_sell | upsell | new_service | expansion | strategic_partnership | renewal_risk>",
-  "ai_summary": "<2-3 sentence summary of the opportunity, its potential, and recommended next steps>",
-  "ai_confidence": <a decimal between 0.0 and 1.0 representing your confidence in the classification>
+  "ai_category": "<cross_sell|upsell|new_service|expansion|strategic_partnership|renewal_risk>",
+  "ai_summary": "<1-2 sentence actionable summary with recommended next step>",
+  "ai_confidence": <0.0-1.0>,
+  "ai_suggested_priority": "<high|medium|low>",
+  "ai_win_probability": <0.0-1.0>
 }}
 
-Category definitions:
-- cross_sell: Opportunity to sell a different service/product to the same client
-- upsell: Opportunity to expand scope or upgrade existing engagement
-- new_service: Completely new service line not previously offered to this client
-- expansion: Growing the current engagement (more resources, longer duration)
-- strategic_partnership: Long-term partnership or joint venture opportunity
-- renewal_risk: Client may not renew — proactive retention opportunity
-
-Rules:
-- ai_category must be exactly one of the 6 values listed above
-- ai_summary must be 2-3 sentences, clear and actionable
-- ai_confidence must be a number between 0.0 and 1.0
-- Return ONLY the JSON object, no other text, no markdown fences"""
+Priority guidance: high=urgent/large value/strong signals, medium=moderate potential, low=exploratory/early stage.
+Win probability: factor in deal value, client signals, competition likelihood, and stated probability."""
 
 
 async def classify_lead(lead_id: str) -> None:
@@ -84,7 +73,7 @@ async def classify_lead(lead_id: str) -> None:
         client = Anthropic(api_key=settings.anthropic_api_key)
         message = client.messages.create(
             model="claude-3-haiku-20240307",
-            max_tokens=512,
+            max_tokens=256,
             messages=[{"role": "user", "content": prompt}],
         )
 
@@ -106,14 +95,28 @@ async def classify_lead(lead_id: str) -> None:
         if ai_category not in VALID_CATEGORIES:
             ai_category = lead.get("lead_type", "cross_sell")
 
-        supabase.table("leads").update(
-            {
-                "ai_category": ai_category,
-                "ai_confidence": ai_confidence,
-            }
-        ).eq("lead_id", lead_id).execute()
+        ai_summary = (parsed.get("ai_summary") or "")[:500]
+        ai_suggested_priority = parsed.get("ai_suggested_priority", "").strip().lower()
+        if ai_suggested_priority not in ("high", "medium", "low"):
+            ai_suggested_priority = lead.get("priority", "medium")
+        ai_win_probability = max(0.0, min(1.0, float(parsed.get("ai_win_probability", 0.0))))
 
-        logger.info("Lead %s classified: %s (%.0f%%)", lead_id, ai_category, ai_confidence * 100)
+        update_fields: dict = {
+            "ai_category": ai_category,
+            "ai_confidence": ai_confidence,
+        }
+        if ai_summary:
+            update_fields["ai_summary"] = ai_summary
+        if ai_suggested_priority:
+            update_fields["ai_suggested_priority"] = ai_suggested_priority
+        if ai_win_probability > 0:
+            update_fields["ai_win_probability"] = ai_win_probability
+
+        supabase.table("leads").update(update_fields).eq("lead_id", lead_id).execute()
+
+        logger.info("Lead %s classified: %s (%.0f%%) priority=%s win=%.0f%%",
+                     lead_id, ai_category, ai_confidence * 100,
+                     ai_suggested_priority, ai_win_probability * 100)
 
     except Exception as exc:
         logger.exception("Lead classification failed for %s: %s", lead_id, exc)
