@@ -257,6 +257,7 @@ export default function LeadDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="Account" value={lead.account?.account_name ?? null} />
+            <Field label="Service" value={lead.service ?? null} />
             <Field label="Submitted By" value={lead.submitter?.full_name ?? null} />
             <Field
               label="Estimated Value"

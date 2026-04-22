@@ -188,11 +188,13 @@ function AssignmentCard({
   onAction,
   onOpenReview,
   actioning,
+  readOnly = false,
 }: {
   assignment: AssignmentWithRelations;
   onAction: (id: string, action: string, notes?: string) => void;
   onOpenReview: (pending: ReviewPending) => void;
   actioning: string | null;
+  readOnly?: boolean;
 }) {
   const due = getDaysRemaining(assignment.due_date);
   const agingBorder = getAgingBorder(assignment.assignment_date);
@@ -201,7 +203,7 @@ function AssignmentCard({
       ? `/leads/${assignment.submission_id}`
       : `/ideas/${assignment.submission_id}`;
 
-  const isPending = assignment.action_taken === "pending";
+  const isPending = assignment.action_taken === "pending" && !readOnly;
 
   return (
     <Card className={`hover:bg-muted/30 transition-colors overflow-hidden ${agingBorder}`}>
@@ -509,10 +511,12 @@ export default function AssignmentsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ClipboardList className="h-6 w-6" />
-            My Assignments
+            {isOrgRole ? "My Assignments" : "My Submissions"}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Review and act on submissions assigned to you.
+            {isOrgRole
+              ? "Review and act on leads assigned to you."
+              : "Review and act on submissions assigned to you."}
           </p>
         </div>
         {myPending.length > 0 && (
@@ -624,15 +628,23 @@ export default function AssignmentsPage() {
                 No assignments across the organisation yet.
               </p>
             ) : (
-              allAssignments.map((a) => (
-                <AssignmentCard
-                  key={a.assignment_id}
-                  assignment={a}
-                  onAction={handleAction}
-                  onOpenReview={setReviewPending}
-                  actioning={actioning}
-                />
-              ))
+              <>
+                {user?.role === "executive" && (
+                  <p className="text-xs text-muted-foreground pb-1">
+                    Viewing all organisation assignments — use <strong>Pending Review</strong> to action your own assignments.
+                  </p>
+                )}
+                {allAssignments.map((a) => (
+                  <AssignmentCard
+                    key={a.assignment_id}
+                    assignment={a}
+                    onAction={handleAction}
+                    onOpenReview={setReviewPending}
+                    actioning={actioning}
+                    readOnly={user?.role === "executive"}
+                  />
+                ))}
+              </>
             )}
           </TabsContent>
         )}

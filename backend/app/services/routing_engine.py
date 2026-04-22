@@ -190,10 +190,54 @@ def _update_submission_status(supabase, submission_type: str, submission_id: str
 
 def _get_submission(supabase, submission_type: str, submission_id: str) -> dict:
     if submission_type == "lead":
-        res = supabase.table("leads").select("title, description, submitted_by, account_id").eq("lead_id", submission_id).single().execute()
+        res = supabase.table("leads").select("title, description, submitted_by, account_id, service").eq("lead_id", submission_id).single().execute()
     else:
         res = supabase.table("value_ideas").select("title, problem_statement, submitted_by, account_id").eq("idea_id", submission_id).single().execute()
     return res.data or {}
+
+
+def _get_service_stakeholders(supabase, service: str, account_id: str) -> list[dict]:
+    """
+    Resolve a DU from service_routing (service_name → du_user_id) and persist the
+    result into account_stakeholders so advance_routing can walk the chain normally.
+    Used as a last-resort fallback when neither per-account nor vertical routing resolves.
+    """
+    if not service:
+        return []
+    result = (
+        supabase.table("service_routing")
+        .select("du_user_id")
+        .eq("service_name", service)
+        .limit(1)
+        .execute()
+    )
+    row = (result.data or [None])[0]
+    if not row or not row.get("du_user_id"):
+        logger.warning("[ROUTE] No service_routing entry for service '%s'", service)
+        return []
+
+    du_user_id = row["du_user_id"]
+    role_label = f"Delivery Unit ({service})"
+
+    # Persist into account_stakeholders so advance_routing works normally
+    try:
+        supabase.table("account_stakeholders").upsert(
+            [{
+                "account_id": account_id,
+                "user_id":    du_user_id,
+                "role_label": role_label,
+                "step_order": 1,
+            }],
+            on_conflict="account_id,user_id",
+        ).execute()
+        logger.info(
+            "[ROUTE] Auto-populated service stakeholder (%s → %s) for account %s",
+            service, du_user_id, account_id,
+        )
+    except Exception as exc:
+        logger.exception("[ROUTE] Failed to persist service stakeholder: %s", exc)
+
+    return [{"user_id": du_user_id, "role_label": role_label, "step_order": 1}]
 
 
 def _get_profile(supabase, user_id: str) -> dict:
@@ -337,6 +381,14 @@ async def start_routing(
     if not stakeholders:
         logger.info("[ROUTE] No per-account stakeholders for %s — trying vertical routing", account_id)
         stakeholders = _get_vertical_stakeholders(supabase, account_id)
+
+    if not stakeholders and submission_type == "lead":
+        # Final fallback: use the lead's service field to resolve a DU
+        sub_early = _get_submission(supabase, "lead", submission_id)
+        service = sub_early.get("service")
+        if service:
+            logger.info("[ROUTE] No vertical routing for account %s — trying service routing (service=%s)", account_id, service)
+            stakeholders = _get_service_stakeholders(supabase, service, account_id)
 
     if not stakeholders:
         logger.warning("[ROUTE] No stakeholders resolved for account %s — routing_pending", account_id)

@@ -190,7 +190,7 @@ export default function EditAccountPage() {
             <div className="space-y-2">
               <Label>
                 Services
-                <span className="ml-1 text-xs text-muted-foreground">— TX verticals offered to this account</span>
+                <span className="ml-1 text-xs text-muted-foreground">— Tx verticals offered to this account</span>
               </Label>
               <div className="flex flex-wrap gap-2">
                 {TX_SERVICES.map((svc) => {

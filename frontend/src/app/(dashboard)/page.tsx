@@ -480,11 +480,8 @@ function MonthlySubmissionsChart({ data }: { data: MonthlyPoint[] }) {
 
   return (
     <div className="w-full">
-      {/* Tooltip row — appears when a bar is hovered */}
-      <div
-        className="mb-2 overflow-hidden transition-all duration-150"
-        style={{ maxHeight: hd ? 56 : 0, opacity: hd ? 1 : 0 }}
-      >
+      {/* Tooltip row — appears instantly when a bar is hovered */}
+      <div className="mb-2" style={{ minHeight: 48 }}>
         {hd && (
           <div className="flex items-stretch gap-3 rounded-xl border border-[#EDE7E6] bg-[#FAFAFA] px-4 py-2.5 text-xs">
             <div className="flex-1 text-center">
@@ -552,7 +549,6 @@ function MonthlySubmissionsChart({ data }: { data: MonthlyPoint[] }) {
                 rx="3"
                 fill={isEmpty ? "#EDE7E6" : isHov ? "#003466" : "#2E75B6"}
                 opacity={isHov ? 1 : 0.82}
-                style={{ transition: "fill 0.12s, opacity 0.12s" }}
               />
 
               {/* Count label above bar when hovered */}
@@ -1267,29 +1263,23 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
   const s = stats ?? { total_leads: 0, total_ideas: 0, total_accounts: 0, active_users: 0, leads_by_status: {}, ideas_by_status: {}, pending_assignments: 0 };
   const an = analytics;
 
-  // Funnel stages — leads only (ideas disabled)
+  // Funnel stages — all real pipeline stages from DB
+  const totalActive =
+    (s.leads_by_status["submitted"] || 0) +
+    (s.leads_by_status["routing_pending"] || 0) +
+    (s.leads_by_status["under_review"] || 0) +
+    (s.leads_by_status["qualified"] || 0) +
+    (s.leads_by_status["approved"] || 0) +
+    (s.leads_by_status["won"] || 0);
+
   const funnelStages = [
-    {
-      label: "Submitted",
-      count: s.leads_by_status["submitted"] || 0,
-      color: "#2E75B6",
-    },
-    {
-      label: "Under Review",
-      count: s.leads_by_status["under_review"] || 0,
-      color: "#003466",
-    },
-    {
-      label: "Qualified",
-      count: s.leads_by_status["qualified"] || 0,
-      color: "#B12B35",
-    },
-    {
-      label: "Won",
-      count: s.leads_by_status["won"] || 0,
-      color: "#22c55e",
-    },
-  ];
+    { label: "Submitted",       count: s.leads_by_status["submitted"] || 0,        color: "#2E75B6" },
+    { label: "Routing Pending", count: s.leads_by_status["routing_pending"] || 0,  color: "#f59e0b" },
+    { label: "Under Review",    count: s.leads_by_status["under_review"] || 0,     color: "#003466" },
+    { label: "Qualified",       count: s.leads_by_status["qualified"] || 0,        color: "#B12B35" },
+    { label: "Approved",        count: s.leads_by_status["approved"] || 0,         color: "#7c3aed" },
+    { label: "Won",             count: s.leads_by_status["won"] || 0,              color: "#22c55e" },
+  ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Submitted");
 
   return (
     <div className="space-y-6">
@@ -1534,60 +1524,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
         </CardContent>
       </Card>
 
-      {/* ── Review Cycle Performance ── */}
-      <Card className="border-[#EDE7E6] bg-white">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div>
-            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
-              <Clock className="h-4 w-4 text-[#003466]" />
-              Review Cycle Performance
-            </CardTitle>
-            <CardDescription>Escalation by stage — avg. days from assignment to action</CardDescription>
-          </div>
-          <Link
-            href="/reviews"
-            className="text-xs font-medium text-[#003466] hover:underline flex items-center gap-1"
-          >
-            View cycles <ChevronRight className="h-3 w-3" />
-          </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          {!an || an.turnaround.length === 0 ? (
-            <p className="text-sm text-muted-foreground px-6 pb-4">
-              No completed reviews yet — performance data will appear once assignments are acted on.
-            </p>
-          ) : (
-            <div className="divide-y divide-[#EDE7E6]">
-              {/* Header row */}
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-2 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
-                <span>Reviewer Stage</span>
-                <span>Reviews</span>
-                <span>Avg. Days</span>
-                <span className="text-right">Health</span>
-              </div>
-              {an.turnaround.map((t) => {
-                const health = t.avg_days <= 2 ? { label: "On Track", color: "bg-green-100 text-green-700 border-green-200" }
-                  : t.avg_days <= 5 ? { label: "Moderate", color: "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20" }
-                  : { label: "Delayed", color: "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20" };
-                return (
-                  <div key={t.role} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-3 items-center text-sm">
-                    <span className="font-medium text-[#232222] capitalize">{t.role.replace(/_/g, " ")}</span>
-                    <span className="text-[#5D5D5D] text-xs">{t.count}</span>
-                    <span className="font-semibold text-[#232222]">
-                      {t.avg_days < 1 ? `${Math.round(t.avg_days * 24)}h` : `${t.avg_days}d`}
-                    </span>
-                    <div className="text-right">
-                      <Badge variant="outline" className={`text-[10px] px-2 py-0 ${health.color}`}>
-                        {health.label}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Review Cycle Performance removed */}
 
       {/* ── Breakdown ── */}
       {an && (an.leads_by_region.length > 0 || an.leads_by_vertical.length > 0) && (
@@ -1668,7 +1605,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <StakeholderCompletenessCard token={token} showList={false} />
+        <div className="hidden" />{/* Stakeholder Completeness removed */}
         <MiniLeaderboard token={token} />
       </div>
 

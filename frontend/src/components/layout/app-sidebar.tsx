@@ -17,7 +17,6 @@ import {
   GitMerge,
   Route,
   AlertTriangle,
-  Star,
 } from "lucide-react";
 import {
   Sidebar,
@@ -97,17 +96,16 @@ const USER_NAV = [
   {
     label: "Main",
     items: [
-      { title: "Dashboard",      href: "/",            icon: LayoutDashboard },
-      { title: "Leads",          href: "/leads",       icon: Target },
+      { title: "Dashboard",       href: "/",            icon: LayoutDashboard },
+      { title: "Leads",           href: "/leads",       icon: Target },
       // { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
-      { title: "My Assignments", href: "/assignments", icon: ClipboardList },
+      { title: "My Submissions",  href: "/assignments", icon: ClipboardList },
     ],
   },
   {
     label: "Insights",
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
-      { title: "My Score",    href: "/leaderboard", icon: Star },
       { title: "Reports",     href: "/reports",     icon: BarChart3 },
     ],
   },

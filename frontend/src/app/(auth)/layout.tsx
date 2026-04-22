@@ -32,7 +32,7 @@ export default function AuthLayout({
           </div>
           <div className="flex items-center gap-2">
             <div className="h-px w-5 bg-white/40" />
-            <p className="text-white text-lg font-extrabold tracking-[0.12em] uppercase">
+            <p className="text-white text-lg font-extrabold tracking-[0.12em]">
               Tx-Catalyst
             </p>
             <div className="h-px flex-1 bg-white/20" />

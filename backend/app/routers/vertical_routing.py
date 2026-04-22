@@ -40,6 +40,16 @@ class RegionSalesUpdate(BaseModel):
     copy_all: Optional[bool] = None
 
 
+class ServiceRoutingCreate(BaseModel):
+    service_name: str
+    du_user_id: Optional[UUID] = None
+
+
+class ServiceRoutingUpdate(BaseModel):
+    service_name: Optional[str] = None
+    du_user_id: Optional[UUID] = None
+
+
 # ── Vertical Routing endpoints ────────────────────────────────────────────────
 
 @router.get("/vertical-routing")
@@ -185,3 +195,74 @@ async def delete_region_sales(
     """Delete a region sales mapping entry."""
     supabase = get_supabase_admin()
     supabase.table("region_sales_mapping").delete().eq("id", str(entry_id)).execute()
+
+
+# ── Service Routing endpoints ─────────────────────────────────────────────────
+
+@router.get("/service-routing")
+async def list_service_routing(
+    current_user: dict = Depends(get_current_user),
+):
+    """List all service → DU routing entries."""
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("service_routing")
+        .select("*, du:profiles!du_user_id(id, full_name, email, role)")
+        .order("service_name")
+        .execute()
+    )
+    return result.data or []
+
+
+@router.post("/service-routing", status_code=status.HTTP_201_CREATED)
+async def create_service_routing(
+    payload: ServiceRoutingCreate,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Create a service → DU routing entry."""
+    supabase = get_supabase_admin()
+    data = payload.model_dump(mode="json", exclude_none=True)
+    data["created_by"] = current_user["id"]
+    try:
+        result = supabase.table("service_routing").insert(data).execute()
+        return result.data[0]
+    except Exception as exc:
+        detail = str(exc)
+        if "unique" in detail.lower():
+            raise HTTPException(
+                status_code=409,
+                detail=f"A routing entry for service '{payload.service_name}' already exists.",
+            )
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.patch("/service-routing/{entry_id}")
+async def update_service_routing(
+    entry_id: UUID,
+    payload: ServiceRoutingUpdate,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Update a service routing entry."""
+    supabase = get_supabase_admin()
+    update_data = payload.model_dump(exclude_unset=True, mode="json")
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+    result = (
+        supabase.table("service_routing")
+        .update(update_data)
+        .eq("id", str(entry_id))
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Service routing entry not found.")
+    return result.data[0]
+
+
+@router.delete("/service-routing/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_service_routing(
+    entry_id: UUID,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Delete a service routing entry."""
+    supabase = get_supabase_admin()
+    supabase.table("service_routing").delete().eq("id", str(entry_id)).execute()
