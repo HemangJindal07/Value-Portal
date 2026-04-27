@@ -162,6 +162,7 @@ export default function LeadsPage() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Account</TableHead>
+                  <TableHead>Service</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
@@ -185,6 +186,15 @@ export default function LeadsPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {lead.account?.account_name ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {lead.service ? (
+                        <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">
+                          {lead.service}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">

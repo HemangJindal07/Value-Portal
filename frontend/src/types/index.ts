@@ -55,6 +55,7 @@ export type LeadStatus =
   | "dropped"
   | "rejected";
 export type Priority = "high" | "medium" | "low";
+export type ServiceType = "QE" | "DE" | "AI" | "Data" | "Insurance";
 
 export interface Lead {
   lead_id: string;
@@ -63,6 +64,7 @@ export interface Lead {
   lead_type: LeadType;
   account_id: string;
   submitted_by: string;
+  service: ServiceType | null;
   estimated_value: number | null;
   currency: string;
   probability: number | null;

@@ -26,13 +26,25 @@ import { useAuth } from "@/lib/auth-context";
 import { api, uploadFile } from "@/lib/api";
 import { toast } from "sonner";
 
+const TX_SERVICES = [
+  { value: "QE",        label: "QE (Quality Engineering)",            reviewer: "Manjeet" },
+  { value: "DE",        label: "DE (Data Engineering)",               reviewer: "Vivek" },
+  { value: "AI",        label: "AI (Artificial Intelligence)",        reviewer: "Vivek" },
+  { value: "Data",      label: "Data (Data SME)",                     reviewer: "Manjeet" },
+  { value: "Insurance", label: "Insurance (Insurance Vertical)",      reviewer: "Manjeet" },
+];
+
 export default function NewLeadPage() {
   const { token } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [accountId, setAccountId] = useState("");
+  const [leadType, setLeadType] = useState("current_lead");
+  const [service, setService] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState(false);
+
+  const selectedService = TX_SERVICES.find((s) => s.value === service);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -56,8 +68,9 @@ export default function NewLeadPage() {
       const payload = {
         title: fd.get("title") as string,
         description: fd.get("description") as string,
-        lead_type: fd.get("lead_type") as string,
+        lead_type: leadType,
         account_id: fd.get("account_id") as string,
+        service: service || null,
         estimated_value: fd.get("estimated_value")
           ? Number(fd.get("estimated_value"))
           : null,
@@ -122,12 +135,14 @@ export default function NewLeadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Lead Type *</Label>
-                <Select name="lead_type" required defaultValue="current_lead">
+                <Select value={leadType} onValueChange={setLeadType}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue>
+                      {leadType === "current_lead" ? "Existing Lead" : "New Lead"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="current_lead">Current Lead</SelectItem>
+                    <SelectItem value="current_lead">Existing Lead</SelectItem>
                     <SelectItem value="new_lead">New Lead</SelectItem>
                   </SelectContent>
                 </Select>
@@ -143,6 +158,36 @@ export default function NewLeadPage() {
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                Service
+                <span className="ml-1 text-xs text-muted-foreground">(Tx vertical for this opportunity)</span>
+              </Label>
+              <Select value={service} onValueChange={(v) => setService(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select service…">
+                    {selectedService ? selectedService.label : undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="w-[--radix-select-trigger-width]">
+                  {TX_SERVICES.map((s) => (
+                    <SelectItem key={s.value} value={s.value} className="whitespace-normal">
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedService ? (
+                <p className="text-[12px] text-[#B12B35] bg-[#B12B35]/5 rounded-md px-3 py-1.5 font-medium">
+                  This lead will be submitted to <strong>{selectedService.reviewer}</strong> for review.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Select a service to see who will review this lead.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-4">

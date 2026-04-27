@@ -28,11 +28,20 @@ class Priority(str, Enum):
     low = "low"
 
 
+class ServiceType(str, Enum):
+    QE = "QE"
+    DE = "DE"
+    AI = "AI"
+    Data = "Data"
+    Insurance = "Insurance"
+
+
 class LeadCreate(BaseModel):
     title: str
     description: str
     lead_type: LeadType
     account_id: UUID
+    service: ServiceType | None = None
     estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
     currency: str = "USD"
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
@@ -60,6 +69,7 @@ class LeadResponse(BaseModel):
     lead_type: LeadType
     account_id: UUID
     submitted_by: UUID
+    service: ServiceType | None = None
     estimated_value: float | None = None
     currency: str
     probability: int | None = None
