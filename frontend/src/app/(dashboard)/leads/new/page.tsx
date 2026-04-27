@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -47,11 +47,20 @@ export default function NewLeadPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [accountId, setAccountId] = useState("");
-  const [accountType, setAccountType] = useState<"current_lead" | "new_lead">("current_lead");
+  const [accountType, setAccountType] = useState<"current_lead" | "new_lead" | null>(null);
   const [service, setService] = useState("");
   const [contactRegion, setContactRegion] = useState("");
-  const [priority, setPriority] = useState("medium");
+  const [priority, setPriority] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [estimatedValueError, setEstimatedValueError] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   const selectedService = TX_SERVICES.find((s) => s.value === service);
 
@@ -68,6 +77,14 @@ export default function NewLeadPage() {
     }
 
     const fd = new FormData(e.currentTarget);
+
+    const ev = fd.get("estimated_value");
+    if (ev && Number(ev) < 0) {
+      setEstimatedValueError(true);
+      toast.error("Estimated value cannot be negative.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -88,18 +105,19 @@ export default function NewLeadPage() {
       const payload = {
         title:               fd.get("title") as string,
         description:         fd.get("description") as string,
-        lead_type:           accountType,
+        lead_type:           accountType ?? "current_lead",
         account_id:          fd.get("account_id") as string,
         service:             service || null,
         contact_details:     contactDetails,
         estimated_value:     fd.get("estimated_value") ? Number(fd.get("estimated_value")) : null,
         currency:            (fd.get("currency") as string) || "USD",
         expected_close_date: (fd.get("expected_close_date") as string) || null,
-        priority:            priority,
+        priority:            priority || "medium",
         supporting_docs:     uploadedUrl ? [uploadedUrl] : [],
       };
 
       await api("/api/leads", { method: "POST", body: payload, token: token! });
+      setIsDirty(false);
       toast.success("Lead submitted successfully.");
       router.push("/leads");
     } catch (err: unknown) {
@@ -118,7 +136,7 @@ export default function NewLeadPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} onChange={() => setIsDirty(true)} className="space-y-4">
         {/* ── Lead Details ── */}
         <Card>
           <CardHeader>
@@ -149,7 +167,7 @@ export default function NewLeadPage() {
             </div>
 
             {/* Account + Account Type */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className={accountType !== null ? "grid grid-cols-2 gap-4" : "space-y-2"}>
               <div className="space-y-2">
                 <Label>Account *</Label>
                 <AccountCombobox
@@ -161,24 +179,29 @@ export default function NewLeadPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Account Type</Label>
-                <Select value={accountType} disabled>
-                  <SelectTrigger className="bg-muted/40 text-muted-foreground cursor-not-allowed">
-                    <SelectValue>
-                      {accountType === "new_lead" ? "New Account" : "Existing Account"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="current_lead">Existing Account</SelectItem>
-                    <SelectItem value="new_lead">New Account</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">Auto-filled based on account selection</p>
-              </div>
+              {accountType !== null && (
+                <div className="space-y-2">
+                  <Label>Account Type</Label>
+                  <Select value={accountType} disabled>
+                    <SelectTrigger className="bg-muted/40 text-muted-foreground cursor-not-allowed">
+                      <SelectValue>
+                        {accountType === "new_lead" ? "New Account" : "Existing Account"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="current_lead">Existing Account</SelectItem>
+                      <SelectItem value="new_lead">New Account</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">Auto-filled based on account selection</p>
+                </div>
+              )}
             </div>
 
-        ── Client Contact Details ──
+          </CardContent>
+        </Card>
+
+        {/* ── Client Contact Details ── */}
         <Card>
           <CardHeader>
             <CardDescription>Key contact at the client for this opportunity.</CardDescription>
@@ -250,7 +273,14 @@ export default function NewLeadPage() {
         </Card>
 
 
-            {/* Value + Priority + Date */}
+        {/* ── Deal Details ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Deal Details</CardTitle>
+            <CardDescription>Financial and timeline information.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Value + Priority */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="estimated_value">Estimated Value ($)</Label>
@@ -259,16 +289,20 @@ export default function NewLeadPage() {
                   name="estimated_value"
                   type="number"
                   step="0.01"
-                  placeholder="500000"
+                  min="0"
+                  placeholder="e.g. 500000"
+                  className={estimatedValueError ? "border-red-500 focus-visible:ring-red-500/50" : ""}
+                  onChange={(e) => setEstimatedValueError(Number(e.target.value) < 0)}
                 />
+                {estimatedValueError && (
+                  <p className="text-xs text-red-500">Estimated value cannot be negative.</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Priority</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v ?? "medium")}>
+                <Select value={priority} onValueChange={(v) => setPriority(v ?? "")}>
                   <SelectTrigger>
-                    <SelectValue>
-                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                    </SelectValue>
+                    <SelectValue placeholder="Select priority…" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="high">High</SelectItem>
@@ -282,7 +316,12 @@ export default function NewLeadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="expected_close_date">Expected Close Date</Label>
-                <Input id="expected_close_date" name="expected_close_date" type="date" />
+                <Input
+                  id="expected_close_date"
+                  name="expected_close_date"
+                  type="date"
+                  min={new Date().toISOString().split("T")[0]}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>

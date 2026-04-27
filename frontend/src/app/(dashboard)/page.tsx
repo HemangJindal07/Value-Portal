@@ -1771,7 +1771,7 @@ function UserDashboard({
       }, {});
 
       const myUnderReview = myLeads.filter((l) =>
-        ["under_review", "qualified", "opportunity_created"].includes(l.status)
+        ["submitted", "routing_pending", "under_review"].includes(l.status)
       ).length;
 
       setData({
@@ -1826,9 +1826,9 @@ function UserDashboard({
           href="/leaderboard"
         />
         <StatCard
-          title="Active Leads"
+          title="Under Review"
           value={d.myUnderReview}
-          desc="Under review · qualified · in progress"
+          desc="Submitted · routing pending · under review"
           icon={ClipboardList}
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"

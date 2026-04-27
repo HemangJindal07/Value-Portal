@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     cron_secret: str = ""  # set CRON_SECRET in .env; must match X-Cron-Secret header
     frontend_url: str = "http://localhost:3000"
+    extra_cors_origins: str = ""  # comma-separated additional origins, e.g. "http://192.168.3.90:3002"
     environment: str = "development"
 
     model_config = {"env_file": ".env", "extra": "ignore"}

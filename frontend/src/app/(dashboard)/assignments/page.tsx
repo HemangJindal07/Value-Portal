@@ -596,9 +596,17 @@ export default function AssignmentsPage() {
   const [myLeads, setMyLeads] = useState<LeadWithRelations[]>([]);
   const [orgLeads, setOrgLeads] = useState<LeadWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
   const [wlConfirm, setWlConfirm] = useState<{ leadId: string; action: "won" | "lost"; title: string } | null>(null);
+
+  // Set the default tab once we know the user's role (avoids Base UI uncontrolled warning)
+  useEffect(() => {
+    if (user && activeTab === null) {
+      setActiveTab(isOrgRole ? "pending" : "submissions");
+    }
+  }, [user, isOrgRole, activeTab]);
 
   const fetchAssignments = useCallback(async () => {
     if (!token) return;
@@ -757,7 +765,7 @@ export default function AssignmentsPage() {
         )}
       </div>
 
-      <Tabs defaultValue={isOrgRole ? "pending" : "submissions"}>
+      <Tabs value={activeTab ?? (isOrgRole ? "pending" : "submissions")} onValueChange={setActiveTab}>
         <TabsList>
           {/* My Submissions tracker — end users only */}
           {!isOrgRole && (

@@ -13,13 +13,17 @@ app = FastAPI(
     description="Backend API for TX Catalyst — lead tracking and AI-powered classification.",
 )
 
+_extra_origins = [o.strip() for o in settings.extra_cors_origins.split(",") if o.strip()]
+_cors_origins = list({
+    settings.frontend_url,
+    "http://localhost:3000",
+    "http://localhost:3002",
+    *_extra_origins,
+})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.frontend_url,
-        "http://localhost:3000",
-        # "http://192.168.14.214:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
