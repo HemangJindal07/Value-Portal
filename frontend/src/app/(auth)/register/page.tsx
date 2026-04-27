@@ -41,7 +41,7 @@ export default function RegisterPage() {
           Create an Account
         </h2>
         <p className="text-sm text-[#5D5D5D] mt-1">
-          Join Tx Catalyst and start contributing today.
+          Join Tx-Catalyst and start contributing today.
         </p>
       </div>
 

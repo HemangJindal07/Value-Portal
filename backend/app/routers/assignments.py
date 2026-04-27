@@ -6,6 +6,8 @@ from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
 from app.schemas.assignment import AssignmentUpdate
 from app.services.routing_engine import advance_routing
+from app.services.scoring import award_points
+from app.services.notification_service import send_notification
 
 logger = logging.getLogger("assignments")
 router = APIRouter(prefix="/assignments", tags=["Assignments"])
@@ -183,4 +185,140 @@ async def update_assignment(
             actor_id=current_user["id"],
         )
 
+    # Opportunity created / won / lost — reviewer-only post-qualified actions
+    if payload.action_taken in ("opportunity_created", "won", "lost"):
+        background_tasks.add_task(
+            _handle_post_qualified_action,
+            assignment_id=str(assignment_id),
+            action=payload.action_taken,
+            actor_id=current_user["id"],
+            notes=payload.notes or "",
+        )
+
     return result.data[0]
+
+
+async def _handle_post_qualified_action(
+    assignment_id: str,
+    action: str,
+    actor_id: str,
+    notes: str,
+) -> None:
+    """
+    Handles opportunity_created / won / lost transitions after a lead is qualified.
+    Updates lead status, awards points, sends in-app notification + email to submitter.
+    """
+    from app.services.email_service import send_submitter_status_email
+    from app.services.routing_engine import _get_profile, _send_notification
+
+    supabase = get_supabase_admin()
+
+    # Fetch the assignment to get lead info
+    asgn_res = (
+        supabase.table("assignments")
+        .select("submission_type, submission_id, assigned_to")
+        .eq("assignment_id", assignment_id)
+        .single()
+        .execute()
+    )
+    if not asgn_res.data or asgn_res.data["submission_type"] != "lead":
+        return
+
+    lead_id = asgn_res.data["submission_id"]
+
+    # Fetch the lead
+    lead_res = (
+        supabase.table("leads")
+        .select("title, submitted_by, status, account_id")
+        .eq("lead_id", lead_id)
+        .single()
+        .execute()
+    )
+    if not lead_res.data:
+        return
+
+    lead       = lead_res.data
+    title      = lead["title"]
+    submitter_id = lead["submitted_by"]
+    account_id = lead["account_id"]
+
+    # Map action → lead status
+    status_map = {
+        "opportunity_created": "opportunity_created",
+        "won":  "won",
+        "lost": "lost",
+    }
+    new_status = status_map[action]
+
+    # Guard: only allow these transitions from valid prior states
+    valid_prior = {
+        "opportunity_created": {"qualified"},
+        "won":  {"opportunity_created"},
+        "lost": {"opportunity_created", "qualified"},
+    }
+    if lead["status"] not in valid_prior[action]:
+        logger.warning(
+            "[ASSIGN] Cannot set %s on lead %s — current status is %s",
+            action, lead_id, lead["status"],
+        )
+        return
+
+    # Update lead status
+    supabase.table("leads").update({"status": new_status}).eq("lead_id", lead_id).execute()
+    logger.info("[ASSIGN] Lead %s → %s by actor %s", lead_id, new_status, actor_id)
+
+    # Award points to submitter
+    points_event = {"opportunity_created": "opportunity_created", "won": "deal_won", "lost": "deal_lost"}.get(action)
+    if points_event and submitter_id:
+        try:
+            award_points(submitter_id, "lead", lead_id, points_event)
+        except Exception as exc:
+            logger.exception("[ASSIGN] Points award failed: %s", exc)
+
+    # Fetch account name
+    account_name = "Unknown Account"
+    if account_id:
+        try:
+            acct = supabase.table("accounts").select("account_name").eq("account_id", account_id).single().execute()
+            account_name = (acct.data or {}).get("account_name", account_name)
+        except Exception:
+            pass
+
+    # Actor profile
+    actor_profile = _get_profile(supabase, actor_id)
+    actor_name = actor_profile.get("full_name", "Reviewer")
+
+    # Notification messages
+    msg_map = {
+        "opportunity_created": f'Your lead "{title}" has been moved to Opportunity Created — the team is now actively working on it.',
+        "won":  f'Congratulations! Your lead "{title}" has been marked as Won. Great work!',
+        "lost": f'Your lead "{title}" has been marked as Lost.',
+    }
+    if submitter_id:
+        send_notification(
+            recipient_id=submitter_id,
+            submission_type="lead",
+            submission_id=lead_id,
+            notification_type="status_update",
+            message=msg_map[action],
+        )
+
+    # Email to submitter
+    submitter_profile = _get_profile(supabase, submitter_id) if submitter_id else {}
+    submitter_email = submitter_profile.get("email", "")
+    submitter_name  = submitter_profile.get("full_name", "")
+    if submitter_email:
+        try:
+            send_submitter_status_email(
+                submitter_email=submitter_email,
+                submitter_name=submitter_name or submitter_email,
+                submission_type="lead",
+                submission_id=lead_id,
+                title=title,
+                account_name=account_name,
+                new_status=new_status,
+                actor_name=actor_name,
+                actor_role="Reviewer",
+            )
+        except Exception as exc:
+            logger.exception("[ASSIGN] Email failed for %s: %s", action, exc)

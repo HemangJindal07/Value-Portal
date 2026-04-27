@@ -17,11 +17,14 @@ class AssignedRole(str, Enum):
 
 
 class ActionTaken(str, Enum):
-    pending = "pending"
-    reviewed = "reviewed"
-    approved = "approved"
-    rejected = "rejected"
-    escalated = "escalated"
+    pending              = "pending"
+    reviewed             = "reviewed"
+    approved             = "approved"
+    rejected             = "rejected"
+    escalated            = "escalated"
+    opportunity_created  = "opportunity_created"
+    won                  = "won"
+    lost                 = "lost"
 
 
 class AssignmentUpdate(BaseModel):

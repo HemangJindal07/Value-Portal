@@ -84,10 +84,10 @@ export default function LeaderboardPage() {
     if (!token) return;
     try {
       const [lb, me] = await Promise.all([
-        api<LeaderboardUser[]>("/api/scores/leaderboard", { token }),
+        api<LeaderboardUser[]>("/api/scores/leaderboard?limit=10", { token }),
         api<MyScore>("/api/scores/me", { token }),
       ]);
-      setEntries(lb);
+      setEntries(lb.slice(0, 10));
       setMyScore(me);
     } catch {
       toast.error("Failed to load leaderboard");
@@ -161,94 +161,72 @@ export default function LeaderboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            All-Time Rankings
+            Top 10 Rankings
           </CardTitle>
           <CardDescription>
-            Points are earned by submitting leads and when they progress (e.g.
-            qualified or won).
+            Points are earned by submitting leads and when they progress (e.g. qualified or won).
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading leaderboard...
-            </p>
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading leaderboard...</p>
           ) : entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No scores yet. Start submitting leads to earn points!
-            </p>
+            <p className="text-sm text-muted-foreground py-8 text-center">No scores yet. Start submitting leads to earn points!</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">Rank</TableHead>
-                  <TableHead>Contributor</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Points</TableHead>
-                  <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">Deals Won</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry) => {
-                  const isMe = entry.user_id === user?.id;
-                  return (
-                    <TableRow
-                      key={entry.score_id}
-                      className={isMe ? "bg-accent/50" : undefined}
-                    >
-                      <TableCell className="font-medium">
-                        <div className="flex items-center justify-center">
-                          {getRankIcon(entry.rank)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                              {entry.user
-                                ? getInitials(entry.user.full_name)
-                                : "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium leading-none">
-                              {entry.user?.full_name || "Unknown"}
-                              {isMe && (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-2 text-xs"
-                                >
-                                  You
-                                </Badge>
-                              )}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {entry.user?.department || entry.user?.email}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {roleLabels[entry.user?.role || ""] ||
-                            entry.user?.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold">
-                        {entry.total_points.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {entry.leads_submitted}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {entry.deals_won}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="divide-y divide-[#EDE7E6]">
+              {/* Header */}
+              <div className="grid grid-cols-[48px_1fr_auto_80px_64px_72px] gap-3 px-5 py-2.5 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
+                <span className="text-center">Rank</span>
+                <span>Contributor</span>
+                <span>Role</span>
+                <span className="text-right">Points</span>
+                <span className="text-right">Leads</span>
+                <span className="text-right">Deals Won</span>
+              </div>
+              {entries.map((entry) => {
+                const isMe = entry.user_id === user?.id;
+                return (
+                  <div
+                    key={entry.score_id}
+                    className={`grid grid-cols-[48px_1fr_auto_80px_64px_72px] gap-3 px-5 py-3 items-center ${isMe ? "bg-[#B12B35]/5" : ""}`}
+                  >
+                    <div className="flex items-center justify-center">
+                      {getRankIcon(entry.rank)}
+                    </div>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarFallback className="text-xs bg-[#B12B35] text-white">
+                          {entry.user ? getInitials(entry.user.full_name) : "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[#232222] truncate">
+                          {entry.user?.full_name || "Unknown"}
+                          {isMe && <Badge variant="outline" className="ml-2 text-[10px] py-0">You</Badge>}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {entry.user?.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <Badge variant="secondary" className="text-[11px]">
+                        {roleLabels[entry.user?.role || ""] || entry.user?.role}
+                      </Badge>
+                    </div>
+                    <p className="text-right font-bold text-[#B12B35] text-base tabular-nums">
+                      {entry.total_points.toLocaleString()}
+                    </p>
+                    <p className="text-right text-sm font-medium text-[#232222] tabular-nums">
+                      {entry.leads_submitted}
+                    </p>
+                    <p className="text-right text-sm font-medium text-[#232222] tabular-nums">
+                      {entry.deals_won}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

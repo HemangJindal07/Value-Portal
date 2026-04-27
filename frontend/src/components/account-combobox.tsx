@@ -21,6 +21,7 @@ type AccountComboboxProps = {
   token: string;
   value: string;
   onChange: (accountId: string) => void;
+  onAccountSelected?: (account: Account, isNew: boolean) => void;
   name: string;
   placeholder?: string;
   required?: boolean;
@@ -32,6 +33,7 @@ export function AccountCombobox({
   token,
   value,
   onChange,
+  onAccountSelected,
   name,
   placeholder = "Type at least 3 characters to search...",
   required,
@@ -106,6 +108,7 @@ export function AccountCombobox({
     setSelectedName(account.account_name);
     setQuery("");
     setOpen(false);
+    onAccountSelected?.(account, false);
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -167,6 +170,7 @@ export function AccountCombobox({
         onChange(account.account_id);
         setSelectedName(account.account_name);
         setQuery("");
+        onAccountSelected?.(account, true);
         closeModal();
       }, 900);
     } catch (err: unknown) {

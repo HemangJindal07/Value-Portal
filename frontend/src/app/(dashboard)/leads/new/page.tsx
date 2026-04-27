@@ -25,13 +25,21 @@ import { AccountCombobox } from "@/components/account-combobox";
 import { useAuth } from "@/lib/auth-context";
 import { api, uploadFile } from "@/lib/api";
 import { toast } from "sonner";
+import type { Account } from "@/types";
 
 const TX_SERVICES = [
-  { value: "QE",        label: "QE (Quality Engineering)",            reviewer: "Manjeet" },
-  { value: "DE",        label: "DE (Data Engineering)",               reviewer: "Vivek" },
-  { value: "AI",        label: "AI (Artificial Intelligence)",        reviewer: "Vivek" },
-  { value: "Data",      label: "Data (Data SME)",                     reviewer: "Manjeet" },
-  { value: "Insurance", label: "Insurance (Insurance Vertical)",      reviewer: "Manjeet" },
+  { value: "Quality Engineering",    label: "Quality Engineering",    reviewer: "Manjeet" },
+  { value: "Digital Engineering",    label: "Digital Engineering",    reviewer: "Vivek" },
+  { value: "Artificial Intelligence",label: "Artificial Intelligence",reviewer: "Vivek" },
+  { value: "Data Engineering",       label: "Data Engineering",       reviewer: "Rajiv" },
+  { value: "Insurance",              label: "Insurance",              reviewer: "Yuvraj" },
+];
+
+const REGIONS = [
+  "Australia", "Brazil", "Canada", "China", "France", "Germany",
+  "India", "Japan", "Malaysia", "Mexico", "Middle East", "Netherlands",
+  "New Zealand", "Philippines", "Poland", "Singapore", "South Africa",
+  "South Korea", "Sweden", "UAE", "United Kingdom", "United States", "Other",
 ];
 
 export default function NewLeadPage() {
@@ -39,48 +47,56 @@ export default function NewLeadPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [accountId, setAccountId] = useState("");
-  const [leadType, setLeadType] = useState("current_lead");
+  const [accountType, setAccountType] = useState<"current_lead" | "new_lead">("current_lead");
   const [service, setService] = useState("");
+  const [contactRegion, setContactRegion] = useState("");
+  const [priority, setPriority] = useState("medium");
   const [attachment, setAttachment] = useState<File | null>(null);
-  const [attachmentError, setAttachmentError] = useState(false);
 
   const selectedService = TX_SERVICES.find((s) => s.value === service);
+
+  function handleAccountSelected(account: Account, isNew: boolean) {
+    setAccountType(isNew ? "new_lead" : "current_lead");
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!attachment) {
-      setAttachmentError(true);
-      toast.error("Please attach a supporting document before submitting.");
+    if (!service) {
+      toast.error("Please select a Service Line before submitting.");
       return;
     }
 
-    // Read form data synchronously before any await — React nullifies
-    // e.currentTarget after the first await in a synthetic event handler.
     const fd = new FormData(e.currentTarget);
-
     setLoading(true);
-    setAttachmentError(false);
 
     try {
-      const uploaded = await uploadFile(attachment, token!);
+      let uploadedUrl: string | null = null;
+      if (attachment) {
+        const uploaded = await uploadFile(attachment, token!);
+        uploadedUrl = uploaded.url;
+      }
+
+      const contactName  = (fd.get("contact_name") as string) || null;
+      const contactEmail = (fd.get("contact_email") as string) || null;
+      const contactTitle = (fd.get("contact_title") as string) || null;
+      const contactDetails =
+        contactName || contactEmail || contactRegion || contactTitle
+          ? { name: contactName, email: contactEmail, region: contactRegion || null, title: contactTitle }
+          : null;
 
       const payload = {
-        title: fd.get("title") as string,
-        description: fd.get("description") as string,
-        lead_type: leadType,
-        account_id: fd.get("account_id") as string,
-        service: service || null,
-        estimated_value: fd.get("estimated_value")
-          ? Number(fd.get("estimated_value"))
-          : null,
-        currency: (fd.get("currency") as string) || "USD",
-        probability: fd.get("probability")
-          ? Number(fd.get("probability"))
-          : null,
+        title:               fd.get("title") as string,
+        description:         fd.get("description") as string,
+        lead_type:           accountType,
+        account_id:          fd.get("account_id") as string,
+        service:             service || null,
+        contact_details:     contactDetails,
+        estimated_value:     fd.get("estimated_value") ? Number(fd.get("estimated_value")) : null,
+        currency:            (fd.get("currency") as string) || "USD",
         expected_close_date: (fd.get("expected_close_date") as string) || null,
-        priority: (fd.get("priority") as string) || "medium",
-        supporting_docs: [uploaded.url],
+        priority:            priority,
+        supporting_docs:     uploadedUrl ? [uploadedUrl] : [],
       };
 
       await api("/api/leads", { method: "POST", body: payload, token: token! });
@@ -96,23 +112,23 @@ export default function NewLeadPage() {
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Submit New Lead</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Lead Opportunity</h1>
         <p className="text-muted-foreground">
           Log a cross-sell or upsell opportunity at a client account.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Lead Details</CardTitle>
-          <CardDescription>
-            Describe the opportunity you&apos;ve identified.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* ── Lead Details ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Lead Details</CardTitle>
+            <CardDescription>Describe the opportunity you&apos;ve identified.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+
             <div className="space-y-2">
-              <Label htmlFor="title">Title *</Label>
+              <Label htmlFor="title">Lead Opportunity *</Label>
               <Input
                 id="title"
                 name="title"
@@ -132,65 +148,110 @@ export default function NewLeadPage() {
               />
             </div>
 
+            {/* Account + Account Type */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Lead Type *</Label>
-                <Select value={leadType} onValueChange={setLeadType}>
-                  <SelectTrigger>
-                    <SelectValue>
-                      {leadType === "current_lead" ? "Existing Lead" : "New Lead"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="current_lead">Existing Lead</SelectItem>
-                    <SelectItem value="new_lead">New Lead</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="space-y-2">
                 <Label>Account *</Label>
                 <AccountCombobox
                   token={token!}
                   value={accountId}
                   onChange={setAccountId}
+                  onAccountSelected={handleAccountSelected}
                   name="account_id"
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Account Type</Label>
+                <Select value={accountType} disabled>
+                  <SelectTrigger className="bg-muted/40 text-muted-foreground cursor-not-allowed">
+                    <SelectValue>
+                      {accountType === "new_lead" ? "New Account" : "Existing Account"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current_lead">Existing Account</SelectItem>
+                    <SelectItem value="new_lead">New Account</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Auto-filled based on account selection</p>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>
-                Service
-                <span className="ml-1 text-xs text-muted-foreground">(Tx vertical for this opportunity)</span>
-              </Label>
-              <Select value={service} onValueChange={(v) => setService(v ?? "")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select service…">
-                    {selectedService ? selectedService.label : undefined}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="w-[--radix-select-trigger-width]">
-                  {TX_SERVICES.map((s) => (
-                    <SelectItem key={s.value} value={s.value} className="whitespace-normal">
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedService ? (
-                <p className="text-[12px] text-[#B12B35] bg-[#B12B35]/5 rounded-md px-3 py-1.5 font-medium">
-                  This lead will be submitted to <strong>{selectedService.reviewer}</strong> for review.
-                </p>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  Select a service to see who will review this lead.
-                </p>
-              )}
+        ── Client Contact Details ──
+        <Card>
+          <CardHeader>
+            <CardDescription>Key contact at the client for this opportunity.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contact_name">Name</Label>
+                <Input id="contact_name" name="contact_name" placeholder="e.g. John Smith" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact_email">Email</Label>
+                <Input id="contact_email" name="contact_email" type="email" placeholder="e.g. john@acme.com" />
+              </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Region</Label>
+                <Select value={contactRegion} onValueChange={(v) => setContactRegion(v ?? "")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select region…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REGIONS.map((r) => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact_title">Title</Label>
+                <Input id="contact_title" name="contact_title" placeholder="e.g. VP of Engineering" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-            <div className="grid grid-cols-3 gap-4">
+        {/* ── Service Line ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Service Line <span className="text-[#B12B35]">*</span></CardTitle>
+            <CardDescription>Select the Tx vertical for this opportunity.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select value={service} onValueChange={(v) => setService(v ?? "")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select service line…">
+                  {selectedService ? selectedService.label : undefined}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="w-[--radix-select-trigger-width]">
+                {TX_SERVICES.map((s) => (
+                  <SelectItem key={s.value} value={s.value} className="whitespace-normal">
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedService ? (
+              <p className="text-[12px] text-[#B12B35] bg-[#B12B35]/5 rounded-md px-3 py-1.5 font-medium mt-2">
+                This lead will be submitted to <strong>{selectedService.reviewer}</strong> for review.
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Select a service line to see who will review this lead.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+
+            {/* Value + Priority + Date */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="estimated_value">Estimated Value ($)</Label>
                 <Input
@@ -202,21 +263,12 @@ export default function NewLeadPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="probability">Probability (%)</Label>
-                <Input
-                  id="probability"
-                  name="probability"
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="60"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label>Priority</Label>
-                <Select name="priority" defaultValue="medium">
+                <Select value={priority} onValueChange={(v) => setPriority(v ?? "medium")}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue>
+                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="high">High</SelectItem>
@@ -230,56 +282,37 @@ export default function NewLeadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="expected_close_date">Expected Close Date</Label>
-                <Input
-                  id="expected_close_date"
-                  name="expected_close_date"
-                  type="date"
-                />
+                <Input id="expected_close_date" name="expected_close_date" type="date" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Input
-                  id="currency"
-                  name="currency"
-                  defaultValue="USD"
-                  placeholder="USD"
-                />
+                <Input id="currency" name="currency" defaultValue="USD" placeholder="USD" />
               </div>
             </div>
 
-            {/* Mandatory attachment */}
+            {/* Supporting Document — optional */}
             <div className="space-y-2">
-              <Label>
-                Supporting Document{" "}
-                <span className="text-[#B12B35]">*</span>
-              </Label>
+              <Label>Supporting Document</Label>
               <FileAttachment
                 file={attachment}
-                onChange={(f) => {
-                  setAttachment(f);
-                  if (f) setAttachmentError(false);
-                }}
-                error={attachmentError}
+                onChange={setAttachment}
                 disabled={loading}
               />
             </div>
+          </CardContent>
+        </Card>
 
-            <div className="flex gap-3 pt-4">
-              <Button type="submit" disabled={loading}>
-                {loading ? "Submitting…" : "Submit Lead"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.back()}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+
+
+        <div className="flex gap-3 pt-2">
+          <Button type="submit" disabled={loading} className="bg-[#B12B35] hover:bg-[#9a2330]">
+            {loading ? "Submitting…" : "Submit Lead"}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

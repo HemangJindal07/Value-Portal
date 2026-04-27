@@ -308,14 +308,6 @@ def _dispatch_submission_email(
             )
             stakeholder_emails = [u["email"] for u in (users_res.data or []) if u.get("email")]
 
-        # ── TEST MODE: redirect stakeholder emails to override address ──────────
-        # Before go-live: delete these 6 lines (keep the real stakeholder_emails as-is)
-        from app.services.email_service import TEST_OVERRIDE_EMAIL
-        if stakeholder_emails:
-            logger.info("[ROUTE][TEST] Redirecting %s → %s", stakeholder_emails, TEST_OVERRIDE_EMAIL)
-            stakeholder_emails = [TEST_OVERRIDE_EMAIL]
-        # ── END TEST MODE ─────────────────────────────────────────────────────
-
         send_submission_email(
             submission_type=submission_type,
             submission_id=submission_id,
@@ -520,9 +512,8 @@ async def advance_routing(
             # Email submitter about rejection
             if submitter_email:
                 try:
-                    from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
                     send_submitter_status_email(
-                        submitter_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with submitter_email
+                        submitter_email=submitter_email,
                         submitter_name=submitter_name or submitter_email,
                         submission_type=sub_type,
                         submission_id=sub_id,
@@ -592,9 +583,8 @@ async def advance_routing(
         # Intermediate step approval — email submitter that it's progressing
         if submitter_email:
             try:
-                from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
                 send_submitter_status_email(
-                    submitter_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with submitter_email
+                    submitter_email=submitter_email,
                     submitter_name=submitter_name or submitter_email,
                     submission_type=sub_type,
                     submission_id=sub_id,
@@ -626,9 +616,8 @@ async def advance_routing(
             next_profile = _get_profile(supabase, next_step["user_id"])
             if next_profile.get("email"):
                 try:
-                    from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
                     send_reviewer_assignment_email(
-                        reviewer_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with next_profile["email"]
+                        reviewer_email=next_profile["email"],
                         reviewer_name=next_profile.get("full_name") or next_profile["email"],
                         role_label=next_step["role_label"],
                         submission_type=sub_type,
@@ -646,10 +635,23 @@ async def advance_routing(
             return
 
         # No further steps — final approval
-        _update_submission_status(supabase, sub_type, sub_id, "approved")
+        # For leads: status becomes "qualified" (reviewer has qualified it).
+        # For ideas: keep "approved".
+        final_status = "qualified" if sub_type == "lead" else "approved"
+        _update_submission_status(supabase, sub_type, sub_id, final_status)
+
+        # Award qualified points (20 pts) to submitter
+        if sub_type == "lead" and submitter_id:
+            try:
+                from app.services.scoring import award_points
+                award_points(submitter_id, "lead", sub_id, "qualified")
+                logger.info("[ROUTE] Awarded qualified points to %s for lead %s", submitter_id, sub_id)
+            except Exception as exc:
+                logger.exception("[ROUTE] Failed to award qualified points: %s", exc)
+
         if submitter_id:
             if sub_type == "lead":
-                final_msg = f'Your lead "{title}" has been fully approved through the review chain.'
+                final_msg = f'Great news! Your lead "{title}" has been qualified by {actor_name}. The team will now work on creating the opportunity.'
             else:
                 final_msg = f'Congratulations! Your {sub_type} "{title}" has been fully approved.'
             _send_notification(
@@ -657,21 +659,20 @@ async def advance_routing(
                 "status_update",
                 final_msg,
             )
-            # Email submitter final approval
+            # Email submitter — qualified/approved
             if submitter_email:
                 try:
-                    from app.services.email_service import TEST_OVERRIDE_EMAIL  # TEST: delete before go-live
                     send_submitter_status_email(
-                        submitter_email=TEST_OVERRIDE_EMAIL,  # TEST: replace with submitter_email
+                        submitter_email=submitter_email,
                         submitter_name=submitter_name or submitter_email,
                         submission_type=sub_type,
                         submission_id=sub_id,
                         title=title,
                         account_name=account_name,
-                        new_status="approved",
+                        new_status=final_status,
                         actor_name=actor_name,
                         actor_role=current_label,
                     )
                 except Exception as exc:
                     logger.exception("[ROUTE] Email failed on final approval: %s", exc)
-        logger.info("[ROUTE] Final approval for %s %s", sub_type, sub_id)
+        logger.info("[ROUTE] Final approval → %s for %s %s", final_status, sub_type, sub_id)

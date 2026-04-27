@@ -290,7 +290,7 @@ export default function ReportsPage() {
       return acc;
     }, {});
     const rows = [
-      ["My Report — Tx Catalyst", ""],
+      ["My Report — Tx-Catalyst", ""],
       ["User",      user?.full_name || user?.email || ""],
       ["User ID",   user?.id || ""],
       ["Generated", new Date().toLocaleString()],

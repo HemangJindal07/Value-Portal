@@ -8,30 +8,46 @@ router = APIRouter(prefix="/scores", tags=["Scoring"])
 @router.get("/me")
 async def my_score(current_user: dict = Depends(get_current_user)):
     supabase = get_supabase_admin()
+    uid = current_user["id"]
 
-    # Do NOT use `.single()` here — for users with no scores yet,
-    # PostgREST returns 0 rows and `.single()` raises PGRST116.
     result = (
         supabase.table("user_scores")
         .select("*")
-        .eq("user_id", current_user["id"])
+        .eq("user_id", uid)
         .eq("period", "all_time")
         .limit(1)
         .execute()
     )
 
-    row = (result.data or [None])[0]
-    if not row:
-        return {
-            "total_points": 0,
-            "leads_submitted": 0,
-            "ideas_submitted": 0,
-            "deals_won": 0,
-            "ideas_implemented": 0,
-            "rank": 0,
-        }
+    row = (result.data or [None])[0] or {}
 
-    return row
+    # Real-time lead count from leads table (not stale score_events)
+    leads_res = (
+        supabase.table("leads")
+        .select("lead_id", count="exact")
+        .eq("submitted_by", uid)
+        .execute()
+    )
+    live_leads = leads_res.count or 0
+
+    # Real-time won count
+    won_res = (
+        supabase.table("leads")
+        .select("lead_id", count="exact")
+        .eq("submitted_by", uid)
+        .eq("status", "won")
+        .execute()
+    )
+    live_won = won_res.count or 0
+
+    return {
+        "total_points":    row.get("total_points", 0),
+        "leads_submitted": live_leads,
+        "ideas_submitted": row.get("ideas_submitted", 0),
+        "deals_won":       live_won,
+        "ideas_implemented": row.get("ideas_implemented", 0),
+        "rank":            row.get("rank", 0),
+    }
 
 
 @router.get("/events")
@@ -83,6 +99,24 @@ async def leaderboard(
 
     score_by_user = {row["user_id"]: row for row in (scores.data or [])}
 
+    # Fetch real-time lead counts per user from the leads table
+    leads_res = (
+        supabase.table("leads")
+        .select("submitted_by")
+        .execute()
+    )
+    from collections import Counter
+    leads_count_by_user = Counter(l["submitted_by"] for l in (leads_res.data or []))
+
+    # Fetch real-time won counts per user
+    won_res = (
+        supabase.table("leads")
+        .select("submitted_by")
+        .eq("status", "won")
+        .execute()
+    )
+    won_count_by_user = Counter(l["submitted_by"] for l in (won_res.data or []))
+
     entries: list[dict] = []
     for user in profiles.data or []:
         uid = user["id"]
@@ -92,9 +126,9 @@ async def leaderboard(
             "score_id": score.get("score_id") or f"no-score-{uid}",
             "user_id": uid,
             "total_points": score.get("total_points", 0),
-            "leads_submitted": score.get("leads_submitted", 0),
+            "leads_submitted": leads_count_by_user.get(uid, 0),
             "ideas_submitted": score.get("ideas_submitted", 0),
-            "deals_won": score.get("deals_won", 0),
+            "deals_won": won_count_by_user.get(uid, 0),
             "ideas_implemented": score.get("ideas_implemented", 0),
             # Rank will be recomputed below
             "rank": 0,

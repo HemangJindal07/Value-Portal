@@ -10,16 +10,17 @@ class LeadType(str, Enum):
 
 
 class LeadStatus(str, Enum):
-    draft = "draft"
-    submitted = "submitted"
-    routing_pending = "routing_pending"
-    under_review = "under_review"
-    qualified = "qualified"
-    approved = "approved"
-    won = "won"
-    lost = "lost"
-    dropped = "dropped"
-    rejected = "rejected"
+    draft                = "draft"
+    submitted            = "submitted"
+    routing_pending      = "routing_pending"
+    under_review         = "under_review"
+    qualified            = "qualified"
+    opportunity_created  = "opportunity_created"
+    approved             = "approved"
+    won                  = "won"
+    lost                 = "lost"
+    dropped              = "dropped"
+    rejected             = "rejected"
 
 
 class Priority(str, Enum):
@@ -29,11 +30,11 @@ class Priority(str, Enum):
 
 
 class ServiceType(str, Enum):
-    QE = "QE"
-    DE = "DE"
-    AI = "AI"
-    Data = "Data"
-    Insurance = "Insurance"
+    quality_engineering     = "Quality Engineering"
+    digital_engineering     = "Digital Engineering"
+    artificial_intelligence = "Artificial Intelligence"
+    data_engineering        = "Data Engineering"
+    insurance               = "Insurance"
 
 
 class LeadCreate(BaseModel):
@@ -42,6 +43,7 @@ class LeadCreate(BaseModel):
     lead_type: LeadType
     account_id: UUID
     service: ServiceType | None = None
+    contact_details: dict | None = None
     estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
     currency: str = "USD"
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
@@ -70,6 +72,7 @@ class LeadResponse(BaseModel):
     account_id: UUID
     submitted_by: UUID
     service: ServiceType | None = None
+    contact_details: dict | None = None
     estimated_value: float | None = None
     currency: str
     probability: int | None = None

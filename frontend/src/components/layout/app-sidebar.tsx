@@ -37,18 +37,18 @@ const ADMIN_NAV = [
   {
     label: "Main",
     items: [
-      { title: "Dashboard",       href: "/",              icon: LayoutDashboard },
-      { title: "Accounts",        href: "/accounts",      icon: Building2 },
-      { title: "Leads",           href: "/leads",         icon: Target },
+      { title: "Dashboard",         href: "/",              icon: LayoutDashboard },
+      { title: "Accounts",          href: "/accounts",      icon: Building2 },
+      { title: "Submit New Lead",   href: "/leads/new",     icon: Target },
       // { title: "Value Ideas",     href: "/ideas",         icon: Lightbulb },
-      { title: "My Assignments",  href: "/assignments",   icon: ClipboardList },
+      { title: "My Assignments",    href: "/assignments",   icon: ClipboardList },
     ],
   },
   {
     label: "Insights",
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
-      { title: "Reports",     href: "/reports",     icon: BarChart3 },
+      // { title: "Reports",  href: "/reports",     icon: BarChart3 }, // Reports hidden
       { title: "Reviews",     href: "/reviews",     icon: ShieldCheck },
     ],
   },
@@ -69,17 +69,17 @@ const EXECUTIVE_NAV = [
   {
     label: "Main",
     items: [
-      { title: "Dashboard",      href: "/",            icon: LayoutDashboard },
-      { title: "Leads",          href: "/leads",       icon: Target },
+      { title: "Dashboard",        href: "/",            icon: LayoutDashboard },
+      { title: "Submit New Lead",  href: "/leads/new",  icon: Target },
       // { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
-      { title: "My Assignments", href: "/assignments", icon: ClipboardList },
+      { title: "My Assignments",   href: "/assignments", icon: ClipboardList },
     ],
   },
   {
     label: "Insights",
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
-      { title: "Reports",     href: "/reports",     icon: BarChart3 },
+      // { title: "Reports",  href: "/reports",     icon: BarChart3 }, // Reports hidden
       { title: "Reviews",     href: "/reviews",     icon: ShieldCheck },
     ],
   },
@@ -96,17 +96,17 @@ const USER_NAV = [
   {
     label: "Main",
     items: [
-      { title: "Dashboard",       href: "/",            icon: LayoutDashboard },
-      { title: "Leads",           href: "/leads",       icon: Target },
+      { title: "Dashboard",        href: "/",            icon: LayoutDashboard },
+      { title: "Submit New Lead",  href: "/leads/new",  icon: Target },
       // { title: "Value Ideas",    href: "/ideas",       icon: Lightbulb },
-      { title: "My Submissions",  href: "/assignments", icon: ClipboardList },
+      { title: "My Submissions",   href: "/assignments", icon: ClipboardList },
     ],
   },
   {
     label: "Insights",
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
-      { title: "Reports",     href: "/reports",     icon: BarChart3 },
+      // { title: "Reports",  href: "/reports",     icon: BarChart3 }, // Reports hidden
     ],
   },
   {
@@ -140,6 +140,8 @@ function NavGroup({
                 isActive={
                   item.href === "/"
                     ? pathname === "/"
+                    : item.href === "/leads/new"
+                    ? pathname === "/leads/new"
                     : pathname.startsWith(item.href)
                 }
                 render={<Link href={item.href} />}
