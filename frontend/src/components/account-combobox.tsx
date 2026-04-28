@@ -21,6 +21,7 @@ type AccountComboboxProps = {
   token: string;
   value: string;
   onChange: (accountId: string) => void;
+  onAccountSelected?: (account: Account, isNew: boolean) => void;
   name: string;
   placeholder?: string;
   required?: boolean;
@@ -32,6 +33,7 @@ export function AccountCombobox({
   token,
   value,
   onChange,
+  onAccountSelected,
   name,
   placeholder = "Type at least 3 characters to search...",
   required,
@@ -43,7 +45,9 @@ export function AccountCombobox({
   const [results, setResults] = React.useState<Account[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedName, setSelectedName] = React.useState("");
+  const [dropdownStyle, setDropdownStyle] = React.useState<React.CSSProperties>({});
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Quick-add modal state ─────────────────────────────────────────────────
@@ -99,6 +103,18 @@ export function AccountCombobox({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  function updateDropdownPosition() {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    setDropdownStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  }
+
   const inputValue = open ? query : selectedName;
 
   function handleSelect(account: Account) {
@@ -106,11 +122,13 @@ export function AccountCombobox({
     setSelectedName(account.account_name);
     setQuery("");
     setOpen(false);
+    onAccountSelected?.(account, false);
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value;
     setQuery(val);
+    updateDropdownPosition();
     setOpen(true);
     if (!val) {
       onChange("");
@@ -167,6 +185,7 @@ export function AccountCombobox({
         onChange(account.account_id);
         setSelectedName(account.account_name);
         setQuery("");
+        onAccountSelected?.(account, true);
         closeModal();
       }, 900);
     } catch (err: unknown) {
@@ -186,10 +205,11 @@ export function AccountCombobox({
         <input type="hidden" name={name} value={value} readOnly aria-hidden />
         <div className="relative">
           <input
+            ref={inputRef}
             type="text"
             value={inputValue}
             onChange={handleInputChange}
-            onFocus={() => setOpen(true)}
+            onFocus={() => { updateDropdownPosition(); setOpen(true); }}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             placeholder={placeholder}
             required={required && !value}
@@ -198,7 +218,8 @@ export function AccountCombobox({
               "flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 pr-9 text-sm transition-colors outline-none",
               "placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
               "disabled:cursor-not-allowed disabled:opacity-50",
-              "dark:bg-input/30"
+              "dark:bg-input/30",
+              value ? "[&:invalid]:border-input [&:invalid]:ring-0" : ""
             )}
             autoComplete="off"
           />
@@ -212,75 +233,80 @@ export function AccountCombobox({
           )}
         </div>
 
-        {/* Hint — not enough chars yet */}
-        {open && query.trim().length > 0 && query.trim().length < MIN_CHARS && (
-          <div className="absolute z-[100] mt-1 w-full rounded-lg border border-[#C5C5C5] bg-white px-2.5 py-2 text-xs text-[#5D5D5D] shadow-lg">
-            Type {MIN_CHARS - query.trim().length} more character
-            {MIN_CHARS - query.trim().length > 1 ? "s" : ""} to search…
-          </div>
-        )}
-
-        {showDropdown && (
-          <ul
-            className="absolute z-[100] mt-1 max-h-60 min-w-full w-full overflow-auto rounded-lg border border-[#C5C5C5] bg-white py-1 text-[#232222] shadow-xl"
-            role="listbox"
-          >
-            {loading ? (
-              <li className="flex items-center gap-2 px-3 py-2.5 text-sm text-[#5D5D5D]">
-                <Loader2 className="h-3 w-3 animate-spin" /> Searching…
-              </li>
-            ) : (
-              <>
-                {results.length === 0 ? (
-                  <li className="px-3 py-2.5 text-sm text-[#5D5D5D]">
-                    No accounts found for &ldquo;{query}&rdquo;.
-                  </li>
-                ) : (
-                  results.map((a) => (
-                    <li
-                      key={a.account_id}
-                      role="option"
-                      aria-selected={value === a.account_id}
-                      className={cn(
-                        "cursor-pointer px-3 py-2.5 text-sm outline-none hover:bg-[#F9F9F9]",
-                        value === a.account_id && "bg-[#F9F9F9]"
-                      )}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleSelect(a);
-                      }}
-                    >
-                      <span className="font-medium text-[#232222]">{a.account_name}</span>
-                      {(a.industry || a.region) && (
-                        <div className="text-xs text-[#5D5D5D] mt-0.5">
-                          {[a.industry, a.region].filter(Boolean).join(" · ")}
-                        </div>
-                      )}
-                    </li>
-                  ))
-                )}
-
-                {/* ── Add Account button — always shown at the bottom ── */}
-                <li
-                  className="border-t border-[#EDE7E6] mt-1 pt-1"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    openModal();
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-[#B12B35] hover:bg-[#B12B35]/5 transition-colors"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add &ldquo;{query.trim()}&rdquo; as new account
-                  </button>
-                </li>
-              </>
-            )}
-          </ul>
-        )}
       </div>
+
+      {/* Hint — not enough chars yet, rendered via portal to escape overflow:hidden */}
+      {open && query.trim().length > 0 && query.trim().length < MIN_CHARS && createPortal(
+        <div style={dropdownStyle} className="rounded-lg border border-[#C5C5C5] bg-white px-2.5 py-2 text-xs text-[#5D5D5D] shadow-lg">
+          Type {MIN_CHARS - query.trim().length} more character
+          {MIN_CHARS - query.trim().length > 1 ? "s" : ""} to search…
+        </div>,
+        document.body
+      )}
+
+      {/* Results dropdown — rendered via portal to escape Card's overflow:hidden */}
+      {showDropdown && createPortal(
+        <ul
+          style={dropdownStyle}
+          className="max-h-60 overflow-auto rounded-lg border border-[#C5C5C5] bg-white py-1 text-[#232222] shadow-xl"
+          role="listbox"
+        >
+          {loading ? (
+            <li className="flex items-center gap-2 px-3 py-2.5 text-sm text-[#5D5D5D]">
+              <Loader2 className="h-3 w-3 animate-spin" /> Searching…
+            </li>
+          ) : (
+            <>
+              {results.length === 0 ? (
+                <li className="px-3 py-2.5 text-sm text-[#5D5D5D]">
+                  No accounts found for &ldquo;{query}&rdquo;.
+                </li>
+              ) : (
+                results.map((a) => (
+                  <li
+                    key={a.account_id}
+                    role="option"
+                    aria-selected={value === a.account_id}
+                    className={cn(
+                      "cursor-pointer px-3 py-2.5 text-sm outline-none hover:bg-[#F9F9F9]",
+                      value === a.account_id && "bg-[#F9F9F9]"
+                    )}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelect(a);
+                    }}
+                  >
+                    <span className="font-medium text-[#232222]">{a.account_name}</span>
+                    {(a.industry || a.region) && (
+                      <div className="text-xs text-[#5D5D5D] mt-0.5">
+                        {[a.industry, a.region].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </li>
+                ))
+              )}
+
+              {/* ── Add Account button — always shown at the bottom ── */}
+              <li
+                className="border-t border-[#EDE7E6] mt-1 pt-1"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  openModal();
+                }}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-[#B12B35] hover:bg-[#B12B35]/5 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add &ldquo;{query.trim()}&rdquo; as new account
+                </button>
+              </li>
+            </>
+          )}
+        </ul>,
+        document.body
+      )}
 
       {/* ── Quick-add modal — rendered via portal so it's never inside a <form> ── */}
       {modalOpen && createPortal(

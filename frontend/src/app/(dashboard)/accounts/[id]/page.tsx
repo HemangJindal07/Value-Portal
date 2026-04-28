@@ -163,12 +163,12 @@ export default function AccountDetailPage() {
             )}
           </div>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/accounts/${id}/edit`}>
+        <Link href={`/accounts/${id}/edit`}>
+          <Button variant="outline" size="sm">
             <Pencil className="mr-2 h-3 w-3" />
             Edit
-          </Link>
-        </Button>
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

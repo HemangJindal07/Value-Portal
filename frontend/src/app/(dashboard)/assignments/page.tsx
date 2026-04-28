@@ -2,10 +2,22 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target } from "lucide-react";
+import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Briefcase, Trophy, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import {
+  Select as StatusSelect,
+  SelectContent as StatusSelectContent,
+  SelectItem as StatusSelectItem,
+  SelectTrigger as StatusSelectTrigger,
+  SelectValue as StatusSelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -37,11 +49,14 @@ const roleLabels: Record<string, string> = {
 };
 
 const actionColors: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400",
-  reviewed: "bg-blue-500/10 text-blue-400",
-  approved: "bg-green-500/10 text-green-400",
-  rejected: "bg-red-500/10 text-red-400",
-  escalated: "bg-purple-500/10 text-purple-400",
+  pending:              "bg-amber-500/10 text-amber-400",
+  reviewed:             "bg-blue-500/10 text-blue-400",
+  approved:             "bg-green-500/10 text-green-400",
+  rejected:             "bg-red-500/10 text-red-400",
+  escalated:            "bg-purple-500/10 text-purple-400",
+  opportunity_created:  "bg-[#003466]/10 text-[#003466]",
+  won:                  "bg-emerald-500/10 text-emerald-600",
+  lost:                 "bg-[#C5C5C5]/30 text-[#5D5D5D]",
 };
 
 const submissionTypeColors: Record<string, string> = {
@@ -269,56 +284,87 @@ function AssignmentCard({
             )}
           </div>
 
-          {/* Action buttons — only shown for pending */}
+          {/* Action buttons */}
           {isPending && (
             <div className="flex flex-col gap-1.5 shrink-0">
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
-                <Link href={href} className="flex items-center gap-1">
-                  <Eye className="h-3 w-3" />
-                  Open
-                </Link>
-              </Button>
-              <Button
-                size="sm"
-                className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
-                disabled={actioning === assignment.assignment_id}
-                onClick={() =>
-                  onOpenReview({
-                    assignmentId: assignment.assignment_id,
-                    submissionType: assignment.submission_type as "lead" | "idea",
-                    action: "approved",
-                  })
-                }
-              >
-                <CheckCircle2 className="h-3 w-3" />
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1 text-red-400 border-red-400/30 hover:bg-red-500/10"
-                disabled={actioning === assignment.assignment_id}
-                onClick={() =>
-                  onOpenReview({
-                    assignmentId: assignment.assignment_id,
-                    submissionType: assignment.submission_type as "lead" | "idea",
-                    action: "rejected",
-                  })
-                }
-              >
-                <XCircle className="h-3 w-3" />
-                Reject
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1 text-purple-400 border-purple-400/30 hover:bg-purple-500/10"
-                disabled={actioning === assignment.assignment_id}
-                onClick={() => onAction(assignment.assignment_id, "escalated")}
-              >
-                <AlertTriangle className="h-3 w-3" />
-                Escalate
-              </Button>
+              {/* Open link — always shown */}
+              <Link href={href} className="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                <Eye className="h-3 w-3" />
+                Open
+              </Link>
+
+              {/* Standard review actions — shown when lead is under_review */}
+              {(assignment.submission_status === "under_review" || assignment.submission_type === "idea") && (
+                <>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                    disabled={actioning === assignment.assignment_id}
+                    onClick={() => onOpenReview({ assignmentId: assignment.assignment_id, submissionType: assignment.submission_type as "lead" | "idea", action: "approved" })}
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    Qualify
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1 text-red-400 border-red-400/30 hover:bg-red-500/10"
+                    disabled={actioning === assignment.assignment_id}
+                    onClick={() => onOpenReview({ assignmentId: assignment.assignment_id, submissionType: assignment.submission_type as "lead" | "idea", action: "rejected" })}
+                  >
+                    <XCircle className="h-3 w-3" />
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1 text-purple-400 border-purple-400/30 hover:bg-purple-500/10"
+                    disabled={actioning === assignment.assignment_id}
+                    onClick={() => onAction(assignment.assignment_id, "escalated")}
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    Escalate
+                  </Button>
+                </>
+              )}
+
+              {/* Post-qualified: Create Opportunity */}
+              {assignment.submission_status === "qualified" && (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1 bg-[#003466] hover:bg-[#002244] text-white"
+                  disabled={actioning === assignment.assignment_id}
+                  onClick={() => onAction(assignment.assignment_id, "opportunity_created")}
+                >
+                  <Briefcase className="h-3 w-3" />
+                  Create Opportunity
+                </Button>
+              )}
+
+              {/* Won / Lost — shown when opportunity is created */}
+              {assignment.submission_status === "opportunity_created" && (
+                <>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    disabled={actioning === assignment.assignment_id}
+                    onClick={() => onAction(assignment.assignment_id, "won")}
+                  >
+                    <Trophy className="h-3 w-3" />
+                    Won
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1 text-[#5D5D5D] border-[#C5C5C5] hover:bg-muted"
+                    disabled={actioning === assignment.assignment_id}
+                    onClick={() => onAction(assignment.assignment_id, "lost")}
+                  >
+                    <TrendingDown className="h-3 w-3" />
+                    Lost
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -340,18 +386,30 @@ function SkeletonCard() {
 }
 
 const submissionStatusColors: Record<string, string> = {
-  draft:           "bg-[#C5C5C5]/30 text-[#5D5D5D]",
-  submitted:       "bg-[#2E75B6]/10 text-[#2E75B6]",
-  routing_pending: "bg-amber-100 text-amber-700",
+  draft:                "bg-[#C5C5C5]/30 text-[#5D5D5D]",
+  submitted:            "bg-[#2E75B6]/10 text-[#2E75B6]",
+  routing_pending:      "bg-amber-100 text-amber-700",
+  opportunity_created:  "bg-[#003466]/10 text-[#003466]",
   under_review:    "bg-[#003466]/10 text-[#003466]",
-  qualified:       "bg-[#B12B35]/10 text-[#B12B35]",
+  qualified:       "bg-green-100 text-green-700",
   approved:        "bg-green-100 text-green-700",
   in_progress:     "bg-[#003466]/10 text-[#003466]",
   implemented:     "bg-[#003466]/15 text-[#003466]",
-  won:             "bg-[#003466]/15 text-[#003466]",
+  won:             "bg-emerald-100 text-emerald-700",
   lost:            "bg-[#C5C5C5]/30 text-[#5D5D5D]",
   dropped:         "bg-[#C5C5C5]/30 text-[#5D5D5D]",
-  rejected:        "bg-[#E42525]/10 text-[#E42525]",
+  rejected:        "bg-red-100 text-red-700",
+};
+
+const submissionPriorityColors: Record<string, string> = {
+  high:   "bg-[#E42525]/10 text-[#E42525]",
+  medium: "bg-[#003466]/10 text-[#003466]",
+  low:    "bg-[#2E75B6]/10 text-[#2E75B6]",
+};
+
+const accountTypeLabels: Record<string, string> = {
+  current_lead: "Existing Account",
+  new_lead:     "New Account",
 };
 
 function MySubmissionsTab({
@@ -361,18 +419,18 @@ function MySubmissionsTab({
   leads: LeadWithRelations[];
   loading: boolean;
 }) {
-  // Value Ideas: idea rows commented out — leads-only portal
-  const combined = [
-    ...leads.map((l) => ({
-      id: l.lead_id,
-      type: "lead" as const,
-      title: l.title,
-      status: l.status,
-      account: l.account?.account_name ?? "—",
-      href: `/leads/${l.lead_id}`,
-      created_at: l.created_at,
-    })),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const sorted = [...leads].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const filtered = sorted.filter((l) => {
+    const matchSearch = !search || l.title.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = !statusFilter || l.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
 
   if (loading) {
     return (
@@ -382,58 +440,149 @@ function MySubmissionsTab({
     );
   }
 
-  if (combined.length === 0) {
-    return (
-      <div className="text-center py-16 text-muted-foreground mt-4">
-        <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
-        <p className="text-sm">No submissions yet.</p>
-        <p className="text-xs mt-1">Submit a lead to start tracking.</p>
-        <div className="flex gap-3 justify-center mt-4">
-          <Link
-            href="/leads/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#B12B35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#9a2330] transition-colors"
-          >
-            <Target className="h-4 w-4" /> New Lead
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3 mt-4">
-      {combined.map((item) => (
-        <Card key={item.id} className="hover:bg-muted/30 transition-colors">
-          <CardContent className="py-4 px-5">
-            <div className="flex items-center gap-3 flex-wrap">
-              <Badge
-                variant="secondary"
-                className={`text-[11px] px-2 py-0 ${item.type === "lead" ? "bg-blue-500/10 text-blue-600" : "bg-violet-500/10 text-violet-600"}`}
-              >
-                {item.type === "lead" ? "Lead" : "Idea"}
-              </Badge>
-              <Link
-                href={item.href}
-                className="text-sm font-medium hover:underline flex items-center gap-1"
-              >
-                {item.title}
-                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-              </Link>
-              <span className="text-xs text-muted-foreground ml-auto">
-                {item.account}
-              </span>
+    <div className="space-y-4 mt-4">
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search leads..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <StatusSelect value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "")}>
+          <StatusSelectTrigger className="w-44">
+            <StatusSelectValue placeholder="All Statuses" />
+          </StatusSelectTrigger>
+          <StatusSelectContent>
+            <StatusSelectItem value="">All Statuses</StatusSelectItem>
+            <StatusSelectItem value="submitted">Submitted</StatusSelectItem>
+            <StatusSelectItem value="routing_pending">Routing Pending</StatusSelectItem>
+            <StatusSelectItem value="under_review">Under Review</StatusSelectItem>
+            <StatusSelectItem value="qualified">Qualified</StatusSelectItem>
+            <StatusSelectItem value="approved">Approved</StatusSelectItem>
+            <StatusSelectItem value="won">Won</StatusSelectItem>
+            <StatusSelectItem value="lost">Lost</StatusSelectItem>
+            <StatusSelectItem value="rejected">Rejected</StatusSelectItem>
+          </StatusSelectContent>
+        </StatusSelect>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">My Leads</CardTitle>
+          <CardDescription>{filtered.length} lead{filtered.length !== 1 ? "s" : ""}</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+              <Target className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">
+                {leads.length === 0 ? "No submissions yet. Submit a lead to start tracking." : "No leads match your filters."}
+              </p>
+              {leads.length === 0 && (
+                <Link
+                  href="/leads/new"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#B12B35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#9a2330] transition-colors"
+                >
+                  <Target className="h-4 w-4" /> Submit New Lead
+                </Link>
+              )}
             </div>
-            <div className="mt-2">
-              <Badge
-                variant="secondary"
-                className={`text-[11px] ${submissionStatusColors[item.status] ?? ""}`}
-              >
-                {item.status.replace(/_/g, " ")}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Service Line</TableHead>
+                  <TableHead>Account Type</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Est. Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((lead) => {
+                  const cd = lead.contact_details as { name?: string; email?: string; title?: string } | null;
+                  const STATUS_DISPLAY: Record<string, string> = {
+                    submitted:           "Submitted",
+                    routing_pending:     "Routing Pending",
+                    under_review:        "Under Review",
+                    qualified:           "Qualified",
+                    rejected:            "Rejected",
+                    opportunity_created: "Opportunity Created",
+                    won:                 "Won",
+                    lost:                "Lost",
+                    dropped:             "Dropped",
+                    draft:               "Draft",
+                  };
+                  const statusDisplay = STATUS_DISPLAY[lead.status] ?? lead.status.replace(/_/g, " ");
+                  return (
+                  <TableRow key={lead.lead_id}>
+                    <TableCell>
+                      <Link
+                        href={`/leads/${lead.lead_id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {lead.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {lead.account?.account_name ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {cd?.name ? (
+                        <div className="text-xs">
+                          <p className="font-medium text-[#232222]">{cd.name}</p>
+                          {cd.email && <p className="text-muted-foreground">{cd.email}</p>}
+                          {cd.title && <p className="text-muted-foreground">{cd.title}</p>}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {lead.service ? (
+                        <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">
+                          {lead.service}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[11px]">
+                        {accountTypeLabels[lead.lead_type] || lead.lead_type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={`text-[11px] ${submissionPriorityColors[lead.priority] ?? ""}`}>
+                        {lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={`text-[11px] ${submissionStatusColors[lead.status] ?? ""}`}>
+                        {statusDisplay}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {lead.estimated_value
+                        ? `$${Number(lead.estimated_value).toLocaleString()}`
+                        : "—"}
+                    </TableCell>
+                  </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -445,9 +594,19 @@ export default function AssignmentsPage() {
   const [myAssignments, setMyAssignments] = useState<AssignmentWithRelations[]>([]);
   const [allAssignments, setAllAssignments] = useState<AssignmentWithRelations[]>([]);
   const [myLeads, setMyLeads] = useState<LeadWithRelations[]>([]);
+  const [orgLeads, setOrgLeads] = useState<LeadWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
+  const [wlConfirm, setWlConfirm] = useState<{ leadId: string; action: "won" | "lost"; title: string } | null>(null);
+
+  // Set the default tab once we know the user's role (avoids Base UI uncontrolled warning)
+  useEffect(() => {
+    if (user && activeTab === null) {
+      setActiveTab(isOrgRole ? "pending" : "submissions");
+    }
+  }, [user, isOrgRole, activeTab]);
 
   const fetchAssignments = useCallback(async () => {
     if (!token) return;
@@ -458,6 +617,8 @@ export default function AssignmentsPage() {
       if (isOrgRole) {
         const all = await api<AssignmentWithRelations[]>("/api/assignments/all", { token });
         setAllAssignments(all);
+        const leads = await api<LeadWithRelations[]>("/api/leads", { token });
+        setOrgLeads(Array.isArray(leads) ? leads : []);
       } else {
         const leads = await api<LeadWithRelations[]>("/api/leads", { token });
         // const ideas = await api<IdeaWithRelations[]>("/api/ideas", { token }); // Value Ideas disabled
@@ -498,6 +659,50 @@ export default function AssignmentsPage() {
   const myPending = myAssignments.filter((a) => a.action_taken === "pending");
   const myActioned = myAssignments.filter((a) => a.action_taken !== "pending");
 
+  // User-perspective tabs (non-org role):
+  const myUnderReview = myLeads.filter((l) =>
+    ["submitted", "routing_pending", "under_review"].includes(l.status)
+  );
+  const myQualifiedRejected = myLeads.filter((l) =>
+    ["qualified", "rejected", "opportunity_created", "won", "lost"].includes(l.status)
+  );
+
+  // Org-role tabs — opportunity created and won/loss
+  const oppLeads  = orgLeads.filter((l) => l.status === "opportunity_created");
+  const wonLostLeads = orgLeads.filter((l) => ["won", "lost"].includes(l.status));
+
+  const handleWonLost = async (leadId: string, action: "won" | "lost") => {
+    if (!token) return;
+    setActioning(leadId);
+    try {
+      // Find the assignment for this lead so we can use the assignments route
+      // (triggers scoring + email). Fall back to leads PATCH if no assignment found.
+      const leadAssignment = allAssignments.find(
+        (a) => a.submission_id === leadId && a.submission_type === "lead"
+      );
+      if (leadAssignment) {
+        await api(`/api/assignments/${leadAssignment.assignment_id}`, {
+          method: "PATCH",
+          body: { action_taken: action },
+          token,
+        });
+      } else {
+        await api(`/api/leads/${leadId}`, {
+          method: "PATCH",
+          body: { status: action },
+          token,
+        });
+      }
+      toast.success(`Lead marked as ${action}`);
+      setWlConfirm(null);
+      await fetchAssignments();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActioning(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <ReviewDecisionDialog
@@ -506,6 +711,40 @@ export default function AssignmentsPage() {
         onConfirm={handleAction}
         submitting={actioning !== null}
       />
+
+      {/* Won / Lost confirmation dialog */}
+      {wlConfirm && (
+        <Dialog open={!!wlConfirm} onOpenChange={(open) => !open && setWlConfirm(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-[#232222]">
+                Confirm — Mark as {wlConfirm.action === "won" ? "Won" : "Lost"}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground py-2">
+              Are you sure you want to mark <strong>&ldquo;{wlConfirm.title}&rdquo;</strong> as{" "}
+              <strong className={wlConfirm.action === "won" ? "text-emerald-600" : "text-[#5D5D5D]"}>
+                {wlConfirm.action === "won" ? "Won" : "Lost"}
+              </strong>?
+              {wlConfirm.action === "won" && (
+                <span className="block mt-1 text-[#B12B35] font-medium">+100 points will be awarded to the submitter.</span>
+              )}
+            </p>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setWlConfirm(null)} disabled={actioning !== null}>
+                Cancel
+              </Button>
+              <Button
+                disabled={actioning !== null}
+                onClick={() => handleWonLost(wlConfirm.leadId, wlConfirm.action)}
+                className={wlConfirm.action === "won" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#5D5D5D] hover:bg-[#3D3D3D] text-white"}
+              >
+                {actioning ? "Processing…" : `Confirm ${wlConfirm.action === "won" ? "Won" : "Lost"}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <div className="flex items-center justify-between">
         <div>
@@ -526,7 +765,7 @@ export default function AssignmentsPage() {
         )}
       </div>
 
-      <Tabs defaultValue={isOrgRole ? "pending" : "submissions"}>
+      <Tabs value={activeTab ?? (isOrgRole ? "pending" : "submissions")} onValueChange={setActiveTab}>
         <TabsList>
           {/* My Submissions tracker — end users only */}
           {!isOrgRole && (
@@ -540,19 +779,35 @@ export default function AssignmentsPage() {
             </TabsTrigger>
           )}
           <TabsTrigger value="pending">
-            Pending Review
-            {myPending.length > 0 && (
-              <span className="ml-1.5 text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
-                {myPending.length}
-              </span>
+            {isOrgRole ? "Pending Review" : "Under Review"}
+            {isOrgRole ? (
+              myPending.length > 0 && (
+                <span className="ml-1.5 text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
+                  {myPending.length}
+                </span>
+              )
+            ) : (
+              myUnderReview.length > 0 && (
+                <span className="ml-1.5 text-xs bg-[#003466]/10 text-[#003466] px-1.5 py-0.5 rounded-full">
+                  {myUnderReview.length}
+                </span>
+              )
             )}
           </TabsTrigger>
           <TabsTrigger value="actioned">
-            Reviewed
-            {myActioned.length > 0 && (
-              <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                {myActioned.length}
-              </span>
+            {isOrgRole ? "Reviewed" : "Qualified / Rejected"}
+            {isOrgRole ? (
+              myActioned.length > 0 && (
+                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                  {myActioned.length}
+                </span>
+              )
+            ) : (
+              myQualifiedRejected.length > 0 && (
+                <span className="ml-1.5 text-xs bg-[#B12B35]/10 text-[#B12B35] px-1.5 py-0.5 rounded-full">
+                  {myQualifiedRejected.length}
+                </span>
+              )
             )}
           </TabsTrigger>
           {isOrgRole && (
@@ -561,6 +816,26 @@ export default function AssignmentsPage() {
               {allAssignments.length > 0 && (
                 <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
                   {allAssignments.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+          {isOrgRole && (
+            <TabsTrigger value="opportunity_created">
+              Opportunity Created
+              {oppLeads.length > 0 && (
+                <span className="ml-1.5 text-xs bg-purple-500/20 text-purple-600 px-1.5 py-0.5 rounded-full">
+                  {oppLeads.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+          {isOrgRole && (
+            <TabsTrigger value="won_loss">
+              Won / Loss
+              {wonLostLeads.length > 0 && (
+                <span className="ml-1.5 text-xs bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded-full">
+                  {wonLostLeads.length}
                 </span>
               )}
             </TabsTrigger>
@@ -580,42 +855,50 @@ export default function AssignmentsPage() {
         <TabsContent value="pending" className="mt-4 space-y-3">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
-          ) : myPending.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No pending assignments.</p>
-              <p className="text-xs mt-1">You&apos;re all caught up!</p>
-            </div>
+          ) : isOrgRole ? (
+            myPending.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No pending assignments.</p>
+                <p className="text-xs mt-1">You&apos;re all caught up!</p>
+              </div>
+            ) : (
+              myPending.map((a) => (
+                <AssignmentCard
+                  key={a.assignment_id}
+                  assignment={a}
+                  onAction={handleAction}
+                  onOpenReview={setReviewPending}
+                  actioning={actioning}
+                />
+              ))
+            )
           ) : (
-            myPending.map((a) => (
-              <AssignmentCard
-                key={a.assignment_id}
-                assignment={a}
-                onAction={handleAction}
-                onOpenReview={setReviewPending}
-                actioning={actioning}
-              />
-            ))
+            <MySubmissionsTab leads={myUnderReview} loading={false} />
           )}
         </TabsContent>
 
         <TabsContent value="actioned" className="mt-4 space-y-3">
           {loading ? (
             Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
-          ) : myActioned.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No reviewed assignments yet.
-            </p>
+          ) : isOrgRole ? (
+            myActioned.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No reviewed assignments yet.
+              </p>
+            ) : (
+              myActioned.map((a) => (
+                <AssignmentCard
+                  key={a.assignment_id}
+                  assignment={a}
+                  onAction={handleAction}
+                  onOpenReview={setReviewPending}
+                  actioning={actioning}
+                />
+              ))
+            )
           ) : (
-            myActioned.map((a) => (
-              <AssignmentCard
-                key={a.assignment_id}
-                assignment={a}
-                onAction={handleAction}
-                onOpenReview={setReviewPending}
-                actioning={actioning}
-              />
-            ))
+            <MySubmissionsTab leads={myQualifiedRejected} loading={false} />
           )}
         </TabsContent>
 
@@ -645,6 +928,148 @@ export default function AssignmentsPage() {
                   />
                 ))}
               </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ── Opportunity Created tab ── */}
+        {isOrgRole && (
+          <TabsContent value="opportunity_created" className="mt-4 space-y-4">
+            <Card className="border-[#EDE7E6] bg-[#F9F9F9]">
+              <CardContent className="py-3 px-4">
+                <p className="text-sm text-[#5D5D5D] italic">
+                  The Opportunity that the team is working on that opportunity to make it successfully delivered.
+                </p>
+              </CardContent>
+            </Card>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+            ) : oppLeads.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <Briefcase className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No opportunities in progress yet.</p>
+              </div>
+            ) : (
+              <Card className="border-[#EDE7E6]">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Lead</TableHead>
+                        <TableHead>Account</TableHead>
+                        <TableHead>Service Line</TableHead>
+                        <TableHead>Submitted By</TableHead>
+                        <TableHead className="text-right">Est. Value</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {oppLeads.map((lead) => (
+                        <TableRow key={lead.lead_id}>
+                          <TableCell>
+                            <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline flex items-center gap-1">
+                              {lead.title}
+                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{lead.account?.account_name ?? "—"}</TableCell>
+                          <TableCell>
+                            {lead.service ? (
+                              <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">{lead.service}</Badge>
+                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{lead.submitter?.full_name ?? "—"}</TableCell>
+                          <TableCell className="text-right text-sm">
+                            {lead.estimated_value ? `$${Number(lead.estimated_value).toLocaleString()}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-1.5 justify-end">
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                                disabled={actioning === lead.lead_id}
+                                onClick={() => setWlConfirm({ leadId: lead.lead_id, action: "won", title: lead.title })}
+                              >
+                                <Trophy className="h-3 w-3" /> Won
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1 text-[#5D5D5D] border-[#C5C5C5]"
+                                disabled={actioning === lead.lead_id}
+                                onClick={() => setWlConfirm({ leadId: lead.lead_id, action: "lost", title: lead.title })}
+                              >
+                                <TrendingDown className="h-3 w-3" /> Lost
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ── Won / Loss tab ── */}
+        {isOrgRole && (
+          <TabsContent value="won_loss" className="mt-4">
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+            ) : wonLostLeads.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <Trophy className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No closed leads yet.</p>
+              </div>
+            ) : (
+              <Card className="border-[#EDE7E6]">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Lead</TableHead>
+                        <TableHead>Account</TableHead>
+                        <TableHead>Service Line</TableHead>
+                        <TableHead>Submitted By</TableHead>
+                        <TableHead className="text-right">Est. Value</TableHead>
+                        <TableHead className="text-right">Outcome</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {wonLostLeads.map((lead) => (
+                        <TableRow key={lead.lead_id}>
+                          <TableCell>
+                            <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline flex items-center gap-1">
+                              {lead.title}
+                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{lead.account?.account_name ?? "—"}</TableCell>
+                          <TableCell>
+                            {lead.service ? (
+                              <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">{lead.service}</Badge>
+                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{lead.submitter?.full_name ?? "—"}</TableCell>
+                          <TableCell className="text-right text-sm">
+                            {lead.estimated_value ? `$${Number(lead.estimated_value).toLocaleString()}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge
+                              variant="secondary"
+                              className={lead.status === "won" ? "bg-emerald-100 text-emerald-700" : "bg-[#C5C5C5]/30 text-[#5D5D5D]"}
+                            >
+                              {lead.status === "won" ? "Won" : "Lost"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
         )}

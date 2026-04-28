@@ -49,6 +49,7 @@ export type LeadStatus =
   | "routing_pending"
   | "under_review"
   | "qualified"
+  | "opportunity_created"
   | "approved"
   | "won"
   | "lost"
@@ -65,6 +66,7 @@ export interface Lead {
   account_id: string;
   submitted_by: string;
   service: ServiceType | null;
+  contact_details: { name?: string; email?: string; region?: string; title?: string } | null;
   estimated_value: number | null;
   currency: string;
   probability: number | null;
@@ -158,7 +160,10 @@ export type ActionTaken =
   | "reviewed"
   | "approved"
   | "rejected"
-  | "escalated";
+  | "escalated"
+  | "opportunity_created"
+  | "won"
+  | "lost";
 
 export interface Assignment {
   assignment_id: string;

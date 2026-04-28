@@ -8,11 +8,11 @@ from app.database.supabase import get_supabase_admin
 logger = logging.getLogger("scoring")
 
 POINTS_MAP = {
-    "submitted": 10,
-    "qualified": 20,
-    "approved": 25,
-    "implemented": 50,
-    "deal_won": 100,
+    "submitted":            10,   # lead submitted & routed → +10 (cumulative: 10)
+    "qualified":            20,   # reviewer qualifies lead → +20 (cumulative: 30)
+    "opportunity_created":  50,   # reviewer creates opportunity → +50 (cumulative: 80)
+    "deal_won":             100,  # lead marked won → +100 (cumulative: 180)
+    "deal_lost":            0,    # tracked but no points
 }
 
 
@@ -88,7 +88,7 @@ def _update_user_score(user_id: str) -> None:
                 ideas += 1
         elif e["event_type"] == "deal_won":
             won += 1
-        elif e["event_type"] == "implemented":
+        elif e["event_type"] in ("implemented", "opportunity_created"):
             implemented += 1
 
     score_data = {

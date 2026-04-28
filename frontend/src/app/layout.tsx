@@ -16,7 +16,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Tx Catalyst — TestingXperts",
+  title: "Tx-Catalyst — TestingXperts",
   description:
     "Capture, track, and measure the business value generated at client accounts.",
 };

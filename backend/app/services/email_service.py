@@ -25,40 +25,19 @@ logger = logging.getLogger("email_service")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-# ── TEST MODE ─────────────────────────────────────────────────────────────────
-# All emails are currently redirected to hemang.jindal for testing.
-# Before go-live: delete the TEST_OVERRIDE_EMAIL line and uncomment the
-# PRODUCTION block below (CC_ALWAYS + REGION_EXTRA_RECIPIENTS).
-TEST_OVERRIDE_EMAIL = "hemang.jindal@testingxperts.com"
-
-CC_ALWAYS = TEST_OVERRIDE_EMAIL
+CC_ALWAYS = "adeesh.jain@testingxperts.com"
 
 REGION_EXTRA_RECIPIENTS: dict[str, str] = {
-    "united kingdom": TEST_OVERRIDE_EMAIL,
-    "uk":             TEST_OVERRIDE_EMAIL,
-    "gb":             TEST_OVERRIDE_EMAIL,
-    "great britain":  TEST_OVERRIDE_EMAIL,
-    "england":        TEST_OVERRIDE_EMAIL,
-    "united states":  TEST_OVERRIDE_EMAIL,
-    "us":             TEST_OVERRIDE_EMAIL,
-    "usa":            TEST_OVERRIDE_EMAIL,
-    "united states of america": TEST_OVERRIDE_EMAIL,
+    "united kingdom": "sahil.baquer@testingxperts.com",
+    "uk":             "sahil.baquer@testingxperts.com",
+    "gb":             "sahil.baquer@testingxperts.com",
+    "great britain":  "sahil.baquer@testingxperts.com",
+    "england":        "sahil.baquer@testingxperts.com",
+    "united states":  "joe.underwood@testingxperts.com",
+    "us":             "joe.underwood@testingxperts.com",
+    "usa":            "joe.underwood@testingxperts.com",
+    "united states of america": "joe.underwood@testingxperts.com",
 }
-
-# ── PRODUCTION (uncomment before go-live, delete TEST block above) ────────────
-# CC_ALWAYS = "adeesh.jain@testingxperts.com"
-#
-# REGION_EXTRA_RECIPIENTS: dict[str, str] = {
-#     "united kingdom": "sahil.baquer@testingxperts.com",
-#     "uk":             "sahil.baquer@testingxperts.com",
-#     "gb":             "sahil.baquer@testingxperts.com",
-#     "great britain":  "sahil.baquer@testingxperts.com",
-#     "england":        "sahil.baquer@testingxperts.com",
-#     "united states":  "joe.underwood@testingxperts.com",
-#     "us":             "joe.underwood@testingxperts.com",
-#     "usa":            "joe.underwood@testingxperts.com",
-#     "united states of america": "joe.underwood@testingxperts.com",
-# }
 
 
 def _get_region_extra(region: str | None) -> str | None:
@@ -154,7 +133,7 @@ def _build_submission_html(
         <tr>
           <td style="background:#B12B35;padding:20px 28px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr>
-              <td><span style="color:#fff;font-size:18px;font-weight:700;">TX Catalyst</span>
+              <td><span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
                   <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span></td>
               <td align="right"><span style="background:rgba(255,255,255,0.15);color:#fff;font-size:11px;
                                padding:3px 10px;border-radius:20px;font-weight:600;">{type_label.upper()}</span></td>
@@ -204,13 +183,13 @@ def _build_submission_html(
           <td style="padding:8px 28px 28px;">
             <a href="{cta_url}" style="display:inline-block;background:#B12B35;color:#ffffff;
                       text-decoration:none;font-size:14px;font-weight:600;
-                      padding:11px 24px;border-radius:6px;">View in TX Catalyst →</a>
+                      padding:11px 24px;border-radius:6px;">View in Tx-Catalyst →</a>
           </td>
         </tr>
         <tr>
           <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
             <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
-              Automated notification from TestingXperts TX Catalyst. Do not reply.
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
             </p>
           </td>
         </tr>
@@ -237,7 +216,7 @@ def _build_status_html(
 
     return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><title>TX Catalyst Notification</title></head>
+<head><meta charset="UTF-8"/><title>Tx-Catalyst Notification</title></head>
 <body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
     <tr><td align="center">
@@ -245,7 +224,7 @@ def _build_status_html(
              style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
         <tr>
           <td style="background:#B12B35;padding:20px 28px;">
-            <span style="color:#fff;font-size:18px;font-weight:700;">TX Catalyst</span>
+            <span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
             <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span>
           </td>
         </tr>
@@ -274,13 +253,13 @@ def _build_status_html(
           <td style="padding:8px 28px 28px;">
             <a href="{cta_url}" style="display:inline-block;background:#B12B35;color:#ffffff;
                       text-decoration:none;font-size:14px;font-weight:600;
-                      padding:11px 24px;border-radius:6px;">View in TX Catalyst →</a>
+                      padding:11px 24px;border-radius:6px;">View in Tx-Catalyst →</a>
           </td>
         </tr>
         <tr>
           <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
             <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
-              Automated notification from TestingXperts TX Catalyst. Do not reply.
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
             </p>
           </td>
         </tr>
@@ -326,7 +305,7 @@ def send_submission_email(
         )
         return
 
-    subject = f"[TX Catalyst] New {submission_type.title()}: {title} — {account_name}"
+    subject = f"[Tx-Catalyst] New {submission_type.title()}: {title} — {account_name}"
     html = _build_submission_html(
         submission_type=submission_type,
         title=title,
@@ -360,9 +339,9 @@ def send_reviewer_assignment_email(
     type_label = submission_type.title()
     message = (
         f"A <strong>{type_label}</strong> has been routed to you for review as "
-        f"<strong>{role_label}</strong>. Please log in to the TX Catalyst to take action."
+        f"<strong>{role_label}</strong>. Please log in to the Tx-Catalyst to take action."
     )
-    subject = f"[TX Catalyst] Action Required — {type_label}: {title}"
+    subject = f"[Tx-Catalyst] Action Required — {type_label}: {title}"
     html = _build_status_html(
         recipient_name=reviewer_name,
         submission_type=submission_type,
@@ -393,26 +372,46 @@ def send_submitter_status_email(
     settings = get_settings()
     type_label = submission_type.title()
 
-    if new_status == "approved":
-        action_msg = f"fully approved"
+    if new_status in ("approved", "qualified"):
         message = (
-            f"Great news! Your <strong>{type_label}</strong> has been "
-            f"<strong>fully approved</strong> by all reviewers."
+            f"Great news! Your <strong>{type_label}</strong> <em>{title}</em> has been "
+            f"<strong>Qualified</strong> by <strong>{actor_name}</strong> ({actor_role}). "
+            f"The team will now work on creating the opportunity. You have earned <strong>20 points</strong>!"
         )
-        subject = f"[TX Catalyst] ✓ {type_label} Approved: {title}"
+        subject = f"[Tx-Catalyst] ✓ Lead Qualified: {title}"
     elif new_status == "rejected":
         message = (
-            f"Your <strong>{type_label}</strong> was <strong>rejected</strong> "
+            f"Your <strong>{type_label}</strong> <em>{title}</em> was <strong>Rejected</strong> "
             f"by {actor_name} ({actor_role}). Please log in to the portal for details."
         )
-        subject = f"[TX Catalyst] {type_label} Rejected: {title}"
+        subject = f"[Tx-Catalyst] Lead Rejected: {title}"
+    elif new_status == "opportunity_created":
+        message = (
+            f"Your lead <em>{title}</em> has been moved to <strong>Opportunity Created</strong> "
+            f"by <strong>{actor_name}</strong>. The team is now actively working on this opportunity. "
+            f"You have earned <strong>50 points</strong>!"
+        )
+        subject = f"[Tx-Catalyst] Opportunity Created: {title}"
+    elif new_status == "won":
+        message = (
+            f"Congratulations! Your lead <em>{title}</em> has been marked as <strong>Won</strong> "
+            f"by <strong>{actor_name}</strong>. Excellent work! "
+            f"You have earned <strong>100 points</strong>!"
+        )
+        subject = f"[Tx-Catalyst] 🎉 Lead Won: {title}"
+    elif new_status == "lost":
+        message = (
+            f"Your lead <em>{title}</em> has been marked as <strong>Lost</strong> "
+            f"by <strong>{actor_name}</strong>. Please log in to the portal for more details."
+        )
+        subject = f"[Tx-Catalyst] Lead Lost: {title}"
     else:
         # Intermediate approval step
         message = (
-            f"Your <strong>{type_label}</strong> was approved by "
+            f"Your <strong>{type_label}</strong> <em>{title}</em> was approved by "
             f"<strong>{actor_name}</strong> ({actor_role}) and has moved to the next review stage."
         )
-        subject = f"[TX Catalyst] {type_label} Progressing: {title}"
+        subject = f"[Tx-Catalyst] Lead Progressing: {title}"
 
     html = _build_status_html(
         recipient_name=submitter_name,

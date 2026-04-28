@@ -70,27 +70,25 @@ function timeAgo(dateStr: string) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  submitted:    "#2E75B6",
-  under_review: "#003466",
-  approved:     "#B12B35",
-  qualified:    "#B12B35",
-  in_progress:  "#5D5D5D",
-  implemented:  "#22c55e",
-  won:          "#22c55e",
-  rejected:     "#C5C5C5",
-  lost:         "#C5C5C5",
+  submitted:            "#2E75B6",
+  routing_pending:      "#f59e0b",
+  under_review:         "#003466",
+  qualified:            "#B12B35",
+  opportunity_created:  "#7c3aed",
+  won:                  "#22c55e",
+  lost:                 "#C5C5C5",
+  rejected:             "#C5C5C5",
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  submitted:    "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20",
-  under_review: "bg-[#003466]/10 text-[#003466] border-[#003466]/20",
-  approved:     "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20",
-  qualified:    "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20",
-  in_progress:  "bg-[#5D5D5D]/10 text-[#5D5D5D] border-[#5D5D5D]/20",
-  implemented:  "bg-green-100 text-green-700 border-green-200",
-  won:          "bg-green-100 text-green-700 border-green-200",
-  rejected:     "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40",
-  lost:         "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40",
+  submitted:            "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20",
+  routing_pending:      "bg-amber-100 text-amber-700 border-amber-200",
+  under_review:         "bg-[#003466]/10 text-[#003466] border-[#003466]/20",
+  qualified:            "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20",
+  opportunity_created:  "bg-purple-100 text-purple-700 border-purple-200",
+  won:                  "bg-green-100 text-green-700 border-green-200",
+  lost:                 "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40",
+  rejected:             "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40",
 };
 
 function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, number>; color?: string }) {
@@ -102,11 +100,24 @@ function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, numb
       {entries.map(([status, count]) => {
         const pct = Math.round((count / max) * 100);
         const badge = STATUS_BADGE[status] || "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40";
+        const STATUS_LABELS: Record<string, string> = {
+          submitted:           "Submitted",
+          routing_pending:     "Routing Pending",
+          under_review:        "Under Review",
+          qualified:           "Qualified",
+          opportunity_created: "Opportunity Created",
+          won:                 "Won",
+          lost:                "Lost",
+          rejected:            "Rejected",
+          draft:               "Draft",
+        };
+        const HIDDEN = ["routing_pending", "draft"];
+        if (HIDDEN.includes(status)) return null;
         return (
           <div key={status}>
             <div className="flex items-center justify-between mb-1">
-              <Badge variant="outline" className={`capitalize text-[11px] px-2 py-0.5 ${badge}`}>
-                {status.replace(/_/g, " ")}
+              <Badge variant="outline" className={`text-[11px] px-2 py-0.5 ${badge}`}>
+                {STATUS_LABELS[status] || status.replace(/_/g, " ")}
               </Badge>
               <span className="text-xs font-semibold text-[#232222]">{count}</span>
             </div>
@@ -114,6 +125,97 @@ function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, numb
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{ width: `${pct}%`, background: color }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Workflow Pipeline Chart — fixed 4-stage view for user dashboard ──────────
+// Shows exactly the 4 stages of the lead lifecycle with real DB counts.
+// Each stage groups related statuses: qualified+rejected, won+lost.
+function WorkflowPipelineChart({ data }: { data: Record<string, number> }) {
+  const stages = [
+    {
+      label: "Awaiting Review",
+      count: (data["submitted"] || 0) + (data["routing_pending"] || 0),
+      subLabels: [
+        { label: "Submitted",       count: data["submitted"]       || 0, color: "#2E75B6" },
+        { label: "Routing Pending", count: data["routing_pending"] || 0, color: "#f59e0b" },
+      ],
+      color: "#2E75B6",
+      badge: "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20",
+    },
+    {
+      label: "Under Review",
+      count: data["under_review"] || 0,
+      color: "#003466",
+      badge: "bg-[#003466]/10 text-[#003466] border-[#003466]/20",
+    },
+    {
+      label: "Qualified / Rejected",
+      count: (data["qualified"] || 0) + (data["approved"] || 0) + (data["rejected"] || 0),
+      subLabels: [
+        { label: "Qualified", count: (data["qualified"] || 0) + (data["approved"] || 0), color: "#B12B35" },
+        { label: "Rejected",  count: data["rejected"] || 0, color: "#C5C5C5" },
+      ],
+      color: "#B12B35",
+      badge: "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20",
+    },
+    {
+      label: "Opportunity Created",
+      count: data["opportunity_created"] || 0,
+      color: "#7c3aed",
+      badge: "bg-purple-100 text-purple-700 border-purple-200",
+    },
+    {
+      label: "Won / Lost",
+      count: (data["won"] || 0) + (data["lost"] || 0),
+      subLabels: [
+        { label: "Won",  count: data["won"]  || 0, color: "#22c55e" },
+        { label: "Lost", count: data["lost"] || 0, color: "#C5C5C5" },
+      ],
+      color: "#22c55e",
+      badge: "bg-green-100 text-green-700 border-green-200",
+    },
+  ];
+
+  const total = stages.reduce((sum, s) => sum + s.count, 0);
+  const max = Math.max(...stages.map((s) => s.count), 1);
+
+  return (
+    <div className="space-y-3">
+      {/* Total count header */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground pb-1 border-b border-[#EDE7E6]">
+        <span>All leads</span>
+        <span className="font-semibold text-[#232222]">{total} total</span>
+      </div>
+      {stages.map((stage) => {
+        const pct = Math.round((stage.count / max) * 100);
+        return (
+          <div key={stage.label}>
+            <div className="flex items-center justify-between mb-1">
+              <Badge variant="outline" className={`text-[11px] px-2 py-0.5 ${stage.badge}`}>
+                {stage.label}
+              </Badge>
+              <div className="flex items-center gap-2">
+                {stage.subLabels?.map((sub) => (
+                  <span key={sub.label} className="text-[11px] text-[#5D5D5D]">
+                    {sub.label}: <span className="font-semibold" style={{ color: sub.color }}>{sub.count}</span>
+                  </span>
+                ))}
+                {!stage.subLabels && (
+                  <span className="text-xs font-semibold text-[#232222]">{stage.count}</span>
+                )}
+              </div>
+            </div>
+            <div className="h-2 w-full rounded-full bg-[#EDE7E6] overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${pct}%`, background: stage.color }}
               />
             </div>
           </div>
@@ -609,8 +711,8 @@ function MiniLeaderboard({ token }: { token: string }) {
   const [loadingAll, setLoadingAll] = useState(false);
 
   useEffect(() => {
-    api<LeaderboardEntry[]>("/api/scores/leaderboard?limit=5", { token })
-      .then((data) => setEntries(Array.isArray(data) ? data.slice(0, 5) : []))
+    api<LeaderboardEntry[]>("/api/scores/leaderboard?limit=10", { token })
+      .then((data) => setEntries(Array.isArray(data) ? data.slice(0, 10) : []))
       .catch(() => {});
   }, [token]);
 
@@ -628,69 +730,64 @@ function MiniLeaderboard({ token }: { token: string }) {
 
   const RANK_COLORS = ["text-amber-500", "text-[#5D5D5D]", "text-[#B12B35]"];
 
-  const renderRow = (e: LeaderboardEntry, compact = true) => (
+  const renderRow = (e: LeaderboardEntry) => (
     <div
       key={e.user_id}
-      className={`flex items-center gap-3 py-2.5 border-b border-[#EDE7E6] last:border-0 ${compact ? "text-sm" : "text-sm px-6"}`}
+      className="grid grid-cols-[28px_1fr_auto] items-center gap-x-3 px-4 py-2.5 border-b border-[#EDE7E6] last:border-0 hover:bg-[#F9F9F9]"
     >
-      <span className={`w-6 text-center font-bold text-xs ${RANK_COLORS[e.rank - 1] || "text-[#C5C5C5]"}`}>
-        {e.rank <= 3 ? ["🥇","🥈","🥉"][e.rank - 1] : e.rank}
+      <span className={`text-center font-bold text-[13px] ${RANK_COLORS[e.rank - 1] || "text-[#9CA3AF]"}`}>
+        {e.rank <= 3 ? ["🥇","🥈","🥉"][e.rank - 1] : `#${e.rank}`}
       </span>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-[#232222] truncate">{e.user.full_name || e.user.email}</p>
-        <p className="text-[11px] text-[#5D5D5D] capitalize">{e.user.role?.replace(/_/g, " ")}</p>
-      </div>
-      <div className="text-right shrink-0">
-        <p className="font-bold text-[#B12B35] text-sm">{e.total_points.toLocaleString()}</p>
-        <p className="text-[11px] text-[#5D5D5D]">pts</p>
-      </div>
+      <p className="text-[15px] font-semibold text-[#232222] truncate">{e.user.full_name || e.user.email}</p>
+      <span className="text-[15px] font-bold text-[#B12B35] tabular-nums whitespace-nowrap">
+        {e.total_points.toLocaleString()}<span className="text-[11px] font-normal text-[#5D5D5D] ml-1">pts</span>
+      </span>
     </div>
   );
 
   return (
     <>
-      <Card
-        className="border-[#EDE7E6] bg-white cursor-pointer hover:shadow-md transition-shadow"
-        onClick={openModal}
-      >
-        <CardHeader className="pb-3">
+      <Card className="border-[#EDE7E6] bg-white">
+        <CardHeader className="pb-2 px-4 pt-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+            <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
               <Trophy className="h-4 w-4 text-amber-500" />
               Leaderboard
             </CardTitle>
-            <button className="text-xs font-medium text-[#B12B35] hover:underline flex items-center gap-1">
+            <button
+              onClick={openModal}
+              className="text-xs font-medium text-[#B12B35] hover:underline flex items-center gap-1"
+            >
               View all <ChevronRight className="h-3 w-3" />
             </button>
           </div>
-          <CardDescription>Top contributors by value points</CardDescription>
+          <CardDescription className="text-[11px]">Top contributors by value points</CardDescription>
         </CardHeader>
-        <CardContent className="pb-3">
+        <CardContent className="p-0 pb-1">
           {entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No scores yet.</p>
+            <p className="text-sm text-muted-foreground px-4 py-3">No scores yet.</p>
           ) : (
-            <div>{entries.map((e) => renderRow(e, true))}</div>
+            <div>{entries.map((e) => renderRow(e))}</div>
           )}
         </CardContent>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b border-[#EDE7E6] shrink-0">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b border-[#EDE7E6] shrink-0">
             <DialogTitle className="flex items-center gap-2 text-[#232222]">
               <Trophy className="h-4 w-4 text-amber-500" />
               Full Leaderboard
             </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">Points: Submit +10 · Qualified +20 · Opportunity +50 · Won +100</p>
           </DialogHeader>
-          <div className="overflow-y-auto flex-1 pb-4">
+          <div className="overflow-y-auto flex-1">
             {loadingAll ? (
               <p className="text-sm text-muted-foreground text-center py-10">Loading…</p>
             ) : allEntries.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-10">No scores yet.</p>
             ) : (
-              <div>
-                {allEntries.map((e) => renderRow(e, false))}
-              </div>
+              <div>{allEntries.map((e) => renderRow(e))}</div>
             )}
           </div>
         </DialogContent>
@@ -832,7 +929,7 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
         <StatCard
           title="Total Leads"
           value={s.total_leads}
-          desc={`${s.leads_by_status["qualified"] || 0} qualified · ${s.leads_by_status["won"] || 0} won`}
+          desc={`${s.leads_by_status["qualified"] || 0} qualified · ${s.leads_by_status["opportunity_created"] || 0} in progress · ${s.leads_by_status["won"] || 0} won`}
           icon={Target}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
@@ -1246,7 +1343,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
       setTopLeads(Array.isArray(leads) ? leads.slice(0, 5) : []);
       setMonthlyTrend(Array.isArray(trend) ? trend : []);
       // Strategic highlights: only status transitions that matter to leadership
-      const STRATEGIC = ["qualified", "won", "approved", "implemented", "lost", "rejected"];
+      const STRATEGIC = ["qualified", "opportunity_created", "won", "lost", "rejected"];
       setActivity(
         Array.isArray(act)
           ? act.filter((a) => STRATEGIC.includes(a.to_status)).slice(0, 8)
@@ -1269,16 +1366,16 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
     (s.leads_by_status["routing_pending"] || 0) +
     (s.leads_by_status["under_review"] || 0) +
     (s.leads_by_status["qualified"] || 0) +
-    (s.leads_by_status["approved"] || 0) +
+    (s.leads_by_status["opportunity_created"] || 0) +
     (s.leads_by_status["won"] || 0);
 
   const funnelStages = [
-    { label: "Submitted",       count: s.leads_by_status["submitted"] || 0,        color: "#2E75B6" },
-    { label: "Routing Pending", count: s.leads_by_status["routing_pending"] || 0,  color: "#f59e0b" },
-    { label: "Under Review",    count: s.leads_by_status["under_review"] || 0,     color: "#003466" },
-    { label: "Qualified",       count: s.leads_by_status["qualified"] || 0,        color: "#B12B35" },
-    { label: "Approved",        count: s.leads_by_status["approved"] || 0,         color: "#7c3aed" },
-    { label: "Won",             count: s.leads_by_status["won"] || 0,              color: "#22c55e" },
+    { label: "Submitted",           count: s.leads_by_status["submitted"] || 0,           color: "#2E75B6" },
+    { label: "Routing Pending",     count: s.leads_by_status["routing_pending"] || 0,     color: "#f59e0b" },
+    { label: "Under Review",        count: s.leads_by_status["under_review"] || 0,        color: "#003466" },
+    { label: "Qualified",           count: s.leads_by_status["qualified"] || 0,           color: "#B12B35" },
+    { label: "Opportunity Created", count: s.leads_by_status["opportunity_created"] || 0, color: "#7c3aed" },
+    { label: "Won",                 count: s.leads_by_status["won"] || 0,                 color: "#22c55e" },
   ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Submitted");
 
   return (
@@ -1337,7 +1434,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
               {s.leads_by_status["qualified"] || 0}
             </div>
             <p className="text-xs text-[#5D5D5D] mt-1">
-              of {s.total_leads} total leads
+              {s.leads_by_status["opportunity_created"] || 0} in progress · {s.leads_by_status["won"] || 0} won
             </p>
           </CardContent>
         </Card>
@@ -1673,7 +1770,9 @@ function UserDashboard({
         return acc;
       }, {});
 
-      const myUnderReview = myLeads.filter((l) => l.status === "under_review").length;
+      const myUnderReview = myLeads.filter((l) =>
+        ["submitted", "routing_pending", "under_review"].includes(l.status)
+      ).length;
 
       setData({
         myLeads: myLeads.length,
@@ -1707,7 +1806,7 @@ function UserDashboard({
         <StatCard
           title="My Leads Submitted"
           value={d.myLeads}
-          desc={`${d.leadsByStatus["qualified"] || 0} qualified`}
+          desc={`${d.leadsByStatus["qualified"] || 0} qualified · ${d.leadsByStatus["opportunity_created"] || 0} in progress · ${d.leadsByStatus["won"] || 0} won`}
           icon={Target}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
@@ -1720,7 +1819,6 @@ function UserDashboard({
         <StatCard
           title="My Score"
           value={d.myScore.toLocaleString()}
-          desc="Value points earned"
           icon={Trophy}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
@@ -1730,12 +1828,12 @@ function UserDashboard({
         <StatCard
           title="Under Review"
           value={d.myUnderReview}
-          desc="Leads being reviewed now"
+          desc="Submitted · routing pending · under review"
           icon={ClipboardList}
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"
           accent="#2E75B6"
-          href="/leads"
+          href="/leads?status=under_review"
         />
       </div>
 
@@ -1755,7 +1853,7 @@ function UserDashboard({
                 </Link>
               </div>
             ) : (
-              <StatusBarChart data={d.leadsByStatus} color="#B12B35" />
+              <WorkflowPipelineChart data={d.leadsByStatus} />
             )}
           </CardContent>
         </Card>
@@ -1773,12 +1871,10 @@ function UserDashboard({
             <Link href="/leads/new" className="inline-flex items-center gap-2 rounded-lg border border-[#B12B35] bg-[#B12B35]/5 px-4 py-2 text-sm font-semibold text-[#B12B35] hover:bg-[#B12B35]/10 transition-colors">
               <Target className="h-4 w-4" /> Submit New Lead
             </Link>
+            {/* View My Assignments removed from quick actions */}
             {/* Submit Value Idea link disabled
             <Link href="/ideas/new" ...>Submit Value Idea</Link>
             */}
-            <Link href="/assignments" className="inline-flex items-center gap-2 rounded-lg border border-[#C5C5C5] bg-white px-4 py-2 text-sm font-semibold text-[#5D5D5D] hover:border-[#B12B35]/40 transition-colors">
-              <ClipboardList className="h-4 w-4" /> View My Assignments
-            </Link>
           </div>
         </CardContent>
       </Card>
