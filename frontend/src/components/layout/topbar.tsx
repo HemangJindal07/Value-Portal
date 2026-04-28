@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { useNavigationGuard } from "@/lib/navigation-guard-context";
 import { Bell, Search, LogOut, User, Settings } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ function getInitials(name: string) {
 export function Topbar() {
   const { user, token, signOut } = useAuth();
   const router = useRouter();
+  const { requestNavigate } = useNavigationGuard();
   const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchUnread = useCallback(async () => {
@@ -53,9 +54,11 @@ export function Topbar() {
     return () => clearInterval(interval);
   }, [fetchUnread]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    router.push("/login");
+  const handleSignOut = () => {
+    requestNavigate(async () => {
+      await signOut();
+      router.push("/login");
+    });
   };
 
   return (
@@ -76,16 +79,19 @@ export function Topbar() {
         <ThemeToggle />
 
         {/* Notification bell — Brand Red badge */}
-        <Link href="/notifications">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#B12B35] px-1 text-[10px] font-bold text-white">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </Button>
-        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          onClick={() => requestNavigate(() => router.push("/notifications"))}
+        >
+          <Bell className="h-4 w-4" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#B12B35] px-1 text-[10px] font-bold text-white">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </Button>
 
         {/* User dropdown */}
         <DropdownMenu>
