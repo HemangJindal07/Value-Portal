@@ -530,7 +530,49 @@ async def advance_routing(
 
     # ── Approval ────────────────────────────────────────────────────────────
     if action == "approved":
-        # In-app + email to submitter about this step's approval
+        # Check current lead status to determine which stage this approval is for.
+        # Stages 2 and 3 are handled here before the normal stakeholder-chain logic.
+        if sub_type == "lead":
+            lead_status_res = supabase.table("leads").select("status").eq("lead_id", sub_id).single().execute()
+            current_lead_status = (lead_status_res.data or {}).get("status", "")
+
+            # ── Stage 2: Opportunity approval (qualified → opportunity_created) ──
+            if current_lead_status == "qualified":
+                from app.services.scoring import award_points as _award
+                _update_submission_status(supabase, "lead", sub_id, "opportunity_created")
+                if submitter_id:
+                    try:
+                        _award(submitter_id, "lead", sub_id, "opportunity_created")
+                    except Exception as exc:
+                        logger.exception("[ROUTE] Failed to award opportunity_created points: %s", exc)
+                # Create Won/Lost stage assignment for same reviewer
+                _create_assignment(supabase, "lead", sub_id, actor_id, current_label, "system")
+                _send_notification(
+                    supabase, actor_id, "lead", sub_id,
+                    "approval",
+                    f'Lead "{title}" is now an Opportunity. Please mark it as Won or Lost.',
+                )
+                if submitter_id:
+                    _send_notification(
+                        supabase, submitter_id, "lead", sub_id,
+                        "status_update",
+                        f'Your lead "{title}" has been moved to Opportunity Created. The team is actively working on it.',
+                    )
+                logger.info("[ROUTE] Lead %s → opportunity_created, Won/Lost assignment → %s", sub_id, actor_id)
+                return
+
+            # ── Stage 3: Won/Lost approval (opportunity_created → won) ──
+            # Won/Lost is dispatched via _handle_post_qualified_action with action="won"/"lost",
+            # not via advance_routing — so if we somehow land here, skip silently.
+            if current_lead_status == "opportunity_created":
+                logger.warning(
+                    "[ROUTE] advance_routing(approved) called on opportunity_created lead %s — "
+                    "won/lost should use action='won'/'lost', not 'approved'. Ignoring.",
+                    sub_id,
+                )
+                return
+
+        # In-app + email to submitter about this step's approval (Stage 1 only)
         if submitter_id:
             _send_notification(
                 supabase, submitter_id, sub_type, sub_id,
@@ -651,7 +693,7 @@ async def advance_routing(
 
         if submitter_id:
             if sub_type == "lead":
-                final_msg = f'Great news! Your lead "{title}" has been qualified by {actor_name}. The team will now work on creating the opportunity.'
+                final_msg = f'Great news! Your lead "{title}" has been qualified by {actor_name}. It will now move to Opportunity review.'
             else:
                 final_msg = f'Congratulations! Your {sub_type} "{title}" has been fully approved.'
             _send_notification(
@@ -675,4 +717,20 @@ async def advance_routing(
                     )
                 except Exception as exc:
                     logger.exception("[ROUTE] Email failed on final approval: %s", exc)
+
         logger.info("[ROUTE] Final approval → %s for %s %s", final_status, sub_type, sub_id)
+
+        # ── Auto-create Stage 2 assignment: Opportunity review ────────────────
+        # The same reviewer now sees this lead in the Opportunity Created tab
+        # and must approve (→ opportunity_created) or reject it.
+        if sub_type == "lead":
+            try:
+                _create_assignment(supabase, "lead", sub_id, actor_id, current_label, "system")
+                _send_notification(
+                    supabase, actor_id, "lead", sub_id,
+                    "approval",
+                    f'Lead "{title}" is now Qualified. Please decide whether to create an Opportunity.',
+                )
+                logger.info("[ROUTE] Stage-2 Opportunity assignment created for lead %s → reviewer %s", sub_id, actor_id)
+            except Exception as exc:
+                logger.exception("[ROUTE] Failed to create Stage-2 assignment for lead %s: %s", sub_id, exc)
