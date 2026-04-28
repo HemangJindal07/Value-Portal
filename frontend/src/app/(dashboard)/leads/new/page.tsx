@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -20,6 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { FileAttachment } from "@/components/ui/file-attachment";
 import { AccountCombobox } from "@/components/account-combobox";
 import { useAuth } from "@/lib/auth-context";
@@ -54,13 +62,52 @@ export default function NewLeadPage() {
   const [attachment, setAttachment] = useState<File | null>(null);
   const [estimatedValueError, setEstimatedValueError] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
 
+  // Block browser tab close / hard refresh
   useEffect(() => {
     if (!isDirty) return;
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
+
+  // Block browser back/forward button while form is dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    // Push a dummy state so pressing Back lands here first
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      // Re-push to prevent actual navigation
+      window.history.pushState(null, "", window.location.href);
+      pendingNavRef.current = () => router.back();
+      setShowUnsavedDialog(true);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isDirty, router]);
+
+  const handleUnsavedConfirm = useCallback(() => {
+    setIsDirty(false);
+    setShowUnsavedDialog(false);
+    pendingNavRef.current?.();
+    pendingNavRef.current = null;
+  }, []);
+
+  const handleUnsavedCancel = useCallback(() => {
+    setShowUnsavedDialog(false);
+    pendingNavRef.current = null;
+  }, []);
+
+  function safeNavigate(navFn: () => void) {
+    if (isDirty) {
+      pendingNavRef.current = navFn;
+      setShowUnsavedDialog(true);
+    } else {
+      navFn();
+    }
+  }
 
   const selectedService = TX_SERVICES.find((s) => s.value === service);
 
@@ -347,11 +394,34 @@ export default function NewLeadPage() {
           <Button type="submit" disabled={loading} className="bg-[#B12B35] hover:bg-[#9a2330]">
             {loading ? "Submitting…" : "Submit Lead"}
           </Button>
-          <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
+          <Button type="button" variant="outline" onClick={() => safeNavigate(() => router.back())} disabled={loading}>
             Cancel
           </Button>
         </div>
       </form>
+
+      {/* Unsaved changes warning dialog */}
+      <Dialog open={showUnsavedDialog} onOpenChange={(open) => { if (!open) handleUnsavedCancel(); }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Discard unsaved changes?</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes in this lead form. If you leave now, all entered data will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleUnsavedCancel}>
+              Keep Editing
+            </Button>
+            <Button
+              className="bg-[#B12B35] hover:bg-[#9a2330] text-white"
+              onClick={handleUnsavedConfirm}
+            >
+              Discard & Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

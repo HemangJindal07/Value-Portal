@@ -1833,7 +1833,7 @@ function UserDashboard({
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"
           accent="#2E75B6"
-          href="/leads"
+          href="/leads?status=under_review"
         />
       </div>
 

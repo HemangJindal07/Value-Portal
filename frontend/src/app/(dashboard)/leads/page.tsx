@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus, Target, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,12 +59,13 @@ const typeLabels: Record<string, string> = {
 // Roles that can see ALL leads across the org
 const LEADS_ALL_ROLES = ["admin", "executive", "sales"];
 
-export default function LeadsPage() {
+function LeadsPageInner() {
   const { token, user } = useAuth();
+  const searchParams = useSearchParams();
   const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -230,5 +232,13 @@ export default function LeadsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense>
+      <LeadsPageInner />
+    </Suspense>
   );
 }
