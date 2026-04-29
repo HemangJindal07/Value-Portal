@@ -1,17 +1,18 @@
 """
 Email notification service using SMTP (Gmail / any SMTP server).
 
-Routing rules
+Routing rules (driven by the contact-region the user enters on the lead form,
+NOT by the account's own region)
 ──────────────────────────────────────────────────────────────────────────────
-UK  → TO: account stakeholders + sahil.baquer@testingxperts.com
-      CC: adeesh.jain@testingxperts.com
+contact_region == UK   → TO: stakeholders + sahil.baquer@testingxperts.com
+                         CC: adeesh.jain@testingxperts.com
 
-US  → TO: account stakeholders + joe.underwood@testingxperts.com
-      CC: adeesh.jain@testingxperts.com
+contact_region == US   → TO: stakeholders + joe.underwood@testingxperts.com
+                         CC: adeesh.jain@testingxperts.com
 
-All other regions
-    → TO: account stakeholders
-      CC: adeesh.jain@testingxperts.com
+contact_region blank
+or anything else       → TO: stakeholders
+                         CC: adeesh.jain@testingxperts.com
 """
 
 import logging
@@ -283,18 +284,23 @@ def send_submission_email(
     submitter_email: str,
     stakeholder_emails: list[str],
     extra_rows: list[tuple[str, str]] | None = None,
+    routing_region: str | None = None,
 ) -> None:
     """
     Send a new-submission notification email to all stakeholders.
     Called by routing_engine.start_routing immediately after a lead/idea is submitted.
 
-    stakeholder_emails — reviewer addresses (DU, DH, Sales, region contacts, etc.)
+    stakeholder_emails — reviewer addresses (DU, DH, Sales, etc.)
+    region — account region; shown in the email body for context only.
+    routing_region — the region the user typed under "Client Contact Details"
+        on the lead form. Only this value adds UK/US extra recipients.
+        If None or unrecognised, the email goes only to stakeholders + Adeesh in CC.
     """
     settings = get_settings()
     portal_url = settings.portal_url
 
     to_emails: list[str] = list(stakeholder_emails)
-    region_extra = _get_region_extra(region)
+    region_extra = _get_region_extra(routing_region)
     if region_extra and region_extra not in to_emails:
         to_emails.append(region_extra)
 

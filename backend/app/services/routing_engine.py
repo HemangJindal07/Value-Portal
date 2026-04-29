@@ -190,7 +190,7 @@ def _update_submission_status(supabase, submission_type: str, submission_id: str
 
 def _get_submission(supabase, submission_type: str, submission_id: str) -> dict:
     if submission_type == "lead":
-        res = supabase.table("leads").select("title, description, submitted_by, account_id, service").eq("lead_id", submission_id).single().execute()
+        res = supabase.table("leads").select("title, description, submitted_by, account_id, service, contact_details").eq("lead_id", submission_id).single().execute()
     else:
         res = supabase.table("value_ideas").select("title, problem_statement, submitted_by, account_id").eq("idea_id", submission_id).single().execute()
     return res.data or {}
@@ -266,13 +266,19 @@ def _dispatch_submission_email(
     account_id: str,
     submitter_id: str,
     stakeholders: list[dict],
+    contact_region: str | None = None,
 ) -> None:
     """
     Fire-and-forget: gather all required data and call send_submission_email.
     Failures are logged but never raise so they don't break the routing flow.
+
+    contact_region is the region the submitter entered under "Client Contact
+    Details" on the lead form. Only this value drives UK/US extra recipients
+    (sahil/joe). The account's own region is shown in the email body for
+    context but is NOT used for routing.
     """
     try:
-        # Account details (name + region)
+        # Account details (name + region — region only used for display)
         acct_res = (
             supabase.table("accounts")
             .select("account_name, region")
@@ -282,7 +288,7 @@ def _dispatch_submission_email(
         )
         acct = acct_res.data or {}
         account_name = acct.get("account_name", "Unknown Account")
-        region       = acct.get("region")
+        display_region = acct.get("region")
 
         # Submitter profile
         sub_res = (
@@ -314,7 +320,8 @@ def _dispatch_submission_email(
             title=title,
             description=description,
             account_name=account_name,
-            region=region,
+            region=display_region,
+            routing_region=contact_region,
             submitter_name=submitter_name,
             submitter_email=submitter_email,
             stakeholder_emails=stakeholder_emails,
@@ -429,7 +436,17 @@ async def start_routing(
         f'You have a new {submission_type} awaiting your review as {first["role_label"]}: "{title}".',
     )
 
-    # ── Trigger email to ALL stakeholders + region contacts ──────────────────
+    # Region for UK/US extra recipients comes from the lead's contact_details
+    # (what the user filled in on the form), NOT from accounts.region.
+    contact_region: str | None = None
+    if submission_type == "lead":
+        cd = sub.get("contact_details") or {}
+        if isinstance(cd, dict):
+            cd_region = cd.get("region")
+            if isinstance(cd_region, str) and cd_region.strip():
+                contact_region = cd_region.strip()
+
+    # ── Trigger email to ALL stakeholders + (UK/US extras only if user-entered) ──
     _dispatch_submission_email(
         supabase=supabase,
         submission_type=submission_type,
@@ -439,6 +456,7 @@ async def start_routing(
         account_id=account_id,
         submitter_id=actual_submitter_id,
         stakeholders=stakeholders,
+        contact_region=contact_region,
     )
 
     # ── Award submission points only after successful routing ─────────────────
