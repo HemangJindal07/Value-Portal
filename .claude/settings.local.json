@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(npm run *)",
+      "Bash(echo \"Frontend PID: $!\")",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Read(//tmp/**)",
+      "Bash(where python *)",
+      "Bash(ls Scripts)",
+      "Bash(ls bin *)",
+      "Bash(ls *.txt)",
+      "Bash(ls requirements*)",
+      "Bash(pip install *)",
+      "Bash(uvicorn app.main:app --port 8000)",
+      "Bash(echo \"PID: $!\")",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:8000/health\" -Method GET)",
+      "PowerShell(netstat -ano)",
+      "Bash(npx tsc *)",
+      "Bash(python -m py_compile app/main.py app/routers/leads.py app/routers/assignments.py app/services/routing_engine.py app/services/scoring.py app/services/email_service.py app/schemas/lead.py app/schemas/assignment.py)",
+      "Bash(grep -v \"^$\")",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(grep -n \"min=\\\\|estimated_value\\\\|step=\\\\|type=\\\\\"number\\\\\"\" \"c:\\\\\\\\Users\\\\\\\\Testing\\\\\\\\Documents\\\\\\\\value-portal\\\\\\\\frontend\\\\\\\\src\\\\\\\\app\\\\\\\\\\(dashboard\\)\\\\\\\\leads\\\\\\\\new\\\\\\\\page.tsx\")",
+      "Bash(grep -n \"SelectItem\\\\|SelectTrigger\\\\|Existing\\\\|Current\\\\|Lead\" \"c:\\\\\\\\Users\\\\\\\\Testing\\\\\\\\Documents\\\\\\\\value-portal\\\\\\\\frontend\\\\\\\\src\\\\\\\\app\\\\\\\\\\(dashboard\\)\\\\\\\\leads\\\\\\\\new\\\\\\\\page.tsx\")",
+      "Bash(grep -E \"\\\\.\\(py|ts|tsx\\)$\")",
+      "Bash(grep -c \"useEffect\\(\\(\\) => { load\\(\\); }, \\\\[load\\\\]\\);\" page.tsx)",
+      "Bash(python -c ' *)",
+      "PowerShell(Get-Process python, uvicorn -ErrorAction SilentlyContinue)",
+      "Bash(python backend/generate_import_sql.py)",
+      "Bash(python backend/reimport_users.py)"
+    ]
+  }
+}

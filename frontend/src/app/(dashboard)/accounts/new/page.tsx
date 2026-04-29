@@ -41,6 +41,7 @@ export default function NewAccountPage() {
   const [loading, setLoading] = useState(false);
   const [region, setRegion] = useState<string>("");
   const [status, setStatus] = useState<string>("prospect");
+  const [engagementStart, setEngagementStart] = useState<string>("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -125,11 +126,22 @@ export default function NewAccountPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="engagement_start">Engagement Start</Label>
-                <Input id="engagement_start" name="engagement_start" type="date" />
+                <Input
+                  id="engagement_start"
+                  name="engagement_start"
+                  type="date"
+                  value={engagementStart}
+                  onChange={(e) => setEngagementStart(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="engagement_end">Engagement End</Label>
-                <Input id="engagement_end" name="engagement_end" type="date" />
+                <Input
+                  id="engagement_end"
+                  name="engagement_end"
+                  type="date"
+                  min={engagementStart || undefined}
+                />
               </div>
             </div>
 

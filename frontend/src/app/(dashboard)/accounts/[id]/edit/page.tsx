@@ -247,6 +247,7 @@ export default function EditAccountPage() {
                   id="engagement_end"
                   type="date"
                   value={engagementEnd}
+                  min={engagementStart || undefined}
                   onChange={(e) => setEngagementEnd(e.target.value)}
                 />
               </div>
