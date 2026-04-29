@@ -12,7 +12,7 @@ router = APIRouter(prefix="/ai", tags=["AI Classification"])
 # async def trigger_idea_classification(
 #     idea_id: UUID,
 #     background_tasks: BackgroundTasks,
-#     current_user: dict = Depends(require_role("admin", "executive", "delivery_manager")),
+#     current_user: dict = Depends(require_role("admin", "executive", "user")),
 # ):
 #     ...
 

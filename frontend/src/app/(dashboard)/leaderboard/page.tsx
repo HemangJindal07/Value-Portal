@@ -67,7 +67,7 @@ function getRankIcon(rank: number) {
 }
 
 const roleLabels: Record<string, string> = {
-  delivery_manager: "Delivery Manager",
+  user: "User",
   sales: "Sales",
   practice_lead: "Practice Lead",
   admin: "Admin",

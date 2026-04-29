@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import type { Profile } from "@/types";
 
 const roleLabels: Record<string, string> = {
-  delivery_manager: "Delivery Manager",
+  user: "User",
   sales: "Sales",
   practice_lead: "Practice Lead",
   admin: "Admin",
@@ -43,7 +43,7 @@ const roleColors: Record<string, string> = {
   executive: "bg-purple-500/10 text-purple-400",
   sales: "bg-blue-500/10 text-blue-400",
   practice_lead: "bg-amber-500/10 text-amber-400",
-  delivery_manager: "bg-green-500/10 text-green-400",
+  user: "bg-green-500/10 text-green-400",
 };
 
 function getInitials(name: string) {
@@ -60,13 +60,26 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isAdmin = currentUser?.role === "admin";
+
   useEffect(() => {
-    if (!token) return;
+    if (!token || !isAdmin) {
+      setLoading(false);
+      return;
+    }
     api<Profile[]>("/api/users", { token })
       .then(setUsers)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, isAdmin]);
+
+  if (currentUser && !isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Admin access required.</p>
+      </div>
+    );
+  }
 
   async function handleRoleChange(userId: string, newRole: string) {
     try {

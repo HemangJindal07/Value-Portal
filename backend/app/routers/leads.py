@@ -56,7 +56,7 @@ async def list_leads(
     # Role-based scoping:
     # - admin: sees all leads
     # - executive: sees leads they submitted + leads they have an assignment on
-    # - all others (delivery_manager, sales, practice_lead): own submissions only
+    # - all others (user, sales, practice_lead): own submissions only
     if role == "admin":
         pass  # no filter — admin sees everything
     elif role == "executive":
@@ -75,7 +75,7 @@ async def list_leads(
         else:
             query = query.eq("submitted_by", user_id)
     else:
-        # delivery_manager, sales, practice_lead — own submissions only
+        # user, sales, practice_lead — own submissions only
         query = query.eq("submitted_by", user_id)
 
     if status_filter:

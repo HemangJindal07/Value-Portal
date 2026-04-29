@@ -5,7 +5,7 @@ from uuid import UUID
 
 
 class UserRole(str, Enum):
-    delivery_manager = "delivery_manager"
+    user = "user"
     sales = "sales"
     practice_lead = "practice_lead"
     admin = "admin"

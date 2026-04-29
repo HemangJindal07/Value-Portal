@@ -79,7 +79,7 @@ function LeadsPageInner() {
 
     api<LeadWithRelations[]>(`/api/leads${qs}`, { token })
       .then((data) => {
-        // delivery_manager and practice_lead only see their own submissions
+        // user and practice_lead only see their own submissions
         if (!canSeeAll && user?.id) {
           setLeads(data.filter((l) => l.submitted_by === user.id));
         } else {

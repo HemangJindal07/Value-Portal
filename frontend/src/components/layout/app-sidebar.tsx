@@ -91,7 +91,7 @@ const EXECUTIVE_NAV = [
   },
 ];
 
-// ─── End-user nav (delivery_manager / sales / practice_lead) ─────────────
+// ─── End-user nav (user / sales / practice_lead) ─────────────
 const USER_NAV = [
   {
     label: "Main",

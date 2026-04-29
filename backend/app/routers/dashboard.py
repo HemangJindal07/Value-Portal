@@ -15,7 +15,7 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
     - DM / others: own submissions only
     """
     supabase = get_supabase_admin()
-    role = current_user.get("role", "delivery_manager")
+    role = current_user.get("role", "user")
     user_id = current_user["id"]
     is_org = role in ("admin", "executive")
 
@@ -97,7 +97,7 @@ async def recent_activity(
     - DM / others: only activity on own submissions
     """
     supabase = get_supabase_admin()
-    role = current_user.get("role", "delivery_manager")
+    role = current_user.get("role", "user")
     user_id = current_user["id"]
 
     query = (
@@ -287,7 +287,7 @@ async def pipeline_report(
     """
     supabase = get_supabase_admin()
     user_id  = current_user["id"]
-    role     = current_user.get("role", "delivery_manager")
+    role     = current_user.get("role", "user")
 
     all_roles = {"admin", "executive"}
     leads_all_roles  = {"admin", "executive", "sales"}
