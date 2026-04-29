@@ -42,7 +42,7 @@ async def list_users(
 @router.get("/{user_id}")
 async def get_user(
     user_id: UUID,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("admin", "executive")),
 ):
     supabase = get_supabase_admin()
     result = (

@@ -7,7 +7,7 @@ from app.services.routing_engine import start_routing
 from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
 from app.services.notification_service import notify_status_change
-from app.services.scoring import award_points  # used for qualified/won status changes
+from app.services.scoring import award_points, revoke_points_for_submission
 from app.services.sanitize import sanitize_dict
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
@@ -382,3 +382,4 @@ async def delete_lead(
         raise HTTPException(status_code=403, detail="Can only delete own drafts")
 
     supabase.table("leads").delete().eq("lead_id", str(lead_id)).execute()
+    revoke_points_for_submission(str(lead_id))

@@ -62,9 +62,7 @@ async def get_account(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_account(
     payload: AccountCreate,
-    # NOTE: role restriction commented out — any authenticated user can create an account
-    # was: current_user: dict = Depends(require_role("admin", "executive", "sales"))
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("admin", "executive", "sales", "delivery_manager", "practice_lead")),
 ):
     supabase = get_supabase_admin()
     # Exclude None values — avoids sending null FK UUIDs that could confuse Supabase

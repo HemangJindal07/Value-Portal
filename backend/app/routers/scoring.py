@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from app.database.supabase import get_supabase_admin
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/scores", tags=["Scoring"])
 
@@ -148,3 +148,29 @@ async def leaderboard(
         entry["rank"] = idx
 
     return entries[:limit]
+
+
+@router.post("/recalculate")
+async def recalculate_all_scores(
+    current_user: dict = Depends(require_role("admin")),
+):
+    """
+    Admin: recompute user_scores for every user that has score_events.
+    Safe to call any time — scores are derived from score_events, which is the
+    source of truth. Use this after manually inserting/deleting score_events rows.
+    """
+    from app.services.scoring import _update_user_score, _recompute_ranks
+
+    supabase = get_supabase_admin()
+    users_res = (
+        supabase.table("score_events")
+        .select("user_id")
+        .execute()
+    )
+    user_ids = list({r["user_id"] for r in (users_res.data or [])})
+
+    for uid in user_ids:
+        _update_user_score(uid)
+
+    _recompute_ranks()
+    return {"recalculated": len(user_ids), "user_ids": user_ids}

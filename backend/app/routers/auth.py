@@ -1,17 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
+from typing import Literal
 from app.database.supabase import get_supabase_client, get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.user import ProfileResponse, ProfileUpdate
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+SELF_ASSIGNABLE_ROLES = ("delivery_manager", "sales", "practice_lead", "executive")
+
 
 class SignUpRequest(BaseModel):
     email: str
     password: str
     full_name: str
-    role: str = "delivery_manager"
+    role: Literal["delivery_manager", "sales", "practice_lead", "executive"] = "delivery_manager"
 
 
 class SignInRequest(BaseModel):

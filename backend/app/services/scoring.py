@@ -119,6 +119,34 @@ def _update_user_score(user_id: str) -> None:
     _recompute_ranks()
 
 
+def revoke_points_for_submission(submission_id: str) -> list[str]:
+    """
+    Deletes all score_events for a submission and recalculates scores for every
+    affected user. Returns the list of user_ids that were updated.
+    """
+    supabase = get_supabase_admin()
+
+    affected_res = (
+        supabase.table("score_events")
+        .select("user_id")
+        .eq("submission_id", submission_id)
+        .execute()
+    )
+    affected_user_ids = list({r["user_id"] for r in (affected_res.data or [])})
+
+    if not affected_user_ids:
+        return []
+
+    supabase.table("score_events").delete().eq("submission_id", submission_id).execute()
+    logger.info("Deleted score_events for submission %s, affected users: %s", submission_id, affected_user_ids)
+
+    for uid in affected_user_ids:
+        _update_user_score(uid)
+
+    _recompute_ranks()
+    return affected_user_ids
+
+
 def _recompute_ranks() -> None:
     supabase = get_supabase_admin()
     scores = (
