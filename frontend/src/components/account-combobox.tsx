@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, Loader2, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import type { Account } from "@/types";
 
 const MIN_CHARS = 3;
@@ -153,7 +154,10 @@ export function AccountCombobox({
   }
 
   async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
+    // Stop the event from bubbling to the parent form (the leads form),
+    // which would otherwise fire its own onSubmit handler.
     e.preventDefault();
+    e.stopPropagation();
     const name = newName.trim();
     if (!name) return;
     setCreating(true);
@@ -181,6 +185,7 @@ export function AccountCombobox({
       }
 
       setCreateSuccessMsg(`"${account.account_name}" created successfully!`);
+      toast.success(`Account "${account.account_name}" created successfully.`);
       setTimeout(() => {
         onChange(account.account_id);
         setSelectedName(account.account_name);

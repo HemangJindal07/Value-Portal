@@ -79,7 +79,11 @@ async def list_leads(
         query = query.eq("submitted_by", user_id)
 
     if status_filter:
-        query = query.eq("status", status_filter)
+        statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
+        if len(statuses) == 1:
+            query = query.eq("status", statuses[0])
+        elif statuses:
+            query = query.in_("status", statuses)
     if lead_type:
         query = query.eq("lead_type", lead_type)
     if account_id:

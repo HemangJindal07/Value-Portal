@@ -72,8 +72,8 @@ async def classify_lead(lead_id: str) -> None:
 
         client = Anthropic(api_key=settings.anthropic_api_key)
         message = client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=256,
+            model="claude-sonnet-4-6",
+            max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
 

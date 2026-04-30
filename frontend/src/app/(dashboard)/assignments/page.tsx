@@ -755,22 +755,17 @@ export default function AssignmentsPage() {
               )
             )}
           </TabsTrigger>
-          <TabsTrigger value="actioned">
-            {isOrgRole ? "Reviewed" : "Qualified / Rejected"}
-            {isOrgRole ? (
-              myActioned.length > 0 && (
-                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                  {myActioned.length}
-                </span>
-              )
-            ) : (
-              myQualifiedRejected.length > 0 && (
+          {/* Non-org users keep "Qualified / Rejected" inline (no separate Reviewed tab) */}
+          {!isOrgRole && (
+            <TabsTrigger value="actioned">
+              Qualified / Rejected
+              {myQualifiedRejected.length > 0 && (
                 <span className="ml-1.5 text-xs bg-[#B12B35]/10 text-[#B12B35] px-1.5 py-0.5 rounded-full">
                   {myQualifiedRejected.length}
                 </span>
-              )
-            )}
-          </TabsTrigger>
+              )}
+            </TabsTrigger>
+          )}
           {isOrgRole && (
             <TabsTrigger value="all">
               Organisation
@@ -797,6 +792,17 @@ export default function AssignmentsPage() {
               {wonLostPendingAssignments.length > 0 && (
                 <span className="ml-1.5 text-xs bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded-full">
                   {wonLostPendingAssignments.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+          {/* Reviewed — placed last for org-role so it sits after Won/Loss */}
+          {isOrgRole && (
+            <TabsTrigger value="actioned">
+              Reviewed
+              {myActioned.length > 0 && (
+                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                  {myActioned.length}
                 </span>
               )}
             </TabsTrigger>

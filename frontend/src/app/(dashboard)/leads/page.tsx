@@ -67,7 +67,10 @@ function LeadsPageInner() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
   const [loading, setLoading] = useState(true);
-  const highlightPending = searchParams.get("status") === "under_review";
+  const highlightPending = (searchParams.get("status") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .includes("routing_pending");
 
   useEffect(() => {
     if (!token) return;

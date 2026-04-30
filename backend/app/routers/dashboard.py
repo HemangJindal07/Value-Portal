@@ -33,7 +33,7 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
 
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in all_leads if l["status"] in ("submitted", "under_review", "qualified")
+        for l in all_leads if l["status"] == "qualified"
     )
     won_value = sum(
         float(l.get("estimated_value") or 0)
@@ -170,10 +170,10 @@ async def admin_analytics(
     ideas = ideas_res.data or []
 
     # ── 4. Revenue / savings ──────────────────────────────────────────────────
-    # routing_pending = stuck, not real pipeline — excluded intentionally
+    # Pipeline = qualified leads only (pre-qualification stages are not real pipeline)
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in non_draft if l["status"] in ("submitted", "under_review", "qualified")
+        for l in non_draft if l["status"] == "qualified"
     )
     won_value = sum(
         float(l.get("estimated_value") or 0) for l in non_draft if l["status"] == "won"

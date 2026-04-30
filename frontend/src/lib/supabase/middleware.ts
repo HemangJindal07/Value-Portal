@@ -3,6 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that require a specific set of roles.
 // Patterns are matched in order; first match wins.
+// NOTE: `POST /api/accounts` (inline quick-add) is open to every authenticated
+// role — only the standalone /accounts/new and /accounts/{id}/edit *pages* are
+// gated here so URL manipulation cannot reach the full admin-only forms.
 const PROTECTED_ROUTES: { pattern: RegExp; allowedRoles: string[] }[] = [
   {
     // All /admin/* pages — admin only
@@ -10,8 +13,8 @@ const PROTECTED_ROUTES: { pattern: RegExp; allowedRoles: string[] }[] = [
     allowedRoles: ["admin"],
   },
   {
-    // New account creation and account editing — admin, executive, sales
-    pattern: /^\/accounts\/(new|[^/]+(\/edit)?)$/,
+    // New account page and account edit page — admin, executive, sales only
+    pattern: /^\/accounts\/(new|[^/]+\/edit)$/,
     allowedRoles: ["admin", "executive", "sales"],
   },
 ];

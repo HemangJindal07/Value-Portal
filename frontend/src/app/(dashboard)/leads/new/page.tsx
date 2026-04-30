@@ -277,7 +277,11 @@ export default function NewLeadPage() {
                   {selectedService ? selectedService.label : undefined}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent className="w-[--radix-select-trigger-width]">
+              <SelectContent
+                alignItemWithTrigger={false}
+                sideOffset={4}
+                className="w-[var(--anchor-width)] min-w-[var(--anchor-width)] bg-white border border-[#EDE7E6] shadow-lg"
+              >
                 {TX_SERVICES.map((s) => (
                   <SelectItem key={s.value} value={s.value} className="whitespace-normal">
                     {s.label}
