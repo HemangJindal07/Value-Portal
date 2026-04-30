@@ -67,6 +67,10 @@ function LeadsPageInner() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
   const [loading, setLoading] = useState(true);
+  const highlightPending = (searchParams.get("status") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .includes("routing_pending");
 
   useEffect(() => {
     if (!token) return;
@@ -78,7 +82,7 @@ function LeadsPageInner() {
 
     api<LeadWithRelations[]>(`/api/leads${qs}`, { token })
       .then((data) => {
-        // delivery_manager and practice_lead only see their own submissions
+        // user and practice_lead only see their own submissions
         if (!canSeeAll && user?.id) {
           setLeads(data.filter((l) => l.submitted_by === user.id));
         } else {
@@ -173,7 +177,14 @@ function LeadsPageInner() {
               </TableHeader>
               <TableBody>
                 {leads.map((lead) => (
-                  <TableRow key={lead.lead_id}>
+                  <TableRow
+                    key={lead.lead_id}
+                    className={
+                      highlightPending && lead.status === "routing_pending"
+                        ? "border-2 border-red-500 bg-red-50/40"
+                        : ""
+                    }
+                  >
                     <TableCell>
                       <Link
                         href={`/leads/${lead.lead_id}`}
@@ -208,7 +219,7 @@ function LeadsPageInner() {
                         variant="secondary"
                         className={priorityColors[lead.priority]}
                       >
-                        {lead.priority}
+                        {lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1)}
                       </Badge>
                     </TableCell>
                     <TableCell>

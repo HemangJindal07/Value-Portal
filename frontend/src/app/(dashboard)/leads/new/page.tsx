@@ -144,7 +144,7 @@ export default function NewLeadPage() {
       await api("/api/leads", { method: "POST", body: payload, token: token! });
       setIsDirty(false);
       toast.success("Lead submitted successfully.");
-      router.push("/leads");
+      router.push("/assignments");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to submit lead");
     } finally {
@@ -277,7 +277,11 @@ export default function NewLeadPage() {
                   {selectedService ? selectedService.label : undefined}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent className="w-[--radix-select-trigger-width]">
+              <SelectContent
+                alignItemWithTrigger={false}
+                sideOffset={4}
+                className="w-[var(--anchor-width)] min-w-[var(--anchor-width)] bg-white border border-[#EDE7E6] shadow-lg"
+              >
                 {TX_SERVICES.map((s) => (
                   <SelectItem key={s.value} value={s.value} className="whitespace-normal">
                     {s.label}
@@ -327,7 +331,9 @@ export default function NewLeadPage() {
                 <Label>Priority</Label>
                 <Select value={priority} onValueChange={(v) => setPriority(v ?? "")}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select priority…" />
+                    <SelectValue placeholder="Select priority…">
+                      {priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : undefined}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="high">High</SelectItem>

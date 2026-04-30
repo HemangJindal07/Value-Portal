@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -36,6 +37,47 @@ export function UserCombobox({
   const [loading, setLoading] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<UserOption | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = React.useState<React.CSSProperties>({});
+
+  // Position dropdown via fixed coords so it escapes any overflow:hidden ancestor (e.g. Card).
+  const updateDropdownPosition = React.useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    updateDropdownPosition();
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    window.addEventListener("resize", updateDropdownPosition);
+    return () => {
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+      window.removeEventListener("resize", updateDropdownPosition);
+    };
+  }, [open, updateDropdownPosition]);
+
+  // Close on outside click (anywhere outside the trigger or the portalled dropdown)
+  React.useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      // The dropdown is portalled — check via a data attribute.
+      const dropdown = document.querySelector("[data-user-combobox-dropdown='true']");
+      if (dropdown?.contains(target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
 
   // Fetch selected user details when value is set externally
   React.useEffect(() => {
@@ -92,11 +134,16 @@ export function UserCombobox({
   return (
     <div ref={containerRef} className="relative w-full">
       <div
+        ref={triggerRef}
         className={cn(
           "flex items-center h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors",
           disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-[#B12B35]/50"
         )}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={() => {
+          if (disabled) return;
+          updateDropdownPosition();
+          setOpen((o) => !o);
+        }}
       >
         {selectedUser ? (
           <span className="flex-1 truncate text-foreground">
@@ -116,8 +163,12 @@ export function UserCombobox({
         )}
       </div>
 
-      {open && !disabled && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+      {open && !disabled && typeof document !== "undefined" && createPortal(
+        <div
+          data-user-combobox-dropdown="true"
+          style={dropdownStyle}
+          className="rounded-md border bg-white shadow-lg"
+        >
           <div className="p-2">
             <input
               autoFocus
@@ -160,7 +211,8 @@ export function UserCombobox({
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

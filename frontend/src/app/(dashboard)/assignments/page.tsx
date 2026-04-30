@@ -293,7 +293,7 @@ function AssignmentCard({
                 Open
               </Link>
 
-              {/* Standard review actions — shown when lead is under_review */}
+              {/* Qualify / Reject / Escalate — Stage 1: under_review leads */}
               {(assignment.submission_status === "under_review" || assignment.submission_type === "idea") && (
                 <>
                   <Button
@@ -324,44 +324,6 @@ function AssignmentCard({
                   >
                     <AlertTriangle className="h-3 w-3" />
                     Escalate
-                  </Button>
-                </>
-              )}
-
-              {/* Post-qualified: Create Opportunity */}
-              {assignment.submission_status === "qualified" && (
-                <Button
-                  size="sm"
-                  className="h-7 text-xs gap-1 bg-[#003466] hover:bg-[#002244] text-white"
-                  disabled={actioning === assignment.assignment_id}
-                  onClick={() => onAction(assignment.assignment_id, "opportunity_created")}
-                >
-                  <Briefcase className="h-3 w-3" />
-                  Create Opportunity
-                </Button>
-              )}
-
-              {/* Won / Lost — shown when opportunity is created */}
-              {assignment.submission_status === "opportunity_created" && (
-                <>
-                  <Button
-                    size="sm"
-                    className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                    disabled={actioning === assignment.assignment_id}
-                    onClick={() => onAction(assignment.assignment_id, "won")}
-                  >
-                    <Trophy className="h-3 w-3" />
-                    Won
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1 text-[#5D5D5D] border-[#C5C5C5] hover:bg-muted"
-                    disabled={actioning === assignment.assignment_id}
-                    onClick={() => onAction(assignment.assignment_id, "lost")}
-                  >
-                    <TrendingDown className="h-3 w-3" />
-                    Lost
                   </Button>
                 </>
               )}
@@ -599,7 +561,7 @@ export default function AssignmentsPage() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
-  const [wlConfirm, setWlConfirm] = useState<{ leadId: string; action: "won" | "lost"; title: string } | null>(null);
+  const [wlConfirm, setWlConfirm] = useState<{ assignmentId: string; action: "won" | "lost"; title: string } | null>(null);
 
   // Set the default tab once we know the user's role (avoids Base UI uncontrolled warning)
   useEffect(() => {
@@ -657,7 +619,10 @@ export default function AssignmentsPage() {
   };
 
   const myPending = myAssignments.filter((a) => a.action_taken === "pending");
-  const myActioned = myAssignments.filter((a) => a.action_taken !== "pending");
+  // Reviewed: all actioned assignments, sorted by action_date descending (most recent first)
+  const myActioned = [...myAssignments.filter((a) => a.action_taken !== "pending")].sort(
+    (a, b) => new Date(b.action_date ?? b.created_at).getTime() - new Date(a.action_date ?? a.created_at).getTime()
+  );
 
   // User-perspective tabs (non-org role):
   const myUnderReview = myLeads.filter((l) =>
@@ -667,33 +632,29 @@ export default function AssignmentsPage() {
     ["qualified", "rejected", "opportunity_created", "won", "lost"].includes(l.status)
   );
 
-  // Org-role tabs — opportunity created and won/loss
-  const oppLeads  = orgLeads.filter((l) => l.status === "opportunity_created");
+  // Org-role: Stage 2 — pending assignments on qualified leads (approve opportunity or reject)
+  const oppPendingAssignments = allAssignments.filter(
+    (a) => a.action_taken === "pending" && a.submission_status === "qualified" && a.submission_type === "lead"
+  );
+
+  // Org-role: Stage 3 — pending assignments on opportunity_created leads (won or lost)
+  const wonLostPendingAssignments = allAssignments.filter(
+    (a) => a.action_taken === "pending" && a.submission_status === "opportunity_created" && a.submission_type === "lead"
+  );
+
+  // Won/Loss history — closed leads
   const wonLostLeads = orgLeads.filter((l) => ["won", "lost"].includes(l.status));
 
-  const handleWonLost = async (leadId: string, action: "won" | "lost") => {
+  const handleWonLost = async (assignmentId: string, action: "won" | "lost", title: string) => {
     if (!token) return;
-    setActioning(leadId);
+    setActioning(assignmentId);
     try {
-      // Find the assignment for this lead so we can use the assignments route
-      // (triggers scoring + email). Fall back to leads PATCH if no assignment found.
-      const leadAssignment = allAssignments.find(
-        (a) => a.submission_id === leadId && a.submission_type === "lead"
-      );
-      if (leadAssignment) {
-        await api(`/api/assignments/${leadAssignment.assignment_id}`, {
-          method: "PATCH",
-          body: { action_taken: action },
-          token,
-        });
-      } else {
-        await api(`/api/leads/${leadId}`, {
-          method: "PATCH",
-          body: { status: action },
-          token,
-        });
-      }
-      toast.success(`Lead marked as ${action}`);
+      await api(`/api/assignments/${assignmentId}`, {
+        method: "PATCH",
+        body: { action_taken: action },
+        token,
+      });
+      toast.success(`Lead marked as ${action === "won" ? "Won" : "Lost"}`);
       setWlConfirm(null);
       await fetchAssignments();
     } catch (err: unknown) {
@@ -736,7 +697,7 @@ export default function AssignmentsPage() {
               </Button>
               <Button
                 disabled={actioning !== null}
-                onClick={() => handleWonLost(wlConfirm.leadId, wlConfirm.action)}
+                onClick={() => handleWonLost(wlConfirm.assignmentId, wlConfirm.action, wlConfirm.title)}
                 className={wlConfirm.action === "won" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#5D5D5D] hover:bg-[#3D3D3D] text-white"}
               >
                 {actioning ? "Processing…" : `Confirm ${wlConfirm.action === "won" ? "Won" : "Lost"}`}
@@ -794,22 +755,17 @@ export default function AssignmentsPage() {
               )
             )}
           </TabsTrigger>
-          <TabsTrigger value="actioned">
-            {isOrgRole ? "Reviewed" : "Qualified / Rejected"}
-            {isOrgRole ? (
-              myActioned.length > 0 && (
-                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                  {myActioned.length}
-                </span>
-              )
-            ) : (
-              myQualifiedRejected.length > 0 && (
+          {/* Non-org users keep "Qualified / Rejected" inline (no separate Reviewed tab) */}
+          {!isOrgRole && (
+            <TabsTrigger value="actioned">
+              Qualified / Rejected
+              {myQualifiedRejected.length > 0 && (
                 <span className="ml-1.5 text-xs bg-[#B12B35]/10 text-[#B12B35] px-1.5 py-0.5 rounded-full">
                   {myQualifiedRejected.length}
                 </span>
-              )
-            )}
-          </TabsTrigger>
+              )}
+            </TabsTrigger>
+          )}
           {isOrgRole && (
             <TabsTrigger value="all">
               Organisation
@@ -823,9 +779,9 @@ export default function AssignmentsPage() {
           {isOrgRole && (
             <TabsTrigger value="opportunity_created">
               Opportunity Created
-              {oppLeads.length > 0 && (
+              {oppPendingAssignments.length > 0 && (
                 <span className="ml-1.5 text-xs bg-purple-500/20 text-purple-600 px-1.5 py-0.5 rounded-full">
-                  {oppLeads.length}
+                  {oppPendingAssignments.length}
                 </span>
               )}
             </TabsTrigger>
@@ -833,9 +789,20 @@ export default function AssignmentsPage() {
           {isOrgRole && (
             <TabsTrigger value="won_loss">
               Won / Loss
-              {wonLostLeads.length > 0 && (
+              {wonLostPendingAssignments.length > 0 && (
                 <span className="ml-1.5 text-xs bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded-full">
-                  {wonLostLeads.length}
+                  {wonLostPendingAssignments.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+          {/* Reviewed — placed last for org-role so it sits after Won/Loss */}
+          {isOrgRole && (
+            <TabsTrigger value="actioned">
+              Reviewed
+              {myActioned.length > 0 && (
+                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                  {myActioned.length}
                 </span>
               )}
             </TabsTrigger>
@@ -887,15 +854,62 @@ export default function AssignmentsPage() {
                 No reviewed assignments yet.
               </p>
             ) : (
-              myActioned.map((a) => (
-                <AssignmentCard
-                  key={a.assignment_id}
-                  assignment={a}
-                  onAction={handleAction}
-                  onOpenReview={setReviewPending}
-                  actioning={actioning}
-                />
-              ))
+              <>
+                <p className="text-xs text-muted-foreground pb-1">
+                  Most recently actioned first. Status shows the <strong>current</strong> state of each lead.
+                </p>
+                <Card className="border-[#EDE7E6]">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Lead</TableHead>
+                          <TableHead>Account</TableHead>
+                          <TableHead>Your Role</TableHead>
+                          <TableHead>Actioned</TableHead>
+                          <TableHead className="text-right">Current Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {myActioned.map((a) => {
+                          const STATUS_DISPLAY: Record<string, string> = {
+                            submitted: "Submitted", routing_pending: "Routing Pending",
+                            under_review: "Under Review", qualified: "Qualified",
+                            opportunity_created: "Opportunity Created",
+                            won: "Won", lost: "Lost", rejected: "Rejected", dropped: "Dropped",
+                          };
+                          const liveStatus = a.submission_status ?? "";
+                          const statusDisplay = STATUS_DISPLAY[liveStatus] ?? liveStatus.replace(/_/g, " ");
+                          const statusColor = submissionStatusColors[liveStatus] ?? "bg-muted text-muted-foreground";
+                          const actionDate = a.action_date ? new Date(a.action_date).toLocaleDateString() : "—";
+                          return (
+                            <TableRow key={a.assignment_id}>
+                              <TableCell>
+                                {a.submission_type === "lead" ? (
+                                  <Link href={`/leads/${a.submission_id}`} className="font-medium hover:underline flex items-center gap-1">
+                                    {a.submission_title ?? "Untitled"}
+                                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                  </Link>
+                                ) : (
+                                  <span className="font-medium text-muted-foreground">{a.submission_title ?? "Untitled"}</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">{a.account_name ?? "—"}</TableCell>
+                              <TableCell className="text-sm">{roleLabels[a.assigned_role] ?? a.assigned_role}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{actionDate}</TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant="secondary" className={`text-[11px] ${statusColor}`}>
+                                  {statusDisplay}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </>
             )
           ) : (
             <MySubmissionsTab leads={myQualifiedRejected} loading={false} />
@@ -932,22 +946,22 @@ export default function AssignmentsPage() {
           </TabsContent>
         )}
 
-        {/* ── Opportunity Created tab ── */}
+        {/* ── Opportunity Created tab — Stage 2: approve or reject opportunity ── */}
         {isOrgRole && (
           <TabsContent value="opportunity_created" className="mt-4 space-y-4">
             <Card className="border-[#EDE7E6] bg-[#F9F9F9]">
               <CardContent className="py-3 px-4">
                 <p className="text-sm text-[#5D5D5D] italic">
-                  The Opportunity that the team is working on that opportunity to make it successfully delivered.
+                  These qualified leads are awaiting your decision: approve to create an opportunity or reject to close them.
                 </p>
               </CardContent>
             </Card>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
-            ) : oppLeads.length === 0 ? (
+            ) : oppPendingAssignments.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 <Briefcase className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No opportunities in progress yet.</p>
+                <p className="text-sm">No qualified leads awaiting opportunity review.</p>
               </div>
             ) : (
               <Card className="border-[#EDE7E6]">
@@ -957,49 +971,41 @@ export default function AssignmentsPage() {
                       <TableRow>
                         <TableHead>Lead</TableHead>
                         <TableHead>Account</TableHead>
-                        <TableHead>Service Line</TableHead>
                         <TableHead>Submitted By</TableHead>
-                        <TableHead className="text-right">Est. Value</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {oppLeads.map((lead) => (
-                        <TableRow key={lead.lead_id}>
+                      {oppPendingAssignments.map((a) => (
+                        <TableRow key={a.assignment_id}>
                           <TableCell>
-                            <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline flex items-center gap-1">
-                              {lead.title}
+                            <Link href={`/leads/${a.submission_id}`} className="font-medium hover:underline flex items-center gap-1">
+                              {a.submission_title ?? "Untitled"}
                               <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                             </Link>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{lead.account?.account_name ?? "—"}</TableCell>
-                          <TableCell>
-                            {lead.service ? (
-                              <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">{lead.service}</Badge>
-                            ) : <span className="text-xs text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">{lead.submitter?.full_name ?? "—"}</TableCell>
-                          <TableCell className="text-right text-sm">
-                            {lead.estimated_value ? `$${Number(lead.estimated_value).toLocaleString()}` : "—"}
+                          <TableCell className="text-muted-foreground text-sm">{a.account_name ?? "—"}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {(a as AssignmentWithRelations & { submitter_name?: string }).submitter_name ?? "—"}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1.5 justify-end">
                               <Button
                                 size="sm"
-                                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-                                disabled={actioning === lead.lead_id}
-                                onClick={() => setWlConfirm({ leadId: lead.lead_id, action: "won", title: lead.title })}
+                                className="h-7 text-xs bg-[#003466] hover:bg-[#002244] text-white gap-1"
+                                disabled={actioning === a.assignment_id}
+                                onClick={() => handleAction(a.assignment_id, "approved")}
                               >
-                                <Trophy className="h-3 w-3" /> Won
+                                <Briefcase className="h-3 w-3" /> Approve Opportunity
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 text-xs gap-1 text-[#5D5D5D] border-[#C5C5C5]"
-                                disabled={actioning === lead.lead_id}
-                                onClick={() => setWlConfirm({ leadId: lead.lead_id, action: "lost", title: lead.title })}
+                                className="h-7 text-xs gap-1 text-red-400 border-red-400/30 hover:bg-red-500/10"
+                                disabled={actioning === a.assignment_id}
+                                onClick={() => setReviewPending({ assignmentId: a.assignment_id, submissionType: "lead", action: "rejected" })}
                               >
-                                <TrendingDown className="h-3 w-3" /> Lost
+                                <XCircle className="h-3 w-3" /> Reject
                               </Button>
                             </div>
                           </TableCell>
@@ -1013,64 +1019,132 @@ export default function AssignmentsPage() {
           </TabsContent>
         )}
 
-        {/* ── Won / Loss tab ── */}
+        {/* ── Won / Loss tab — Stage 3: mark opportunity as won or lost ── */}
         {isOrgRole && (
-          <TabsContent value="won_loss" className="mt-4">
+          <TabsContent value="won_loss" className="mt-4 space-y-4">
+            {/* Pending Won/Lost decisions */}
+            {wonLostPendingAssignments.length > 0 && (
+              <>
+                <Card className="border-[#EDE7E6] bg-[#F9F9F9]">
+                  <CardContent className="py-3 px-4">
+                    <p className="text-sm text-[#5D5D5D] italic">
+                      These opportunities are awaiting your final decision — mark each as Won or Lost.
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-[#EDE7E6]">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Lead</TableHead>
+                          <TableHead>Account</TableHead>
+                          <TableHead>Submitted By</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {wonLostPendingAssignments.map((a) => (
+                          <TableRow key={a.assignment_id}>
+                            <TableCell>
+                              <Link href={`/leads/${a.submission_id}`} className="font-medium hover:underline flex items-center gap-1">
+                                {a.submission_title ?? "Untitled"}
+                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              </Link>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{a.account_name ?? "—"}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {(a as AssignmentWithRelations & { submitter_name?: string }).submitter_name ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-1.5 justify-end">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                                  disabled={actioning === a.assignment_id}
+                                  onClick={() => setWlConfirm({ assignmentId: a.assignment_id, action: "won", title: a.submission_title ?? "" })}
+                                >
+                                  <Trophy className="h-3 w-3" /> Won
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-[#5D5D5D] border-[#C5C5C5] hover:bg-muted"
+                                  disabled={actioning === a.assignment_id}
+                                  onClick={() => setWlConfirm({ assignmentId: a.assignment_id, action: "lost", title: a.submission_title ?? "" })}
+                                >
+                                  <TrendingDown className="h-3 w-3" /> Lost
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Closed history */}
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
-            ) : wonLostLeads.length === 0 ? (
+            ) : wonLostLeads.length === 0 && wonLostPendingAssignments.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 <Trophy className="h-10 w-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No closed leads yet.</p>
               </div>
-            ) : (
-              <Card className="border-[#EDE7E6]">
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Lead</TableHead>
-                        <TableHead>Account</TableHead>
-                        <TableHead>Service Line</TableHead>
-                        <TableHead>Submitted By</TableHead>
-                        <TableHead className="text-right">Est. Value</TableHead>
-                        <TableHead className="text-right">Outcome</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {wonLostLeads.map((lead) => (
-                        <TableRow key={lead.lead_id}>
-                          <TableCell>
-                            <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline flex items-center gap-1">
-                              {lead.title}
-                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            </Link>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{lead.account?.account_name ?? "—"}</TableCell>
-                          <TableCell>
-                            {lead.service ? (
-                              <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">{lead.service}</Badge>
-                            ) : <span className="text-xs text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">{lead.submitter?.full_name ?? "—"}</TableCell>
-                          <TableCell className="text-right text-sm">
-                            {lead.estimated_value ? `$${Number(lead.estimated_value).toLocaleString()}` : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge
-                              variant="secondary"
-                              className={lead.status === "won" ? "bg-emerald-100 text-emerald-700" : "bg-[#C5C5C5]/30 text-[#5D5D5D]"}
-                            >
-                              {lead.status === "won" ? "Won" : "Lost"}
-                            </Badge>
-                          </TableCell>
+            ) : wonLostLeads.length > 0 ? (
+              <>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-2">Closed Leads</p>
+                <Card className="border-[#EDE7E6]">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Lead</TableHead>
+                          <TableHead>Account</TableHead>
+                          <TableHead>Service Line</TableHead>
+                          <TableHead>Submitted By</TableHead>
+                          <TableHead className="text-right">Est. Value</TableHead>
+                          <TableHead className="text-right">Outcome</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
+                      </TableHeader>
+                      <TableBody>
+                        {wonLostLeads.map((lead) => (
+                          <TableRow key={lead.lead_id}>
+                            <TableCell>
+                              <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline flex items-center gap-1">
+                                {lead.title}
+                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              </Link>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">{lead.account?.account_name ?? "—"}</TableCell>
+                            <TableCell>
+                              {lead.service ? (
+                                <Badge variant="secondary" className="text-[11px] bg-purple-500/10 text-purple-600">{lead.service}</Badge>
+                              ) : <span className="text-xs text-muted-foreground">—</span>}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{lead.submitter?.full_name ?? "—"}</TableCell>
+                            <TableCell className="text-right text-sm">
+                              {lead.estimated_value ? `$${Number(lead.estimated_value).toLocaleString()}` : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge
+                                variant="secondary"
+                                className={lead.status === "won" ? "bg-emerald-100 text-emerald-700" : "bg-[#C5C5C5]/30 text-[#5D5D5D]"}
+                              >
+                                {lead.status === "won" ? "Won" : "Lost"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </>
+            ) : null}
           </TabsContent>
         )}
       </Tabs>

@@ -91,6 +91,12 @@ const STATUS_BADGE: Record<string, string> = {
   rejected:             "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40",
 };
 
+const PRIORITY_BADGE: Record<string, string> = {
+  high:   "bg-[#E42525]/10 text-[#E42525] border-[#E42525]/20",
+  medium: "bg-[#003466]/10 text-[#003466] border-[#003466]/20",
+  low:    "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20",
+};
+
 function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, number>; color?: string }) {
   const entries = Object.entries(data);
   if (!entries.length) return <p className="text-sm text-muted-foreground">No data yet.</p>;
@@ -893,7 +899,11 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
     finally { setLoading(false); }
   }, [token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
@@ -1353,7 +1363,11 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
     finally { setLoading(false); }
   }, [token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
@@ -1579,7 +1593,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
               {/* Table header */}
               <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-2 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
                 <span>Opportunity</span>
-                <span>Type</span>
+                <span>Priority</span>
                 <span>Lead updated</span>
                 <span className="text-right">Status</span>
               </div>
@@ -1591,13 +1605,13 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
                       <span className="text-[11px] text-[#C5C5C5] font-mono w-5 shrink-0">{i + 1}</span>
                       <span className="font-medium text-[#232222] truncate">{lead.title}</span>
                     </div>
-                    {/* Lead type */}
+                    {/* Priority */}
                     <div>
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-2 py-0 capitalize bg-[#B12B35]/5 text-[#B12B35] border-[#B12B35]/20"
+                        className={`text-[10px] px-2 py-0 capitalize ${PRIORITY_BADGE[lead.priority] || "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40"}`}
                       >
-                        {(lead.lead_type || "lead").replace(/_/g, " ")}
+                        {lead.priority || "—"}
                       </Badge>
                     </div>
                     {/* Time ago */}
@@ -1784,7 +1798,11 @@ function UserDashboard({
     finally { setLoading(false); }
   }, [token, userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
 
@@ -1833,7 +1851,7 @@ function UserDashboard({
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"
           accent="#2E75B6"
-          href="/leads?status=under_review"
+          href="/leads?status=submitted,routing_pending,under_review"
         />
       </div>
 

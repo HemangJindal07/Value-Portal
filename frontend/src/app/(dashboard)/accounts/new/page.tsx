@@ -36,11 +36,20 @@ const REGIONS = [
 ];
 
 export default function NewAccountPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [region, setRegion] = useState<string>("");
   const [status, setStatus] = useState<string>("prospect");
+  const [engagementStart, setEngagementStart] = useState<string>("");
+
+  if (user && user.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Admin access required.</p>
+      </div>
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -125,11 +134,22 @@ export default function NewAccountPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="engagement_start">Engagement Start</Label>
-                <Input id="engagement_start" name="engagement_start" type="date" />
+                <Input
+                  id="engagement_start"
+                  name="engagement_start"
+                  type="date"
+                  value={engagementStart}
+                  onChange={(e) => setEngagementStart(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="engagement_end">Engagement End</Label>
-                <Input id="engagement_end" name="engagement_end" type="date" />
+                <Input
+                  id="engagement_end"
+                  name="engagement_end"
+                  type="date"
+                  min={engagementStart || undefined}
+                />
               </div>
             </div>
 

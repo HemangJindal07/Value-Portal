@@ -7,7 +7,7 @@ from app.services.routing_engine import start_routing
 from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
 from app.services.notification_service import notify_status_change
-from app.services.scoring import award_points  # used for qualified/won status changes
+from app.services.scoring import award_points, revoke_points_for_submission
 from app.services.sanitize import sanitize_dict
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
@@ -56,7 +56,7 @@ async def list_leads(
     # Role-based scoping:
     # - admin: sees all leads
     # - executive: sees leads they submitted + leads they have an assignment on
-    # - all others (delivery_manager, sales, practice_lead): own submissions only
+    # - all others (user, sales, practice_lead): own submissions only
     if role == "admin":
         pass  # no filter — admin sees everything
     elif role == "executive":
@@ -75,11 +75,15 @@ async def list_leads(
         else:
             query = query.eq("submitted_by", user_id)
     else:
-        # delivery_manager, sales, practice_lead — own submissions only
+        # user, sales, practice_lead — own submissions only
         query = query.eq("submitted_by", user_id)
 
     if status_filter:
-        query = query.eq("status", status_filter)
+        statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
+        if len(statuses) == 1:
+            query = query.eq("status", statuses[0])
+        elif statuses:
+            query = query.in_("status", statuses)
     if lead_type:
         query = query.eq("lead_type", lead_type)
     if account_id:
@@ -382,3 +386,4 @@ async def delete_lead(
         raise HTTPException(status_code=403, detail="Can only delete own drafts")
 
     supabase.table("leads").delete().eq("lead_id", str(lead_id)).execute()
+    revoke_points_for_submission(str(lead_id))

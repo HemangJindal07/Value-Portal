@@ -274,12 +274,20 @@ function AddReviewerForm({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function StakeholderMappingPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [accountId, setAccountId] = useState<string | null>(null);
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  if (user && user.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Admin access required.</p>
+      </div>
+    );
+  }
 
   const fetchStakeholders = useCallback(async () => {
     if (!accountId || !token) return;

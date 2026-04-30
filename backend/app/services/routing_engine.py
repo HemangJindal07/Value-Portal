@@ -190,7 +190,7 @@ def _update_submission_status(supabase, submission_type: str, submission_id: str
 
 def _get_submission(supabase, submission_type: str, submission_id: str) -> dict:
     if submission_type == "lead":
-        res = supabase.table("leads").select("title, description, submitted_by, account_id, service").eq("lead_id", submission_id).single().execute()
+        res = supabase.table("leads").select("title, description, submitted_by, account_id, service, contact_details").eq("lead_id", submission_id).single().execute()
     else:
         res = supabase.table("value_ideas").select("title, problem_statement, submitted_by, account_id").eq("idea_id", submission_id).single().execute()
     return res.data or {}
@@ -266,13 +266,19 @@ def _dispatch_submission_email(
     account_id: str,
     submitter_id: str,
     stakeholders: list[dict],
+    contact_region: str | None = None,
 ) -> None:
     """
     Fire-and-forget: gather all required data and call send_submission_email.
     Failures are logged but never raise so they don't break the routing flow.
+
+    contact_region is the region the submitter entered under "Client Contact
+    Details" on the lead form. Only this value drives UK/US extra recipients
+    (sahil/joe). The account's own region is shown in the email body for
+    context but is NOT used for routing.
     """
     try:
-        # Account details (name + region)
+        # Account details (name + region — region only used for display)
         acct_res = (
             supabase.table("accounts")
             .select("account_name, region")
@@ -282,7 +288,7 @@ def _dispatch_submission_email(
         )
         acct = acct_res.data or {}
         account_name = acct.get("account_name", "Unknown Account")
-        region       = acct.get("region")
+        display_region = acct.get("region")
 
         # Submitter profile
         sub_res = (
@@ -314,7 +320,8 @@ def _dispatch_submission_email(
             title=title,
             description=description,
             account_name=account_name,
-            region=region,
+            region=display_region,
+            routing_region=contact_region,
             submitter_name=submitter_name,
             submitter_email=submitter_email,
             stakeholder_emails=stakeholder_emails,
@@ -429,7 +436,17 @@ async def start_routing(
         f'You have a new {submission_type} awaiting your review as {first["role_label"]}: "{title}".',
     )
 
-    # ── Trigger email to ALL stakeholders + region contacts ──────────────────
+    # Region for UK/US extra recipients comes from the lead's contact_details
+    # (what the user filled in on the form), NOT from accounts.region.
+    contact_region: str | None = None
+    if submission_type == "lead":
+        cd = sub.get("contact_details") or {}
+        if isinstance(cd, dict):
+            cd_region = cd.get("region")
+            if isinstance(cd_region, str) and cd_region.strip():
+                contact_region = cd_region.strip()
+
+    # ── Trigger email to ALL stakeholders + (UK/US extras only if user-entered) ──
     _dispatch_submission_email(
         supabase=supabase,
         submission_type=submission_type,
@@ -439,6 +456,7 @@ async def start_routing(
         account_id=account_id,
         submitter_id=actual_submitter_id,
         stakeholders=stakeholders,
+        contact_region=contact_region,
     )
 
     # ── Award submission points only after successful routing ─────────────────
@@ -530,7 +548,49 @@ async def advance_routing(
 
     # ── Approval ────────────────────────────────────────────────────────────
     if action == "approved":
-        # In-app + email to submitter about this step's approval
+        # Check current lead status to determine which stage this approval is for.
+        # Stages 2 and 3 are handled here before the normal stakeholder-chain logic.
+        if sub_type == "lead":
+            lead_status_res = supabase.table("leads").select("status").eq("lead_id", sub_id).single().execute()
+            current_lead_status = (lead_status_res.data or {}).get("status", "")
+
+            # ── Stage 2: Opportunity approval (qualified → opportunity_created) ──
+            if current_lead_status == "qualified":
+                from app.services.scoring import award_points as _award
+                _update_submission_status(supabase, "lead", sub_id, "opportunity_created")
+                if submitter_id:
+                    try:
+                        _award(submitter_id, "lead", sub_id, "opportunity_created")
+                    except Exception as exc:
+                        logger.exception("[ROUTE] Failed to award opportunity_created points: %s", exc)
+                # Create Won/Lost stage assignment for same reviewer
+                _create_assignment(supabase, "lead", sub_id, actor_id, current_label, "system")
+                _send_notification(
+                    supabase, actor_id, "lead", sub_id,
+                    "approval",
+                    f'Lead "{title}" is now an Opportunity. Please mark it as Won or Lost.',
+                )
+                if submitter_id:
+                    _send_notification(
+                        supabase, submitter_id, "lead", sub_id,
+                        "status_update",
+                        f'Your lead "{title}" has been moved to Opportunity Created. The team is actively working on it.',
+                    )
+                logger.info("[ROUTE] Lead %s → opportunity_created, Won/Lost assignment → %s", sub_id, actor_id)
+                return
+
+            # ── Stage 3: Won/Lost approval (opportunity_created → won) ──
+            # Won/Lost is dispatched via _handle_post_qualified_action with action="won"/"lost",
+            # not via advance_routing — so if we somehow land here, skip silently.
+            if current_lead_status == "opportunity_created":
+                logger.warning(
+                    "[ROUTE] advance_routing(approved) called on opportunity_created lead %s — "
+                    "won/lost should use action='won'/'lost', not 'approved'. Ignoring.",
+                    sub_id,
+                )
+                return
+
+        # In-app + email to submitter about this step's approval (Stage 1 only)
         if submitter_id:
             _send_notification(
                 supabase, submitter_id, sub_type, sub_id,
@@ -651,7 +711,7 @@ async def advance_routing(
 
         if submitter_id:
             if sub_type == "lead":
-                final_msg = f'Great news! Your lead "{title}" has been qualified by {actor_name}. The team will now work on creating the opportunity.'
+                final_msg = f'Great news! Your lead "{title}" has been qualified by {actor_name}. It will now move to Opportunity review.'
             else:
                 final_msg = f'Congratulations! Your {sub_type} "{title}" has been fully approved.'
             _send_notification(
@@ -675,4 +735,20 @@ async def advance_routing(
                     )
                 except Exception as exc:
                     logger.exception("[ROUTE] Email failed on final approval: %s", exc)
+
         logger.info("[ROUTE] Final approval → %s for %s %s", final_status, sub_type, sub_id)
+
+        # ── Auto-create Stage 2 assignment: Opportunity review ────────────────
+        # The same reviewer now sees this lead in the Opportunity Created tab
+        # and must approve (→ opportunity_created) or reject it.
+        if sub_type == "lead":
+            try:
+                _create_assignment(supabase, "lead", sub_id, actor_id, current_label, "system")
+                _send_notification(
+                    supabase, actor_id, "lead", sub_id,
+                    "approval",
+                    f'Lead "{title}" is now Qualified. Please decide whether to create an Opportunity.',
+                )
+                logger.info("[ROUTE] Stage-2 Opportunity assignment created for lead %s → reviewer %s", sub_id, actor_id)
+            except Exception as exc:
+                logger.exception("[ROUTE] Failed to create Stage-2 assignment for lead %s: %s", sub_id, exc)

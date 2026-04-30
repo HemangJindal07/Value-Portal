@@ -1,7 +1,7 @@
 // ── M1: Auth & User Management ──
 
 export type UserRole =
-  | "delivery_manager"
+  | "user"
   | "sales"
   | "practice_lead"
   | "admin"
@@ -18,6 +18,7 @@ export interface Profile {
   is_active: boolean;
   created_at: string;
   last_login: string | null;
+  must_reset_password?: boolean;
 }
 
 // ── M2: Account & Client Master ──

@@ -94,10 +94,10 @@ async def classify_idea(idea_id: str) -> None:
             tools_involved=", ".join(idea.get("tools_involved") or []) or "Not specified",
         )
 
-        print(f"[AI] 🤖 Sending to Claude (claude-3-haiku-20240307)...")
+        print(f"[AI] 🤖 Sending to Claude (claude-sonnet-4-6)...")
         client = Anthropic(api_key=settings.anthropic_api_key)
         message = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-sonnet-4-6",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )

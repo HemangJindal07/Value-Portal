@@ -1,11 +1,21 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.database.supabase import get_supabase_admin
 
 security = HTTPBearer()
 
+# Endpoints a user with must_reset_password=True is still allowed to call
+# while their account is locked into the password-reset flow.
+_RESET_PASSWORD_ALLOWED_PATHS = {
+    "/api/auth/me",
+    "/api/auth/reset-password",
+    "/api/auth/signin",
+    "/api/auth/signup",
+}
+
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     supabase = get_supabase_admin()
@@ -29,6 +39,15 @@ async def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found",
+            )
+
+        if (
+            profile.data.get("must_reset_password")
+            and request.url.path not in _RESET_PASSWORD_ALLOWED_PATHS
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Password reset required before accessing this resource.",
             )
 
         return profile.data

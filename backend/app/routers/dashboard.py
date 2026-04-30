@@ -15,7 +15,7 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
     - DM / others: own submissions only
     """
     supabase = get_supabase_admin()
-    role = current_user.get("role", "delivery_manager")
+    role = current_user.get("role", "user")
     user_id = current_user["id"]
     is_org = role in ("admin", "executive")
 
@@ -33,7 +33,7 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
 
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in all_leads if l["status"] in ("submitted", "under_review", "qualified")
+        for l in all_leads if l["status"] == "qualified"
     )
     won_value = sum(
         float(l.get("estimated_value") or 0)
@@ -97,7 +97,7 @@ async def recent_activity(
     - DM / others: only activity on own submissions
     """
     supabase = get_supabase_admin()
-    role = current_user.get("role", "delivery_manager")
+    role = current_user.get("role", "user")
     user_id = current_user["id"]
 
     query = (
@@ -170,10 +170,10 @@ async def admin_analytics(
     ideas = ideas_res.data or []
 
     # ── 4. Revenue / savings ──────────────────────────────────────────────────
-    # routing_pending = stuck, not real pipeline — excluded intentionally
+    # Pipeline = qualified leads only (pre-qualification stages are not real pipeline)
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in non_draft if l["status"] in ("submitted", "under_review", "qualified")
+        for l in non_draft if l["status"] == "qualified"
     )
     won_value = sum(
         float(l.get("estimated_value") or 0) for l in non_draft if l["status"] == "won"
@@ -287,7 +287,7 @@ async def pipeline_report(
     """
     supabase = get_supabase_admin()
     user_id  = current_user["id"]
-    role     = current_user.get("role", "delivery_manager")
+    role     = current_user.get("role", "user")
 
     all_roles = {"admin", "executive"}
     leads_all_roles  = {"admin", "executive", "sales"}
