@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigationGuard } from "@/lib/navigation-guard-context";
-import { Bell, Search, LogOut, User, Settings } from "lucide-react";
+import { Bell, Search, LogOut } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,17 +54,16 @@ export function Topbar() {
     return () => clearInterval(interval);
   }, [fetchUnread]);
 
-  const handleSignOut = async() => {
-    // requestNavigate(async () => {
-      try {
-        await signOut();
-        localStorage.clear();
-        sessionStorage.clear();
-        router.push("/login");
-      } catch (err) {
-        console.error("[LOGOUT] signOut() threw an error:", err);
-      }
-    // });
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      // signOut failed — proceed with redirect anyway
+    } finally {
+      window.location.href = "/login";
+    }
   };
 
   return (
@@ -122,15 +121,6 @@ export function Topbar() {
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-[#B12B35] focus:text-[#B12B35] focus:bg-[#B12B35]/5"
               onClick={handleSignOut}

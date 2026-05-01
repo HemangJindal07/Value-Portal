@@ -253,7 +253,8 @@ def _get_profile(supabase, user_id: str) -> dict:
             .execute()
         )
         return res.data or {}
-    except Exception:
+    except Exception as exc:
+        logger.warning("_get_profile: failed to fetch profile for user %s: %s", user_id, exc)
         return {}
 
 

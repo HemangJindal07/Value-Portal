@@ -3,6 +3,9 @@ from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user
 import uuid
 import mimetypes
+import logging
+
+logger = logging.getLogger("uploads")
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
@@ -65,8 +68,8 @@ async def upload_attachment(
     except Exception:
         try:
             supabase.storage.create_bucket(BUCKET, options={"public": True})
-        except Exception:
-            pass  # bucket likely already exists under a different error
+        except Exception as exc:
+            logger.warning("Could not create storage bucket '%s' (may already exist): %s", BUCKET, exc)
 
     # Upload to Supabase Storage
     try:
