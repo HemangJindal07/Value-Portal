@@ -14,8 +14,20 @@ const PROTECTED_ROUTES: { pattern: RegExp; allowedRoles: string[] }[] = [
   },
   {
     // New account page and account edit page — admin, executive, sales only
+    // Must come before the accounts list/detail rule (more specific first)
     pattern: /^\/accounts\/(new|[^/]+\/edit)$/,
     allowedRoles: ["admin", "executive", "sales"],
+  },
+  {
+    // Accounts list and account detail — admin, executive, sales only
+    // user and practice_lead are redirected to / if they type this URL directly
+    pattern: /^\/accounts(\/[^/]+)?$/,
+    allowedRoles: ["admin", "executive", "sales"],
+  },
+  {
+    // Reviews page — admin and executive only
+    pattern: /^\/reviews(\/|$)/,
+    allowedRoles: ["admin", "executive"],
   },
 ];
 
