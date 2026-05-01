@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from typing import Literal
+from datetime import datetime, timedelta
 from app.database.supabase import get_supabase_client, get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.user import ProfileResponse, ProfileUpdate
@@ -8,6 +9,16 @@ from app.schemas.user import ProfileResponse, ProfileUpdate
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 SELF_ASSIGNABLE_ROLES = ("user", "sales", "practice_lead", "executive")
+
+_COMMON_PASSWORDS = {
+    "12345678", "password", "password1", "password123", "qwerty123",
+    "iloveyou", "welcome1", "abc12345", "letmein1", "monkey123",
+    "dragon12", "master12", "sunshine", "princess", "football",
+}
+
+_LOCKOUT_THRESHOLD = 5
+_LOCKOUT_MINUTES = 15
+_failed_attempts: dict[str, dict] = {}
 
 
 class SignUpRequest(BaseModel):
@@ -32,8 +43,52 @@ class AuthResponse(BaseModel):
     user: dict
 
 
+def _check_password_strength(password: str) -> None:
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters.",
+        )
+    if password.lower() in _COMMON_PASSWORDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password is too common. Please choose a stronger one.",
+        )
+
+
+def _check_lockout(email: str) -> None:
+    key = email.lower()
+    entry = _failed_attempts.get(key)
+    if not entry:
+        return
+    locked_until = entry.get("locked_until")
+    if locked_until and datetime.utcnow() < locked_until:
+        remaining = int((locked_until - datetime.utcnow()).total_seconds() / 60) + 1
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account temporarily locked. Try again in {remaining} minute(s).",
+        )
+
+
+def _record_failure(email: str) -> None:
+    key = email.lower()
+    entry = _failed_attempts.setdefault(key, {"count": 0, "locked_until": None})
+    locked_until = entry.get("locked_until")
+    if locked_until and datetime.utcnow() >= locked_until:
+        entry["count"] = 0
+        entry["locked_until"] = None
+    entry["count"] += 1
+    if entry["count"] >= _LOCKOUT_THRESHOLD:
+        entry["locked_until"] = datetime.utcnow() + timedelta(minutes=_LOCKOUT_MINUTES)
+
+
+def _clear_failure(email: str) -> None:
+    _failed_attempts.pop(email.lower(), None)
+
+
 @router.post("/signup", response_model=AuthResponse)
 async def sign_up(payload: SignUpRequest):
+    _check_password_strength(payload.password)
     supabase = get_supabase_client()
     try:
         response = supabase.auth.sign_up(
@@ -76,6 +131,7 @@ async def sign_up(payload: SignUpRequest):
 
 @router.post("/signin", response_model=AuthResponse)
 async def sign_in(payload: SignInRequest):
+    _check_lockout(payload.email)
     supabase = get_supabase_client()
     try:
         response = supabase.auth.sign_in_with_password(
@@ -91,15 +147,19 @@ async def sign_in(payload: SignInRequest):
             .execute()
         )
 
+        _clear_failure(payload.email)
         return AuthResponse(
             access_token=response.session.access_token,
             refresh_token=response.session.refresh_token,
             user=profile.data,
         )
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
+        _record_failure(payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Invalid email or password.",
         )
 
 

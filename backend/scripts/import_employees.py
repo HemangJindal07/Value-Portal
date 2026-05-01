@@ -2,14 +2,14 @@
 Bulk-import employees from the Delivery Project-Emp List CSV.
 
 Each employee gets:
-  - a Supabase Auth user with the shared initial password Txcatalyst@123
+  - a Supabase Auth user with the initial password read from the
+    IMPORT_SHARED_PASSWORD environment variable (must be set before running)
   - a profile row with role='user' and must_reset_password=true
-    (the portal will force them to reset on first login)
 
 Usage (from repo root):
-    python -m backend.scripts.import_employees
+    IMPORT_SHARED_PASSWORD=<password> python -m backend.scripts.import_employees
 or:
-    cd backend && python -m scripts.import_employees
+    cd backend && IMPORT_SHARED_PASSWORD=<password> python -m scripts.import_employees
 
 Idempotent: existing profiles (matched by email) are skipped — their auth
 records and passwords are NOT touched.
@@ -39,7 +39,10 @@ logger = logging.getLogger("import_employees")
 CSV_PATH = (
     BACKEND_DIR.parent / "Delivery Project-Emp List(Delivery Emp List).csv"
 )
-SHARED_PASSWORD = "Txcatalyst@123"
+SHARED_PASSWORD = os.environ.get("IMPORT_SHARED_PASSWORD")
+if not SHARED_PASSWORD:
+    logger.error("IMPORT_SHARED_PASSWORD environment variable is not set. Aborting.")
+    sys.exit(1)
 
 
 def _norm(value: str | None) -> str | None:

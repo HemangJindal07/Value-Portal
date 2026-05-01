@@ -54,11 +54,17 @@ export function Topbar() {
     return () => clearInterval(interval);
   }, [fetchUnread]);
 
-  const handleSignOut = () => {
-    requestNavigate(async () => {
-      await signOut();
-      router.push("/login");
-    });
+  const handleSignOut = async() => {
+    // requestNavigate(async () => {
+      try {
+        await signOut();
+        localStorage.clear();
+        sessionStorage.clear();
+        router.push("/login");
+      } catch (err) {
+        console.error("[LOGOUT] signOut() threw an error:", err);
+      }
+    // });
   };
 
   return (

@@ -31,7 +31,10 @@ export function NavigationGuardProvider({ children }: { children: React.ReactNod
   }, []);
 
   const requestNavigate = useCallback((proceed: () => void) => {
-    if (guardRef.current?.()) {
+    const isDirty = guardRef.current?.();
+    console.log("[LOGOUT] requestNavigate called — form dirty?", isDirty ?? false);
+    if (isDirty) {
+      console.log("[LOGOUT] Navigation guard blocked — showing 'Discard changes?' dialog");
       pendingRef.current = proceed;
       setOpen(true);
     } else {
