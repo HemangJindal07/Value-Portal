@@ -15,7 +15,7 @@ router = APIRouter(prefix="/assignments", tags=["Assignments"])
 
 def _enrich_assignments(assignments: list[dict]) -> list[dict]:
     """
-    Joins submission title, status, and account_name onto each assignment row.
+    Joins submission title, status, account_name, and submitter_name onto each assignment row.
     Handles mixed lead/idea assignment lists in a single batch.
     """
     if not assignments:
@@ -32,7 +32,7 @@ def _enrich_assignments(assignments: list[dict]) -> list[dict]:
     if lead_ids:
         result = (
             supabase.table("leads")
-            .select("lead_id, title, status, account:accounts(account_name)")
+            .select("lead_id, title, status, submitted_by, account:accounts(account_name)")
             .in_("lead_id", lead_ids)
             .execute()
         )
@@ -41,11 +41,29 @@ def _enrich_assignments(assignments: list[dict]) -> list[dict]:
     if idea_ids:
         result = (
             supabase.table("value_ideas")
-            .select("idea_id, title, status, account:accounts(account_name)")
+            .select("idea_id, title, status, submitted_by, account:accounts(account_name)")
             .in_("idea_id", idea_ids)
             .execute()
         )
         ideas_map = {r["idea_id"]: r for r in (result.data or [])}
+
+    # Collect all unique submitter IDs to fetch in one batch
+    submitter_ids: set[str] = set()
+    for a in assignments:
+        sid = a["submission_id"]
+        sub = leads_map.get(sid) if a["submission_type"] == "lead" else ideas_map.get(sid)
+        if sub and sub.get("submitted_by"):
+            submitter_ids.add(sub["submitted_by"])
+
+    profiles_map: dict = {}
+    if submitter_ids:
+        profiles_result = (
+            supabase.table("profiles")
+            .select("id, full_name")
+            .in_("id", list(submitter_ids))
+            .execute()
+        )
+        profiles_map = {r["id"]: r for r in (profiles_result.data or [])}
 
     for a in assignments:
         sid = a["submission_id"]
@@ -57,6 +75,10 @@ def _enrich_assignments(assignments: list[dict]) -> list[dict]:
         a["submission_title"] = sub.get("title")
         a["submission_status"] = sub.get("status")
         a["account_name"] = (sub.get("account") or {}).get("account_name")
+
+        submitter_id = sub.get("submitted_by")
+        profile = profiles_map.get(submitter_id, {}) if submitter_id else {}
+        a["submitter_name"] = profile.get("full_name") or None
 
     return assignments
 

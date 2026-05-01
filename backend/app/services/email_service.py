@@ -1,10 +1,6 @@
 """
 Email notification service using SMTP (Gmail / any SMTP server).
 
-# TEST MODE — all emails are redirected to a single address for testing.
-# Remove the TEST_RECIPIENT block and uncomment PRODUCTION section below
-# before going live.
-
 Routing rules (driven by the contact-region the user enters on the lead form,
 NOT by the account's own region)
 ──────────────────────────────────────────────────────────────────────────────
@@ -30,9 +26,6 @@ logger = logging.getLogger("email_service")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-# TEST: redirect every outbound email to this address.
-# PRODUCTION: remove this block and restore the real CC_ALWAYS below.
-TEST_RECIPIENT = "hemang.jindal@testingxperts.com"
 CC_ALWAYS = "adeesh.jain@testingxperts.com"
 
 REGION_EXTRA_RECIPIENTS: dict[str, str] = {
@@ -68,12 +61,6 @@ def _smtp_send(
     if not settings.smtp_user or not settings.smtp_pass:
         logger.warning("[EMAIL] SMTP credentials not configured — skipping email.")
         return
-
-    # TEST: override all recipients with TEST_RECIPIENT, no CC.
-    # PRODUCTION: remove the four lines below.
-    logger.info("[EMAIL][TEST] Redirecting from TO=%s CC=%s → TO=%s CC=none", to_emails, cc_emails, TEST_RECIPIENT)
-    to_emails = [TEST_RECIPIENT]
-    cc_emails = []
 
     from_addr = f"{settings.smtp_from_name} <{settings.smtp_user}>"
     cc_list   = [e for e in (cc_emails or []) if e]

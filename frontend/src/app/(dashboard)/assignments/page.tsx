@@ -121,10 +121,8 @@ function ReviewDecisionDialog({
   const decisionOptions = isLead
     ? [
         { value: "approved", label: "Qualified — move to next stage" },
-        { value: "rejected", label: "Disqualified — does not meet criteria" },
       ]
     : [
-        { value: "approved", label: "Approved — proceed with idea" },
         { value: "rejected", label: "Rejected — not viable at this time" },
       ];
 
@@ -571,7 +569,8 @@ export default function AssignmentsPage() {
   }, [user, isOrgRole, activeTab]);
 
   const fetchAssignments = useCallback(async () => {
-    if (!token) return;
+    if (!token || !user) return;
+    setLoading(true);
     try {
       const mine = await api<AssignmentWithRelations[]>("/api/assignments/mine", { token });
       setMyAssignments(mine);
@@ -584,16 +583,14 @@ export default function AssignmentsPage() {
       } else {
         const leads = await api<LeadWithRelations[]>("/api/leads", { token });
         // const ideas = await api<IdeaWithRelations[]>("/api/ideas", { token }); // Value Ideas disabled
-        if (user?.id) {
-          setMyLeads(leads.filter((l) => l.submitted_by === user.id));
-        }
+        setMyLeads(leads.filter((l) => l.submitted_by === user.id));
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to load assignments");
     } finally {
       setLoading(false);
     }
-  }, [token, isOrgRole, user?.id]);
+  }, [token, isOrgRole, user]);
 
   useEffect(() => {
     fetchAssignments();
@@ -622,6 +619,10 @@ export default function AssignmentsPage() {
   // Reviewed: all actioned assignments, sorted by action_date descending (most recent first)
   const myActioned = [...myAssignments.filter((a) => a.action_taken !== "pending")].sort(
     (a, b) => new Date(b.action_date ?? b.created_at).getTime() - new Date(a.action_date ?? a.created_at).getTime()
+  );
+  // Organisation tab: sort latest assignment_date / created_at first so newest items appear on top
+  const allAssignmentsSorted = [...allAssignments].sort(
+    (a, b) => new Date(b.assignment_date ?? b.created_at).getTime() - new Date(a.assignment_date ?? a.created_at).getTime()
   );
 
   // User-perspective tabs (non-org role):
@@ -931,7 +932,7 @@ export default function AssignmentsPage() {
                     Viewing all organisation assignments — use <strong>Pending Review</strong> to action your own assignments.
                   </p>
                 )}
-                {allAssignments.map((a) => (
+                {allAssignmentsSorted.map((a) => (
                   <AssignmentCard
                     key={a.assignment_id}
                     assignment={a}
@@ -986,7 +987,7 @@ export default function AssignmentsPage() {
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">{a.account_name ?? "—"}</TableCell>
                           <TableCell className="text-muted-foreground text-sm">
-                            {(a as AssignmentWithRelations & { submitter_name?: string }).submitter_name ?? "—"}
+                            {a.submitter_name ?? "—"}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1.5 justify-end">
@@ -1054,7 +1055,7 @@ export default function AssignmentsPage() {
                             </TableCell>
                             <TableCell className="text-muted-foreground text-sm">{a.account_name ?? "—"}</TableCell>
                             <TableCell className="text-muted-foreground text-sm">
-                              {(a as AssignmentWithRelations & { submitter_name?: string }).submitter_name ?? "—"}
+                              {a.submitter_name ?? "—"}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex gap-1.5 justify-end">

@@ -186,6 +186,7 @@ export interface AssignmentWithRelations extends Assignment {
   submission_title?: string;
   submission_status?: string;
   account_name?: string;
+  submitter_name?: string;
 }
 
 // ── M6: Notifications ──
