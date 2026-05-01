@@ -11,19 +11,19 @@ BUCKET = "attachments"
 # Max 20 MB per file
 MAX_SIZE_BYTES = 20 * 1024 * 1024
 
-ALLOWED_MIME_PREFIXES = (
+ALLOWED_MIME_TYPES = {
     "application/pdf",
+    # Word
     "application/msword",
-    "application/vnd",          # covers all .docx, .xlsx, .pptx
-    "text/",
-    "image/",
-    "application/zip",
-    "application/x-zip",
-)
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    # Excel
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 
 def _is_allowed(content_type: str) -> bool:
-    return any(content_type.startswith(p) for p in ALLOWED_MIME_PREFIXES)
+    return content_type in ALLOWED_MIME_TYPES
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -42,7 +42,7 @@ async def upload_attachment(
         raise HTTPException(
             status_code=400,
             detail=f"File type '{content_type}' is not allowed. "
-                   "Please upload PDF, Word, Excel, image, or text files.",
+                   "Only PDF, Word (.doc/.docx), and Excel (.xls/.xlsx) files are accepted.",
         )
 
     contents = await file.read()

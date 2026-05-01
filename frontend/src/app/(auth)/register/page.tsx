@@ -17,8 +17,22 @@ export default function RegisterPage() {
   const { signUp } = useAuth();
   const router = useRouter();
 
+  const COMMON_PASSWORDS = new Set([
+    "12345678", "password", "password1", "password123", "qwerty123",
+    "iloveyou", "welcome1", "abc12345", "letmein1", "monkey123",
+    "dragon12", "master12", "sunshine", "princess", "football",
+  ]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
+    if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+      toast.error("This password is too common. Please choose a stronger one.");
+      return;
+    }
     setLoading(true);
     try {
       await signUp(email, password, fullName);
@@ -86,11 +100,11 @@ export default function RegisterPage() {
           <Input
             id="password"
             type="password"
-            placeholder="Minimum 6 characters"
+            placeholder="Minimum 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             className="h-10 border-[#C5C5C5] bg-white focus-visible:border-[#B12B35] focus-visible:ring-[#B12B35]/20 placeholder:text-[#C5C5C5]"
           />
         </div>

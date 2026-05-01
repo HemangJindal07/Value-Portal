@@ -36,16 +36,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setUser(profile);
       setToken(accessToken);
-    } catch {
-      setUser(null);
-      setToken(null);
+    } catch (err: unknown) {
+      // Profile fetch failed — token was valid but profile is missing from DB
+      // (e.g. admin deleted the user). Force sign-out and redirect.
+      // Only redirect if we actually had a token (not a normal logged-out state).
+      console.warn("[AUTH] fetchProfile failed — profile missing or invalid token:", err);
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Had a live session but no profile — force full sign-out
+        await supabase.auth.signOut();
+        setUser(null);
+        setToken(null);
+        window.location.href = "/login";
+      } else {
+        // No session — just clear state quietly (normal post-logout state)
+        setUser(null);
+        setToken(null);
+      }
     }
   }, []);
 
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(({ data: { user }, error }) => {
+      if (error?.code === "refresh_token_not_found" || error?.message?.includes("Refresh Token")) {
+        supabase.auth.signOut().finally(() => setLoading(false));
+        return;
+      }
       if (user) {
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session?.access_token) {
@@ -61,7 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" && !session) {
+        supabase.auth.signOut();
+        setUser(null);
+        setToken(null);
+        return;
+      }
       if (session?.access_token) {
         fetchProfile(session.access_token);
       } else {
@@ -73,11 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  // ── Auto-logout after 1 hour of inactivity ──────────────────────────────
+  // ── Auto-logout after 40 minutes of inactivity ──────────────────────────
   useEffect(() => {
     if (!user) return;
 
-    const IDLE_TIMEOUT = 60 * 60 * 1000; // 1 hour
+    const IDLE_TIMEOUT = 40 * 60 * 1000; // 40 minutes
     let timer: ReturnType<typeof setTimeout>;
 
     const resetTimer = () => {
@@ -102,12 +127,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const signIn = async (email: string, password: string) => {
+    const key = `_fl_${email.toLowerCase()}`;
+    const raw = sessionStorage.getItem(key);
+    if (raw) {
+      const entry = JSON.parse(raw) as { count: number; until: number };
+      if (entry.until && Date.now() < entry.until) {
+        const mins = Math.ceil((entry.until - Date.now()) / 60000);
+        throw new Error(`Too many failed attempts. Please wait ${mins} minute(s) before trying again.`);
+      }
+    }
+
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      const stored = raw ? JSON.parse(raw) as { count: number; until: number } : { count: 0, until: 0 };
+      stored.count += 1;
+      if (stored.count >= 5) {
+        stored.until = Date.now() + 15 * 60 * 1000;
+      }
+      sessionStorage.setItem(key, JSON.stringify(stored));
+      throw new Error("Invalid email or password.");
+    }
+
+    sessionStorage.removeItem(key);
   };
 
   const signUp = async (
@@ -121,14 +164,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: { data: { full_name: fullName } },
     });
-    if (error) throw error;
+    if (error) {
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("already") || msg.includes("registered") || msg.includes("taken")) {
+        throw new Error("If this email is available, your account has been created.");
+      }
+      throw new Error("Registration failed. Please try again.");
+    }
   };
 
   const signOut = async () => {
+    console.log("[LOGOUT] signOut() called — clearing Supabase session");
     const supabase = createClient();
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("[LOGOUT] supabase.auth.signOut() returned error:", error);
+    } else {
+      console.log("[LOGOUT] supabase.auth.signOut() succeeded");
+    }
     setUser(null);
     setToken(null);
+    console.log("[LOGOUT] user and token cleared from state");
   };
 
   const refreshProfile = async () => {

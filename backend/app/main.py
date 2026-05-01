@@ -16,10 +16,14 @@ app = FastAPI(
 )
 
 _extra_origins = [o.strip() for o in settings.extra_cors_origins.split(",") if o.strip()]
+_localhost_origins = (
+    ["http://localhost:3000", "http://localhost:3002"]
+    if settings.environment == "development"
+    else []
+)
 _cors_origins = list({
     settings.frontend_url,
-    "http://localhost:3000",
-    "http://localhost:3002",
+    *_localhost_origins,
     *_extra_origins,
 })
 
@@ -32,7 +36,7 @@ _SECURITY_HEADERS = {
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "Content-Security-Policy": (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "font-src 'self' data:; "
