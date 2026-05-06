@@ -201,7 +201,7 @@ export function AppSidebar() {
           {/* Product name */}
           <div className="min-w-0">
             <p className="text-white text-[13px] font-extrabold leading-none tracking-wider">
-              Tx-Catalyst
+              Tx Catalyst
             </p>
           </div>
         </button>

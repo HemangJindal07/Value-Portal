@@ -32,7 +32,7 @@ export function CampaignBanner() {
       {/* Copy */}
       <div className="relative flex-1 min-w-0">
         <p className="text-white/70 text-[10px] font-semibold tracking-[0.15em] uppercase mb-0.5">
-          Tx-Catalyst
+          Tx Catalyst
         </p>
         <p className="text-white font-bold text-base leading-tight">
           Got a lead?&nbsp;

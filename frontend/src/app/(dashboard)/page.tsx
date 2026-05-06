@@ -146,7 +146,7 @@ function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, numb
 function WorkflowPipelineChart({ data }: { data: Record<string, number> }) {
   const stages = [
     {
-      label: "Awaiting Review",
+      label: "Routing Pending",
       count: (data["submitted"] || 0) + (data["routing_pending"] || 0),
       subLabels: [
         { label: "Submitted",       count: data["submitted"]       || 0, color: "#2E75B6" },
@@ -172,7 +172,7 @@ function WorkflowPipelineChart({ data }: { data: Record<string, number> }) {
       badge: "bg-[#B12B35]/10 text-[#B12B35] border-[#B12B35]/20",
     },
     {
-      label: "Opportunity Created",
+      label: "Qualified Opportunity",
       count: data["opportunity_created"] || 0,
       color: "#7c3aed",
       badge: "bg-purple-100 text-purple-700 border-purple-200",
@@ -1822,9 +1822,9 @@ function UserDashboard({
       {/* 4 personal KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          title="My Leads Submitted"
+          title="My Leads"
           value={d.myLeads}
-          desc={`${d.leadsByStatus["qualified"] || 0} qualified · ${d.leadsByStatus["opportunity_created"] || 0} in progress · ${d.leadsByStatus["won"] || 0} won`}
+          desc={`${d.leadsByStatus["qualified"] || 0} Qualified · ${d.leadsByStatus["in progress"] || 0} In Progress · ${d.leadsByStatus["won"] || 0} Won`}
           icon={Target}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
@@ -1844,9 +1844,9 @@ function UserDashboard({
           href="/leaderboard"
         />
         <StatCard
-          title="Under Review"
+          title="Leads Status"
           value={d.myUnderReview}
-          desc="Submitted · routing pending · under review"
+          desc="Routing Pending · Under Review"
           icon={ClipboardList}
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"
