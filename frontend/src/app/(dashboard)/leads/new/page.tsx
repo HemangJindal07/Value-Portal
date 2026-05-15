@@ -36,12 +36,7 @@ const TX_SERVICES = [
   { value: "Insurance",              label: "Insurance",              reviewer: "Yuvraj" },
 ];
 
-const REGIONS = [
-  "Australia", "Brazil", "Canada", "China", "France", "Germany",
-  "India", "Japan", "Malaysia", "Mexico", "Middle East", "Netherlands",
-  "New Zealand", "Philippines", "Poland", "Singapore", "South Africa",
-  "South Korea", "Sweden", "UAE", "United Kingdom", "United States", "Other",
-];
+const REGIONS = ["North America", "EMEA", "APAC"];
 
 export default function NewLeadPage() {
   const { token } = useAuth();
@@ -75,12 +70,17 @@ export default function NewLeadPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
-  // Block browser back/forward button while form is dirty
+  // Block browser back/forward button while form is dirty.
+  // Push a sentinel entry once so the back button has somewhere to "pop" to.
+  // Guard against tab-switch popstate events by checking state identity.
   useEffect(() => {
     if (!isDirty) return;
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
+    // Push sentinel only once when form becomes dirty
+    window.history.pushState({ navGuard: true }, "", window.location.href);
+    const handlePopState = (e: PopStateEvent) => {
+      // Tab switches don't carry our sentinel state — ignore them
+      if (!e.state || !e.state.navGuard) return;
+      window.history.pushState({ navGuard: true }, "", window.location.href);
       requestNavigate(() => router.back());
     };
     window.addEventListener("popstate", handlePopState);
@@ -91,32 +91,33 @@ export default function NewLeadPage() {
 
   function handleAccountSelected(account: Account, isNew: boolean) {
     setAccountType(isNew ? "new_lead" : "current_lead");
+    if (isNew) setService("");
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!service) {
+    if (!service && accountType !== "new_lead") {
       toast.error("Please select a Service Line before submitting.");
       return;
     }
 
     const fd = new FormData(e.currentTarget);
 
-    const ev = fd.get("estimated_value");
-    if (ev && Number(ev) < 0) {
+    const evRaw = ((fd.get("estimated_value") as string) || "").replace(/,/g, "");
+    if (evRaw && (isNaN(Number(evRaw)) || Number(evRaw) < 0)) {
       setEstimatedValueError(true);
-      toast.error("Estimated value cannot be negative.");
+      toast.error("Estimated value must be a valid positive number.");
       return;
     }
 
     setLoading(true);
 
     try {
-      let uploadedUrl: string | null = null;
+      let uploadedDoc: { url: string; name: string } | null = null;
       if (attachment) {
         const uploaded = await uploadFile(attachment, token!);
-        uploadedUrl = uploaded.url;
+        uploadedDoc = { url: uploaded.url, name: uploaded.filename };
       }
 
       const contactName  = (fd.get("contact_name") as string) || null;
@@ -134,11 +135,11 @@ export default function NewLeadPage() {
         account_id:          fd.get("account_id") as string,
         service:             service || null,
         contact_details:     contactDetails,
-        estimated_value:     fd.get("estimated_value") ? Number(fd.get("estimated_value")) : null,
-        currency:            (fd.get("currency") as string) || "USD",
+        estimated_value:     evRaw ? Number(evRaw) : null,
+        currency:            "USD",
         expected_close_date: (fd.get("expected_close_date") as string) || null,
         priority:            priority || "medium",
-        supporting_docs:     uploadedUrl ? [uploadedUrl] : [],
+        supporting_docs:     uploadedDoc ? [uploadedDoc] : [],
       };
 
       await api("/api/leads", { method: "POST", body: payload, token: token! });
@@ -157,7 +158,7 @@ export default function NewLeadPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Lead Opportunity</h1>
         <p className="text-muted-foreground">
-          Log a cross-sell or upsell opportunity at a client account.
+          Log an Opportunity.
         </p>
       </div>
 
@@ -264,10 +265,13 @@ export default function NewLeadPage() {
           </CardContent>
         </Card>
 
-        {/* ── Service Line ── */}
+        {/* ── Service Line ── (hidden for new accounts; auto-routed to Adeesh Jain) */}
+        {accountType !== "new_lead" && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Service Line <span className="text-[#B12B35]">*</span></CardTitle>
+            <CardTitle className="text-base">
+              Service Line <span className="text-[#B12B35]">*</span>
+            </CardTitle>
             <CardDescription>Select the Tx vertical for this opportunity.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -300,6 +304,7 @@ export default function NewLeadPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
 
         {/* ── Deal Details ── */}
@@ -316,12 +321,14 @@ export default function NewLeadPage() {
                 <Input
                   id="estimated_value"
                   name="estimated_value"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="e.g. 500000"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="e.g. 500,000 or 500000.00"
                   className={estimatedValueError ? "border-red-500 focus-visible:ring-red-500/50" : ""}
-                  onChange={(e) => setEstimatedValueError(Number(e.target.value) < 0)}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/,/g, "");
+                    setEstimatedValueError(raw !== "" && (isNaN(Number(raw)) || Number(raw) < 0));
+                  }}
                 />
                 {estimatedValueError && (
                   <p className="text-xs text-red-500">Estimated value cannot be negative.</p>
@@ -356,7 +363,14 @@ export default function NewLeadPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Input id="currency" name="currency" defaultValue="USD" placeholder="USD" />
+                <Input
+                  id="currency"
+                  name="currency"
+                  value="USD"
+                  readOnly
+                  className="bg-muted/40 text-muted-foreground cursor-not-allowed"
+                />
+                <p className="text-[11px] text-muted-foreground">USD only (per BRD)</p>
               </div>
             </div>
 

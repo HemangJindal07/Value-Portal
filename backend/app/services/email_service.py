@@ -1,18 +1,8 @@
 """
 Email notification service using SMTP (Gmail / any SMTP server).
 
-Routing rules (driven by the contact-region the user enters on the lead form,
-NOT by the account's own region)
-──────────────────────────────────────────────────────────────────────────────
-contact_region == UK   → TO: stakeholders + sahil.baquer@testingxperts.com
-                         CC: adeesh.jain@testingxperts.com
-
-contact_region == US   → TO: stakeholders + joe.underwood@testingxperts.com
-                         CC: adeesh.jain@testingxperts.com
-
-contact_region blank
-or anything else       → TO: stakeholders
-                         CC: adeesh.jain@testingxperts.com
+All submission emails go to stakeholders (TO) with adeesh.jain@testingxperts.com
+always in CC. No region-based extra recipients.
 """
 
 import logging
@@ -26,25 +16,11 @@ logger = logging.getLogger("email_service")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-CC_ALWAYS = "adeesh.jain@testingxperts.com"
+# TEST MODE: all emails are redirected to this address regardless of intended recipients.
+# Remove TEST_OVERRIDE_EMAIL and revert _smtp_send overrides before going to production.
+TEST_OVERRIDE_EMAIL = "hemang.jindal@testingxperts.com"
 
-REGION_EXTRA_RECIPIENTS: dict[str, str] = {
-    "united kingdom": "sahil.baquer@testingxperts.com",
-    "uk":             "sahil.baquer@testingxperts.com",
-    "gb":             "sahil.baquer@testingxperts.com",
-    "great britain":  "sahil.baquer@testingxperts.com",
-    "england":        "sahil.baquer@testingxperts.com",
-    "united states":  "joe.underwood@testingxperts.com",
-    "us":             "joe.underwood@testingxperts.com",
-    "usa":            "joe.underwood@testingxperts.com",
-    "united states of america": "joe.underwood@testingxperts.com",
-}
-
-
-def _get_region_extra(region: str | None) -> str | None:
-    if not region:
-        return None
-    return REGION_EXTRA_RECIPIENTS.get(region.strip().lower())
+CC_ALWAYS = "hemang.jindal@testingxperts.com"
 
 
 # ── SMTP send helper ──────────────────────────────────────────────────────────
@@ -61,6 +37,11 @@ def _smtp_send(
     if not settings.smtp_user or not settings.smtp_pass:
         logger.warning("[EMAIL] SMTP credentials not configured — skipping email.")
         return
+
+    # TEST MODE: override all recipients with the test address
+    logger.info("[EMAIL] TEST MODE — redirecting to %s (intended TO: %s, CC: %s)", TEST_OVERRIDE_EMAIL, to_emails, cc_emails)
+    to_emails = [TEST_OVERRIDE_EMAIL]
+    cc_emails  = None
 
     from_addr = f"{settings.smtp_from_name} <{settings.smtp_user}>"
     cc_list   = [e for e in (cc_emails or []) if e]
@@ -273,6 +254,100 @@ def _build_status_html(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def send_new_account_email(
+    account_name: str,
+    account_id: str,
+    industry: str | None,
+    region: str | None,
+    creator_name: str,
+    creator_email: str,
+    portal_url: str,
+) -> None:
+    """
+    Notify adeesh.jain@testingxperts.com whenever a new account is created,
+    regardless of who created it (any role).
+    """
+    subject = f"[Tx-Catalyst] New Account Created: {account_name}"
+    cta_url = f"{portal_url}/accounts"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>New Account: {account_name}</title>
+</head>
+<body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
+        <tr>
+          <td style="background:#B12B35;padding:20px 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td><span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
+                  <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span></td>
+              <td align="right"><span style="background:rgba(255,255,255,0.15);color:#fff;font-size:11px;
+                               padding:3px 10px;border-radius:20px;font-weight:600;">NEW ACCOUNT</span></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 28px 8px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#B12B35;font-weight:600;
+                      text-transform:uppercase;letter-spacing:0.8px;">New Account</p>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#232222;line-height:1.3;">{account_name}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:1px solid #EDE7E6;border-radius:6px;overflow:hidden;">
+              <tr style="background:#F9F9F9;">
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;width:140px;">Account ID</td>
+                <td style="padding:6px 12px;color:#232222;font-size:13px;font-family:monospace;">{account_id}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;">Industry</td>
+                <td style="padding:6px 12px;color:#232222;font-size:13px;">{industry or "—"}</td>
+              </tr>
+              <tr style="background:#F9F9F9;">
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;">Region</td>
+                <td style="padding:6px 12px;color:#232222;font-size:13px;">{region or "—"}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;">Created by</td>
+                <td style="padding:6px 12px;color:#232222;font-size:13px;">
+                  {creator_name}
+                  <span style="color:#5D5D5D;font-size:12px;margin-left:4px;">&lt;{creator_email}&gt;</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 28px 28px;">
+            <a href="{cta_url}" style="display:inline-block;background:#B12B35;color:#ffffff;
+                      text-decoration:none;font-size:14px;font-weight:600;
+                      padding:11px 24px;border-radius:6px;">View Accounts in Tx-Catalyst →</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
+            <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    _smtp_send(to_emails=["adeesh.jain@testingxperts.com"], subject=subject, html_body=html)
+
+
 def send_submission_email(
     submission_type: str,
     submission_id: str,
@@ -284,25 +359,16 @@ def send_submission_email(
     submitter_email: str,
     stakeholder_emails: list[str],
     extra_rows: list[tuple[str, str]] | None = None,
-    routing_region: str | None = None,
+    routing_region: str | None = None,  # kept for call-site compatibility, no longer used
 ) -> None:
     """
-    Send a new-submission notification email to all stakeholders.
-    Called by routing_engine.start_routing immediately after a lead/idea is submitted.
-
-    stakeholder_emails — reviewer addresses (DU, DH, Sales, etc.)
-    region — account region; shown in the email body for context only.
-    routing_region — the region the user typed under "Client Contact Details"
-        on the lead form. Only this value adds UK/US extra recipients.
-        If None or unrecognised, the email goes only to stakeholders + Adeesh in CC.
+    Send a new-submission notification email to all stakeholders (TO).
+    Adeesh Jain is always CC'd. No region-based extra recipients.
     """
     settings = get_settings()
     portal_url = settings.portal_url
 
     to_emails: list[str] = list(stakeholder_emails)
-    region_extra = _get_region_extra(routing_region)
-    if region_extra and region_extra not in to_emails:
-        to_emails.append(region_extra)
 
     if not to_emails:
         logger.warning(
@@ -328,6 +394,97 @@ def send_submission_email(
     _smtp_send(to_emails=to_emails, subject=subject, html_body=html, cc_emails=[CC_ALWAYS])
 
 
+def send_new_lead_under_review_email(
+    title: str,
+    account_name: str,
+    submitter_name: str,
+    submitter_email: str,
+    submission_id: str,
+    portal_url: str,
+    to_email: str = "hemang.jindal@testingxperts.com",
+) -> None:
+    """
+    Notify the assigned reviewer when a new-account lead arrives for review.
+    Defaults to adeesh.jain@testingxperts.com for backwards compatibility.
+    """
+    account_suffix = f" — {account_name}" if account_name else ""
+    subject = f"[Tx-Catalyst] New Account Lead Under Review: {title}{account_suffix}"
+    cta_url = f"{portal_url}/leads/{submission_id}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>New Account Lead Under Review: {title}</title>
+</head>
+<body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
+        <tr>
+          <td style="background:#003466;padding:20px 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td><span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
+                  <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span></td>
+              <td align="right"><span style="background:rgba(255,255,255,0.15);color:#fff;font-size:11px;
+                               padding:3px 10px;border-radius:20px;font-weight:600;">NEW ACCOUNT LEAD</span></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 28px 8px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#003466;font-weight:600;
+                      text-transform:uppercase;letter-spacing:0.8px;">New Account Lead — Under Review</p>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#232222;line-height:1.3;">{title}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:1px solid #EDE7E6;border-radius:6px;overflow:hidden;">
+              <tr style="background:#F9F9F9;">
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;width:140px;">Account</td>
+                <td style="padding:6px 12px;color:#232222;font-size:13px;font-weight:600;">{account_name}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;">Submitted by</td>
+                <td style="padding:6px 12px;color:#232222;font-size:13px;">
+                  {submitter_name}
+                  <span style="color:#5D5D5D;font-size:12px;margin-left:4px;">&lt;{submitter_email}&gt;</span>
+                </td>
+              </tr>
+              <tr style="background:#F9F9F9;">
+                <td style="padding:6px 12px;color:#5D5D5D;font-size:13px;">Account Type</td>
+                <td style="padding:6px 12px;color:#003466;font-size:13px;font-weight:600;">New Account</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 28px 28px;">
+            <a href="{cta_url}" style="display:inline-block;background:#003466;color:#ffffff;
+                      text-decoration:none;font-size:14px;font-weight:600;
+                      padding:11px 24px;border-radius:6px;">View Lead in Tx-Catalyst →</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
+            <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    _smtp_send(to_emails=[to_email], subject=subject, html_body=html)
+
+
 def send_reviewer_assignment_email(
     reviewer_email: str,
     reviewer_name: str,
@@ -347,7 +504,8 @@ def send_reviewer_assignment_email(
         f"A <strong>{type_label}</strong> has been routed to you for review as "
         f"<strong>{role_label}</strong>. Please log in to the Tx-Catalyst to take action."
     )
-    subject = f"[Tx-Catalyst] Action Required — {type_label}: {title}"
+    account_suffix = f" — {account_name}" if account_name else ""
+    subject = f"[Tx-Catalyst] Action Required — {type_label}: {title}{account_suffix}"
     html = _build_status_html(
         recipient_name=reviewer_name,
         submission_type=submission_type,
@@ -370,6 +528,7 @@ def send_submitter_status_email(
     new_status: str,
     actor_name: str,
     actor_role: str,
+    rejection_remarks: str | None = None,
 ) -> None:
     """
     Email the submitter whenever their lead/idea changes status (approved/rejected/final).
@@ -377,6 +536,7 @@ def send_submitter_status_email(
     """
     settings = get_settings()
     type_label = submission_type.title()
+    account_suffix = f" — {account_name}" if account_name else ""
 
     if new_status in ("approved", "qualified"):
         message = (
@@ -384,40 +544,57 @@ def send_submitter_status_email(
             f"<strong>Qualified</strong> by <strong>{actor_name}</strong> ({actor_role}). "
             f"The team will now work on creating the opportunity. You have earned <strong>20 points</strong>!"
         )
-        subject = f"[Tx-Catalyst] ✓ Lead Qualified: {title}"
+        subject = f"[Tx-Catalyst] ✓ Lead Qualified: {title}{account_suffix}"
     elif new_status == "rejected":
+        remarks_html = ""
+        if rejection_remarks:
+            # Light HTML-escape on the user-supplied remark
+            safe = (
+                rejection_remarks.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
+            remarks_html = (
+                f'<br/><br/><span style="color:#5D5D5D;font-size:13px;">'
+                f'<strong>Reviewer remarks:</strong></span><br/>'
+                f'<span style="display:inline-block;margin-top:4px;padding:8px 12px;'
+                f'background:#F9F9F9;border-left:3px solid #B12B35;'
+                f'border-radius:0 4px 4px 0;color:#232222;font-size:13px;line-height:1.5;">'
+                f'{safe}</span>'
+            )
         message = (
             f"Your <strong>{type_label}</strong> <em>{title}</em> was <strong>Rejected</strong> "
             f"by {actor_name} ({actor_role}). Please log in to the portal for details."
+            f"{remarks_html}"
         )
-        subject = f"[Tx-Catalyst] Lead Rejected: {title}"
+        subject = f"[Tx-Catalyst] Lead Rejected: {title}{account_suffix}"
     elif new_status == "opportunity_created":
         message = (
             f"Your lead <em>{title}</em> has been moved to <strong>Opportunity Created</strong> "
             f"by <strong>{actor_name}</strong>. The team is now actively working on this opportunity. "
             f"You have earned <strong>50 points</strong>!"
         )
-        subject = f"[Tx-Catalyst] Opportunity Created: {title}"
+        subject = f"[Tx-Catalyst] Opportunity Created: {title}{account_suffix}"
     elif new_status == "won":
         message = (
             f"Congratulations! Your lead <em>{title}</em> has been marked as <strong>Won</strong> "
             f"by <strong>{actor_name}</strong>. Excellent work! "
             f"You have earned <strong>100 points</strong>!"
         )
-        subject = f"[Tx-Catalyst] 🎉 Lead Won: {title}"
+        subject = f"[Tx-Catalyst] 🎉 Lead Won: {title}{account_suffix}"
     elif new_status == "lost":
         message = (
             f"Your lead <em>{title}</em> has been marked as <strong>Lost</strong> "
             f"by <strong>{actor_name}</strong>. Please log in to the portal for more details."
         )
-        subject = f"[Tx-Catalyst] Lead Lost: {title}"
+        subject = f"[Tx-Catalyst] Lead Lost: {title}{account_suffix}"
     else:
         # Intermediate approval step
         message = (
             f"Your <strong>{type_label}</strong> <em>{title}</em> was approved by "
             f"<strong>{actor_name}</strong> ({actor_role}) and has moved to the next review stage."
         )
-        subject = f"[Tx-Catalyst] Lead Progressing: {title}"
+        subject = f"[Tx-Catalyst] Lead Progressing: {title}{account_suffix}"
 
     html = _build_status_html(
         recipient_name=submitter_name,

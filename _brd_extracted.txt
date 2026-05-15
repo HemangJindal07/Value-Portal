@@ -1,0 +1,744 @@
+TX-CATALYST
+Lead Management & Opportunity Tracking Portal
+Admin Login Module
+BUSINESS REQUIREMENTS DOCUMENT
+Document Version
+v1.0
+Date
+May 2025
+Module
+Admin Login
+Status
+Draft
+1. Document Information
+Product Name
+Tx-Catalyst
+Module
+Admin Login
+Document Type
+Business Requirements Document (BRD)
+Version
+1.0
+Prepared For
+Development & QA Teams
+Reference Doc
+Tx-Catalyst User Login BRD v1.0
+Date
+May 2025
+Status
+Draft
+1.1 Revision History
+Version
+Date
+Author
+Description
+1.0
+May 2025
+Product Owner
+Initial Admin BRD draft
+2. Overview & Purpose
+The Admin login in Tx-Catalyst provides elevated access to the primary administrator — Adeesh Jain — and any designated admin-level users. While a standard User logs opportunities and a Reviewer evaluates them within their practice area, the Admin has complete cross-portal visibility and control.
+The Admin login is responsible for:
+Overseeing all leads across all practice areas and all users
+Managing user accounts — creating, editing, and deactivating users
+Configuring reviewer-to-practice routing rules
+Mapping stakeholders to accounts and leads
+Manually resolving leads that fail auto-routing (Exception Queue)
+Monitoring the leaderboard and reviewing performance across the team
+Receiving a CC notification on every lead submitted portal-wide
+Note: The Admin module is a superset of both the User and Reviewer modules. The Admin can perform all actions available to Users and Reviewers in addition to the administrative capabilities described in this document.
+3. Admin Navigation Menu
+The Admin sidebar is divided into three sections with the following menu items:
+Section
+Menu Item
+Description
+MAIN
+Dashboard
+Admin-level summary of portal-wide activity, pipeline, and team performance
+MAIN
+Accounts
+User account management — add, edit, deactivate, and manage portal users
+MAIN
+Submit New Lead
+Admin can submit a new lead directly (same form as User)
+MAIN
+My Assignments
+Leads manually assigned to or actioned by the Admin
+INSIGHTS
+Leaderboard
+Full portal-wide leaderboard of all users ranked by value points
+INSIGHTS
+Reviews
+Aggregated view of all leads across all reviewers and practice areas
+SYSTEM
+Notifications
+All portal-wide notifications visible to the Admin
+SYSTEM
+Exception Queue
+Leads that could not be auto-routed; require manual Admin intervention
+SYSTEM
+Stakeholder Mapping
+Configure which stakeholders are linked to which accounts/clients
+SYSTEM
+Routing Config
+Define and update practice-area-to-reviewer routing rules
+SYSTEM
+Admin
+System-level settings: user roles, permissions, and portal configuration
+4. Dashboard
+The Admin Dashboard is the first screen on login and provides a comprehensive, portal-wide view of all activity — unlike the User Dashboard which is scoped to the individual user.
+4.1 Portal-Wide KPI Summary Cards
+The top of the dashboard displays high-level metrics across all users and leads:
+KPI Card
+Metric Shown
+Scope
+Total Leads Submitted
+Count of all leads ever submitted on the portal
+All Users
+Awaiting Review
+Leads currently pending reviewer action
+All Practice Areas
+Qualified Leads
+Leads approved and pushed to Sales
+All Practice Areas
+Leads Won
+Opportunities marked as Won
+All Practice Areas
+Total Active Users
+Number of users who have submitted at least one lead
+Portal-wide
+Exception Queue Count
+Number of leads sitting in the exception queue unresolved
+Portal-wide
+4.2 Portal-Wide Lead Pipeline
+A visual pipeline (mirroring the User's My Lead Pipeline) but showing aggregate counts across all users:
+Awaiting Review — Submitted count | Routing Pending count
+Under Review — Total leads with reviewers
+Qualified / Rejected — Split count
+Opportunity Created — Pushed to Sales count
+Won / Lost — Final outcome count
+4.3 Recent Activity Feed
+A real-time feed of the latest portal actions visible only to the Admin:
+New lead submitted (by whom, for which client, which practice)
+Lead status changed (by which reviewer, to which stage)
+Exception queue item added or resolved
+New user account created or deactivated
+4.4 Quick Actions
+Submit New Lead — Opens the lead submission form
+Go to Exception Queue — Shortcut to unresolved routing exceptions
+Manage Users — Shortcut to the Accounts section
+5. Accounts (User Management)
+The Accounts section enables the Admin to manage all portal user accounts. This is the single interface for onboarding new users, editing existing profiles, and deactivating leavers.
+5.1 User Listing View
+Displays a table of all registered portal users with the following columns:
+Column
+Description
+User Name
+Full name of the user
+Email Address
+Corporate email used for login and notifications
+Role
+User / Reviewer / Admin
+Practice Area
+Applicable for Reviewers — their assigned practice
+Status
+Active / Inactive
+Date Added
+Account creation date
+Last Login
+Timestamp of most recent login
+Actions
+Edit | Deactivate | Reset Password
+5.2 Add New User
+Admin can create a new portal account by filling the following form:
+#
+Field
+Type
+Mandatory
+Notes
+1
+Full Name
+Text
+Yes
+User's full name as it will appear on leaderboard and notifications
+2
+Email Address
+Email
+Yes
+Must be a valid corporate email; used for login and all notifications
+3
+Role
+Dropdown
+Yes
+User / Reviewer / Admin
+4
+Practice Area
+Dropdown
+No
+Required only if Role = Reviewer; determines routing assignment
+5
+Password
+Password
+Yes
+Set initial password; user prompted to change on first login
+6
+Status
+Toggle
+Yes
+Active by default on creation
+5.3 Edit User
+Admin can modify any existing user's details: name, email, role, practice area, or status. Changing a Reviewer's practice area updates the routing configuration automatically.
+5.4 Deactivate / Reactivate User
+Deactivated users cannot log in to the portal
+Their historical submissions and points remain intact in the system
+Leads previously routed to a deactivated Reviewer must be manually re-routed by Admin via the Exception Queue or Routing Config
+Admin can reactivate a deactivated account at any time
+5.5 Reset Password
+Admin can trigger a password reset email to any user
+The reset link expires after 24 hours
+6. Submit New Lead
+The Admin can submit a lead directly using the same form available to standard Users. All mandatory and optional fields, routing logic, notification triggers, and points awards are identical to those defined in the User Login BRD (Section 5.3).
+Additional Admin-specific behaviour:
+The Admin can submit a lead on behalf of another user by selecting a 'Submit on behalf of' field (user dropdown) — the points for the submission are credited to the selected user, not the Admin
+If the Admin submits without selecting a proxy user, the lead is attributed to the Admin account
+Routing logic remains the same — practice area determines the assigned reviewer
+7. My Assignments
+My Assignments shows leads that have been specifically routed to the Admin for action. This primarily includes:
+New Client leads — routed to Adeesh Jain (Admin) since there is no predefined reviewer for new clients
+Leads manually re-assigned to the Admin from the Exception Queue
+Any lead where the Admin has intervened and taken ownership
+7.1 My Assignments List View
+Column
+Description
+Lead Title
+Title of the opportunity
+Submitted By
+Name of the user who logged the lead
+Client Name
+Client associated with the lead
+Practice Area
+Practice the lead belongs to
+Date Submitted
+When the lead was submitted
+Current Status
+Status badge: Awaiting Review / Under Review / etc.
+Actions
+Review | Approve | Reject | Re-assign to Reviewer
+7.2 Actions from My Assignments
+Review — View the full lead details
+Approve — Approve the lead; status moves to Qualified; user notified; +20 pts credited
+Reject — Reject with optional remarks; user notified
+Re-assign to Reviewer — Select a Reviewer from the dropdown and transfer ownership; the lead leaves My Assignments and moves to the selected Reviewer's queue
+8. Leaderboard (Admin View)
+The Admin's Leaderboard page is the same ranking table visible to Users, but with additional administrative data columns and controls.
+8.1 Leaderboard Columns (Admin Extended)
+Column
+Visible to User
+Visible to Admin
+Description
+Rank
+Yes
+Yes
+User's current ranking by total points
+User Name
+Yes
+Yes
+Contributor's name
+Total Points
+Yes
+Yes
+Cumulative points earned
+Leads Submitted
+No
+Yes
+Total number of leads ever logged
+Leads Won
+No
+Yes
+Count of Won opportunities
+Practice Area
+No
+Yes
+User's associated practice (if Reviewer)
+Last Activity
+No
+Yes
+Date of most recent lead submission or status update
+8.2 Admin Leaderboard Controls
+Filter by Practice Area — View leaderboard scoped to a specific practice
+Filter by Date Range — View points earned within a custom date window
+Export — Download leaderboard data as CSV or Excel
+9. Reviews
+The Reviews section gives the Admin a consolidated view of all leads across all reviewers and all practice areas — a true 360-degree pipeline view.
+9.1 Reviews List View
+Displays every lead in the system with the following details:
+Column
+Description
+Lead ID
+Unique identifier for the lead
+Lead Title
+Opportunity title
+Submitted By
+User who submitted the lead
+Client Name
+Associated client
+Practice Area
+QE / Data Engineering / Digital Engineering & AI / Insurance
+Assigned Reviewer
+Delivery Head responsible for this lead
+Date Submitted
+Submission timestamp
+Current Status
+Status badge with colour coding
+Last Updated
+Timestamp of most recent status change
+Actions
+View | Re-assign | Override Status
+9.2 Filter & Search
+Filter by Status — Awaiting Review / Under Review / Qualified / Rejected / Opportunity Identified / Won / Lost
+Filter by Practice Area
+Filter by Reviewer
+Filter by Date Range (submitted date or last updated)
+Search by Lead Title or Client Name
+9.3 Admin Override Actions
+From the Reviews section, the Admin can perform the following override actions on any lead:
+Action
+Description
+Points Impact
+View
+Open full lead details in read-only mode
+None
+Re-assign
+Transfer lead to a different Reviewer; original reviewer loses access
+None
+Override Status
+Manually move a lead to any status stage (e.g., force-approve or force-close a stuck lead)
+Points awarded as per the milestone reached
+Add Remark
+Attach an Admin-level note to the lead visible to the Reviewer
+None
+Note: Status overrides should be used sparingly. Every override is logged in the audit trail with the Admin's name, timestamp, and reason.
+10. Notifications
+The Admin's Notifications section consolidates all portal-wide events in a single chronological feed. The Admin always receives a CC copy of every notification triggered on the platform.
+10.1 Notification Events Visible to Admin
+Event
+Source
+Admin Notified?
+New lead submitted (any user, any practice)
+User action
+Yes — always
+Lead auto-routed to Reviewer
+System
+Yes
+Lead routing failed → moved to Exception Queue
+System
+Yes — priority alert
+Reviewer approves a lead
+Reviewer action
+Yes
+Reviewer rejects a lead
+Reviewer action
+Yes
+Reviewer marks Opportunity Identified
+Reviewer action
+Yes
+Reviewer marks Won or Lost
+Reviewer action
+Yes
+New user account created
+Admin action
+Yes
+User account deactivated
+Admin action
+Yes
+Routing Config updated
+Admin action
+Yes — confirmation
+Exception Queue item resolved
+Admin action
+Yes — confirmation
+10.2 Notification Display
+Each notification shows: event description, related lead title or user name, timestamp, and a direct link to the relevant section
+Unread notifications are highlighted with a badge count on the Notifications menu item
+Admin can mark individual notifications as read or clear all
+11. Exception Queue
+The Exception Queue captures leads that could not be automatically routed to a Reviewer. These are flagged for manual Admin intervention to ensure no opportunity is lost or left unassigned.
+11.1 When Does a Lead Enter the Exception Queue?
+Scenario
+Reason
+Expected Admin Action
+Practice area selected has no reviewer mapped in Routing Config
+Routing rule missing
+Map a reviewer in Routing Config or manually assign
+Assigned Reviewer account has been deactivated
+Reviewer inactive
+Re-assign to an active Reviewer
+Lead submitted for a new client with no practice-area match
+Ambiguous routing
+Manually assign to appropriate Reviewer or self-assign to My Assignments
+Routing Config rule temporarily suspended by Admin
+Config change mid-submission
+Restore config or manually route
+System routing failure (technical error)
+Backend error
+Retry auto-routing or manually assign
+11.2 Exception Queue List View
+Column
+Description
+Lead ID
+Unique identifier
+Lead Title
+Opportunity title
+Submitted By
+User who logged the lead
+Client Name
+Associated client
+Practice Area
+Practice selected on the form
+Date Submitted
+When the lead was originally submitted
+Failure Reason
+System-generated reason the lead could not be routed
+Days in Queue
+Number of days the lead has been unresolved
+Actions
+Assign to Reviewer | Self-Assign | Re-route
+11.3 Resolution Actions
+Assign to Reviewer — Admin selects an active Reviewer from a dropdown; lead exits the queue and appears in the Reviewer's queue; user is notified of status update.
+Self-Assign — Admin takes ownership; lead appears in Admin's My Assignments.
+Re-route — Admin updates the practice area or client type to trigger a fresh routing attempt.
+Note: A lead in the Exception Queue for more than 48 hours without resolution should trigger an escalation notification to the Admin. SLA for resolution should be defined by the business.
+12. Stakeholder Mapping
+Stakeholder Mapping allows the Admin to associate specific internal stakeholders (users or external contacts) with client accounts. This ensures that when a lead is submitted for a particular client, the relevant stakeholders are aware and can be looped in.
+12.1 Mapping View
+Displays a list of all client accounts with their mapped stakeholders:
+Column
+Description
+Client Name
+Name of the client account
+Client Type
+Existing / New
+Mapped Stakeholders
+List of internal users or contacts linked to this client
+Practice Area
+Primary practice associated with this client
+Actions
+Edit Mapping | Add Stakeholder | Remove Stakeholder
+12.2 Add / Edit Stakeholder Mapping
+#
+Field
+Type
+Mandatory
+Notes
+1
+Client Name
+Text / Dropdown
+Yes
+Select from existing client list or add new
+2
+Stakeholder Name
+Dropdown
+Yes
+Select from registered portal users
+3
+Stakeholder Role
+Text
+No
+e.g., Account Manager, Technical Lead
+4
+Notification Opt-in
+Toggle
+Yes
+If ON, stakeholder is CC'd on all leads for this client
+12.3 Behaviour
+If Notification Opt-in is ON for a stakeholder, they receive in-portal and email notifications for every status change on leads associated with that client
+Stakeholder Mapping does not affect routing — it only controls notification visibility
+Multiple stakeholders can be mapped to a single client
+A stakeholder can be mapped to multiple clients
+13. Routing Config
+Routing Config is the control panel for the automated lead-routing engine. The Admin uses this section to define, update, and manage the rules that determine which Reviewer receives a lead based on the practice area selected at submission.
+13.1 Current Routing Rules (Default Configuration)
+Practice Area
+Client Type
+Assigned Reviewer
+Status
+Quality Engineering (QE)
+Existing Client
+Manjeet
+Active
+Data Engineering
+Existing Client
+Rajiv Diwan
+Active
+Digital Engineering & AI
+Existing Client
+Vivek Gupta
+Active
+Insurance
+Existing Client
+Yurvaj Singh
+Active
+Any Practice Area
+New Client
+Adeesh Jain
+Active
+13.2 Add New Routing Rule
+#
+Field
+Type
+Mandatory
+Notes
+1
+Practice Area
+Dropdown
+Yes
+Select from defined practice areas or add custom
+2
+Client Type
+Dropdown
+Yes
+Existing Client / New Client / All
+3
+Assigned Reviewer
+Dropdown
+Yes
+Select from active Reviewer accounts
+4
+Rule Priority
+Number
+No
+If multiple rules match, higher priority rule wins
+5
+Status
+Toggle
+Yes
+Active / Inactive; inactive rules are skipped by the engine
+13.3 Edit / Deactivate a Routing Rule
+Admin can update the Assigned Reviewer for any existing rule — e.g., when a Delivery Head changes
+Deactivating a rule causes future leads matching that rule to fall into the Exception Queue
+All changes to Routing Config are logged in the audit trail
+13.4 Rule Conflict Resolution
+If two active rules match the same lead, the rule with the higher Priority number takes precedence
+If priority is equal, the more specific rule (Existing Client over All) takes precedence
+If no rule matches, the lead enters the Exception Queue automatically
+14. Admin Settings
+The Admin menu item (bottom of the SYSTEM section) provides system-level configuration options for the entire portal.
+14.1 User Role Management
+View and edit role assignments for all users (User / Reviewer / Admin)
+Promote a User to Reviewer or Admin
+Demote a Reviewer to User
+Assign or re-assign practice areas to Reviewers
+14.2 Points Configuration
+Admin can view and update the points awarded at each lead lifecycle milestone:
+Milestone
+Default Points
+Configurable?
+Opportunity Submitted
+10
+Yes
+Opportunity Approved
+20
+Yes
+Opportunity Identified
+20
+Yes
+Opportunity Won
+50
+Yes
+Note: Changes to points configuration apply to future milestones only. Historical points already credited are not retroactively adjusted.
+14.3 Practice Area Management
+View all defined practice areas
+Add new practice areas (e.g., for future business expansion)
+Rename or deactivate existing practice areas
+Deactivating a practice area removes it from the lead submission form dropdown and flags related routing rules as requiring update
+14.4 Email Notification Settings
+Configure the sender name and email address for system-generated emails
+Enable or disable email notifications globally (kill switch for maintenance)
+View email delivery logs — sent, failed, bounced
+14.5 Audit Log
+A read-only, tamper-proof log of all system-level actions:
+Column
+Description
+Timestamp
+Date and time of the action
+Actor
+Name and role of the user who performed the action
+Action Type
+e.g., Status Override, Routing Rule Updated, User Deactivated
+Entity
+The lead, user, or config item affected
+Details
+Before/after values or description of the change
+15. Notification & Email Matrix — Full Portal View
+The following matrix documents every notification event across the portal and which role receives in-portal and/or email alerts:
+Event
+User (Submitter)
+Reviewer
+Admin (Adeesh Jain)
+Lead submitted
+Portal + Email
+Portal + Email
+Portal + Email (always)
+Lead auto-routed successfully
+Portal
+Portal + Email
+Portal
+Lead routing failed (Exception Queue)
+Portal
+—
+Portal + Email (Priority)
+Exception Queue resolved by Admin
+Portal + Email
+Portal + Email
+Portal (confirmation)
+Lead approved (Qualified)
+Portal + Email
+Portal
+Portal
+Lead rejected
+Portal + Email
+Portal
+Portal
+Lead marked Opportunity Identified
+Portal + Email
+Portal
+Portal
+Lead marked Won
+Portal + Email
+Portal
+Portal
+Lead marked Lost
+Portal + Email
+Portal
+Portal
+Admin overrides status
+Portal + Email
+Portal + Email
+Portal (confirmation)
+New user account created
+Email (welcome)
+—
+Portal
+User account deactivated
+Email (notice)
+—
+Portal
+Routing Config updated
+—
+—
+Portal (confirmation)
+Stakeholder Mapping updated
+—
+—
+Portal (confirmation)
+16. Acceptance Criteria
+The following criteria must be met before the Admin module is considered production-ready:
+#
+Feature
+Acceptance Criteria
+AC-A01
+Admin Dashboard
+Admin dashboard shows portal-wide KPIs (not scoped to logged-in admin's own leads). All counts are accurate and real-time.
+AC-A02
+Add User
+Admin can create a new user with all mandatory fields. User receives a welcome email. New user can log in with the set credentials.
+AC-A03
+Edit User
+Admin can update user name, email, role, and practice area. Changes reflect immediately across the portal.
+AC-A04
+Deactivate User
+Deactivated user cannot log in. Their historical data and points are preserved. Leads previously assigned to a deactivated reviewer appear in the Exception Queue.
+AC-A05
+Submit on Behalf
+Admin can submit a lead on behalf of another user. Points are credited to the selected user, not the Admin.
+AC-A06
+My Assignments
+New client leads route to Admin's My Assignments. Admin can approve, reject, or re-assign. Status changes trigger correct notifications and points.
+AC-A07
+Exception Queue Entry
+Any lead that fails auto-routing must appear in the Exception Queue within 60 seconds of submission.
+AC-A08
+Exception Queue Resolution
+Admin can assign an exception lead to a reviewer. Lead exits queue, reviewer is notified, user is notified.
+AC-A09
+Routing Config — Add
+Admin can add a new routing rule. Subsequent leads matching the new rule are routed correctly.
+AC-A10
+Routing Config — Deactivate
+Deactivating a routing rule causes new matching leads to fall into Exception Queue, not silently fail.
+AC-A11
+Stakeholder Mapping
+Adding a stakeholder with Notification Opt-in ON results in that stakeholder receiving notifications for leads on that client.
+AC-A12
+Reviews — Override
+Admin can override a lead's status. Points are credited per the milestone. Override is logged in the Audit Log with reason.
+AC-A13
+Leaderboard Filters
+Admin can filter leaderboard by practice area and date range. Exported CSV matches the filtered view.
+AC-A14
+Points Config
+Admin can change milestone points values. New values apply only to future milestones. Existing points are unchanged.
+AC-A15
+Audit Log
+Every admin action (override, deactivation, routing change, config update) appears in the Audit Log with actor, timestamp, and detail.
+AC-A16
+Admin CC Notifications
+Admin receives a portal and email notification for every single lead submitted across the portal, regardless of practice area or user.
+AC-A17
+Role-Based Access
+Admin login provides full portal visibility. A Reviewer attempting to access Admin-only sections receives an access denied error.
+17. Non-Functional Requirements (Admin Module)
+Category
+Requirement
+Security
+Admin credentials must be stored with bcrypt hashing. Admin sessions expire after 60 minutes of inactivity.
+Access Control
+RBAC enforced — Admin-only pages return HTTP 403 Forbidden for Reviewer or User session tokens.
+Performance
+Reviews and Exception Queue pages load within 3 seconds even with 1,000+ leads in the system.
+Audit Integrity
+Audit Log entries are immutable — no user (including Admin) can edit or delete log entries.
+Data Export
+Leaderboard and Reviews export must complete within 10 seconds for datasets up to 10,000 rows.
+Email Delivery
+All notification emails must be delivered within 5 minutes of the triggering event.
+Availability
+Admin module must be available 99.5% of business hours; planned maintenance windows communicated 24 hours in advance.
+18. Assumptions & Constraints
+18.1 Assumptions
+Adeesh Jain is the primary Admin for Phase 1. Additional admins can be created by the existing Admin via the Accounts section.
+Practice areas are fixed for Phase 1 (QE, Data Engineering, Digital Engineering & AI, Insurance). New areas can be added via Admin Settings but require a routing rule to be created before leads can be routed.
+All reviewer account changes (deactivation, practice re-assignment) are communicated to the Admin prior to implementation to allow proactive routing updates.
+The portal is an internal tool; authentication is form-based login (no SSO in Phase 1 unless separately scoped).
+The Audit Log is read-only and cannot be exported in Phase 1 — it is viewable on-screen only.
+18.2 Constraints
+CRM integration is out of scope for Phase 1 — Sales handoff remains manual.
+The Admin cannot delete leads or user point histories — only deactivate accounts and override statuses.
+Bulk actions (bulk approve, bulk reassign) are out of scope for Phase 1.
+Email notification template customisation is out of scope for Phase 1.
+19. Glossary
+Term
+Definition
+Admin
+A portal user with the highest level of access — full visibility and configuration rights across all modules
+Exception Queue
+A holding area for leads that failed automated routing and require manual Admin intervention
+Routing Config
+The Admin-managed rule set that determines which Reviewer receives a lead based on practice area and client type
+Stakeholder Mapping
+Configuration that links internal contacts to client accounts for notification purposes
+My Assignments
+A personalised queue showing leads routed to or actioned by the Admin
+Reviews
+Admin's aggregated view of all leads across all practice areas and reviewers
+Status Override
+Admin action to manually force a lead to a specific status stage, bypassing normal workflow
+Audit Log
+An immutable, tamper-proof record of all administrative actions performed on the portal
+RBAC
+Role-Based Access Control — the permission model ensuring each role can only access relevant sections
+CC Notification
+A copy notification automatically sent to Adeesh Jain for every lead event on the portal
+Rule Priority
+A numeric value determining which routing rule takes precedence when multiple rules match the same lead
+— End of Document —

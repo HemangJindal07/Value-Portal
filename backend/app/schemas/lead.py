@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import date, datetime
 from uuid import UUID
+from typing import Union
 
 
 class LeadType(str, Enum):
@@ -45,11 +46,11 @@ class LeadCreate(BaseModel):
     service: ServiceType | None = None
     contact_details: dict | None = None
     estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
-    currency: str = "USD"
+    currency: str = Field("USD", pattern=r"^USD$", description="USD only per BRD")
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
     priority: Priority = Priority.medium
-    supporting_docs: list[str] = []
+    supporting_docs: list[Union[str, dict[str, str]]] = []
 
 
 class LeadUpdate(BaseModel):
@@ -57,11 +58,12 @@ class LeadUpdate(BaseModel):
     description: str | None = None
     lead_type: LeadType | None = None
     estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
-    currency: str | None = None
+    currency: str | None = Field(None, pattern=r"^USD$", description="USD only per BRD")
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
     status: LeadStatus | None = None
     priority: Priority | None = None
+    rejection_remarks: str | None = None
 
 
 class LeadResponse(BaseModel):
@@ -79,7 +81,8 @@ class LeadResponse(BaseModel):
     expected_close_date: date | None = None
     status: LeadStatus
     priority: Priority
-    supporting_docs: list[str] = []
+    supporting_docs: list[Union[str, dict[str, str]]] = []
+    rejection_remarks: str | None = None
     ai_category: str | None = None
     ai_confidence: float | None = None
     value_score: int | None = None

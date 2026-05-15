@@ -117,8 +117,12 @@ async def leaderboard(
     )
     won_count_by_user = Counter(l["submitted_by"] for l in (won_res.data or []))
 
+    EXCLUDED_ROLES = {"admin", "executive"}
+
     entries: list[dict] = []
     for user in profiles.data or []:
+        if user.get("role") in EXCLUDED_ROLES:
+            continue
         uid = user["id"]
         score = score_by_user.get(uid, {})
 

@@ -65,8 +65,9 @@ function LeadsPageInner() {
   const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  // Highlight routing_pending rows when navigated from dashboard alert
   const highlightPending = (searchParams.get("status") ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -227,7 +228,7 @@ function LeadsPageInner() {
                         variant="secondary"
                         className={statusColors[lead.status]}
                       >
-                        {lead.status.replace("_", " ")}
+                        {lead.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">

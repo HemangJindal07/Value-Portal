@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, FileText, Save, CheckCircle2, XCircle, Clock, CircleDot } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, CheckCircle2, XCircle, Clock, CircleDot, AlertOctagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,20 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
 import Link from "next/link";
 import { ActivitySection } from "@/components/activity-section";
-import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500/10 text-gray-400",
@@ -59,27 +51,12 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-const leadStatuses = [
-  "draft",
-  "submitted",
-  "routing_pending",
-  "under_review",
-  "qualified",
-  "approved",
-  "won",
-  "lost",
-  "dropped",
-  "rejected",
-];
-
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const router = useRouter();
   const [lead, setLead] = useState<LeadWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
-  const [newStatus, setNewStatus] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [routingSteps, setRoutingSteps] = useState<{
     step_order: number;
     role_label: string;
@@ -93,7 +70,6 @@ export default function LeadDetailPage() {
     api<LeadWithRelations>(`/api/leads/${id}`, { token })
       .then((data) => {
         setLead(data);
-        setNewStatus(data.status);
       })
       .catch(() => router.push("/leads"))
       .finally(() => setLoading(false));
@@ -103,28 +79,6 @@ export default function LeadDetailPage() {
       .catch(() => {});
   }, [token, id, router]);
 
-  const canChangeStatus = Boolean(lead?.can_update_status);
-
-  const handleStatusChange = async () => {
-    if (!token || !lead || !newStatus || newStatus === lead.status) return;
-    setSaving(true);
-    try {
-      const updated = await api<LeadWithRelations>(`/api/leads/${id}`, {
-        method: "PATCH",
-        token,
-        body: { status: newStatus },
-      });
-      setLead({ ...lead, ...updated });
-      toast.success(`Status changed to ${newStatus.replace(/_/g, " ")}`);
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to update status"
-      );
-      setNewStatus(lead.status);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -151,13 +105,13 @@ export default function LeadDetailPage() {
               variant="secondary"
               className={statusColors[lead.status]}
             >
-              {lead.status.replace(/_/g, " ")}
+              {lead.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
             </Badge>
             <Badge
               variant="secondary"
               className={priorityColors[lead.priority]}
             >
-              {lead.priority}
+              {lead.priority.replace(/\b\w/g, c => c.toUpperCase())}
             </Badge>
             <Badge variant="outline">
               {typeLabels[lead.lead_type] || lead.lead_type}
@@ -166,51 +120,31 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {canChangeStatus && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-4 py-4">
-            <p className="text-sm font-medium text-muted-foreground">
-              Change Status:
-            </p>
-            <Select
-              value={newStatus || lead.status}
-              onValueChange={setNewStatus}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {leadStatuses.map((s) => (
-                  <SelectItem key={s} value={s} className="capitalize">
-                    {s.replace(/_/g, " ")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              disabled={saving || newStatus === lead.status}
-              onClick={handleStatusChange}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              {saving ? "Saving…" : "Apply"}
-            </Button>
-            <p className="text-xs text-muted-foreground w-full">
-              Reviewers should use <strong>My Assignments</strong> → Approve or Reject
-              to move the chain forward; use this only when you need a manual status
-              correction (admin / assigned reviewer / sales after approval).
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="py-4">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Lead Status:</span>{" "}
+            This lead is currently{" "}
+            <span className="font-semibold">
+              {lead.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+            </span>.{" "}
+            Status updates progress automatically as reviewers act via{" "}
+            <strong>My Assignments</strong>. Contact your administrator for manual corrections.
+          </p>
+        </CardContent>
+      </Card>
 
-      {!canChangeStatus && user?.id === lead.submitted_by && (
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Your submission status</span>{" "}
-              is shown above and updates as each reviewer acts on{" "}
-              <strong>My Assignments</strong>. You cannot change it here.
+      {lead.status === "rejected" && lead.rejection_remarks && (
+        <Card className="border-red-200 bg-red-50/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-red-700">
+              <AlertOctagon className="h-4 w-4" />
+              Reviewer Remarks (Rejection)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm whitespace-pre-wrap text-red-900">
+              {lead.rejection_remarks}
             </p>
           </CardContent>
         </Card>
@@ -232,19 +166,28 @@ export default function LeadDetailPage() {
                     Supporting documents
                   </p>
                   <ul className="space-y-2">
-                    {lead.supporting_docs.map((url) => (
-                      <li key={url}>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-[#2E75B6] hover:underline inline-flex items-center gap-1.5 break-all"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                          {url.split("/").pop() || url}
-                        </a>
-                      </li>
-                    ))}
+                    {lead.supporting_docs.map((doc, i) => {
+                      let parsed: { url: string; name: string } | null = null;
+                      if (typeof doc === "string") {
+                        try { parsed = JSON.parse(doc); } catch { /* plain URL */ }
+                      }
+                      const docObj = parsed ?? (typeof doc === "object" ? doc as { url: string; name: string } : null);
+                      const url  = docObj ? docObj.url  : (doc as string);
+                      const name = docObj ? docObj.name : (doc as string).split("/").pop() || (doc as string);
+                      return (
+                        <li key={i}>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-[#2E75B6] hover:underline inline-flex items-center gap-1.5 break-all"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                            {name}
+                          </a>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

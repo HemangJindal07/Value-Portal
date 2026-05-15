@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Briefcase, Trophy, TrendingDown } from "lucide-react";
+import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Briefcase, Trophy, TrendingDown, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,13 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -75,15 +68,38 @@ function getDaysRemaining(dueDate: string | null): { label: string; urgent: bool
   return { label: `${diff}d remaining`, urgent: false };
 }
 
-// 3-tier aging color: green 0-3 days · amber 4-7 days · red 7+ days
-function getAgingBorder(assignmentDate: string | null | undefined): string {
-  if (!assignmentDate) return "border-l-4 border-l-[#C5C5C5]";
-  const daysPending = Math.floor(
-    (Date.now() - new Date(assignmentDate).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  if (daysPending <= 3) return "border-l-4 border-l-green-500";
-  if (daysPending <= 7) return "border-l-4 border-l-amber-500";
-  return "border-l-4 border-l-red-500";
+// Border color rules:
+//   • Stage-1 Pending Review (lead in submitted / routing_pending / under_review AND
+//     assignment still pending) → 3-tier AGING colour:
+//         green 0-3 days · amber 4-7 days · red 7+ days
+//   • Beyond Stage-1, border reflects OUTCOME / lead status:
+//         approved → green · rejected → red · routing_pending → yellow ·
+//         other pending → amber · anything else → neutral grey
+function getStatusBorder(
+  actionTaken: string | null | undefined,
+  submissionStatus: string | null | undefined,
+  assignmentDate: string | null | undefined,
+): string {
+  const STAGE1_STATUSES = new Set(["submitted", "routing_pending", "under_review"]);
+  const isStage1Pending =
+    actionTaken === "pending" &&
+    (!submissionStatus || STAGE1_STATUSES.has(submissionStatus));
+
+  if (isStage1Pending) {
+    if (!assignmentDate) return "border-l-4 border-l-[#C5C5C5]";
+    const daysPending = Math.floor(
+      (Date.now() - new Date(assignmentDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (daysPending <= 3) return "border-l-4 border-l-green-500";
+    if (daysPending <= 7) return "border-l-4 border-l-amber-500";
+    return "border-l-4 border-l-red-500";
+  }
+
+  if (actionTaken === "approved") return "border-l-4 border-l-green-500";
+  if (actionTaken === "rejected") return "border-l-4 border-l-red-500";
+  if (submissionStatus === "routing_pending") return "border-l-4 border-l-yellow-400";
+  if (actionTaken === "pending") return "border-l-4 border-l-amber-500";
+  return "border-l-4 border-l-[#C5C5C5]";
 }
 
 // ── Review Decision Dialog ─────────────────────────────────────────────────
@@ -105,28 +121,17 @@ function ReviewDecisionDialog({
   submitting: boolean;
 }) {
   const [reason, setReason] = useState("");
-  const [decision, setDecision] = useState<string>("");
 
   // Reset form when dialog opens
   useEffect(() => {
     if (pending) {
       setReason("");
-      setDecision(pending.action);
     }
   }, [pending]);
 
   if (!pending) return null;
 
-  const isLead = pending.submissionType === "lead";
-  const decisionOptions = isLead
-    ? [
-        { value: "approved", label: "Qualified — move to next stage" },
-      ]
-    : [
-        { value: "rejected", label: "Rejected — not viable at this time" },
-      ];
-
-  const canSubmit = decision && reason.trim().length >= 10;
+  const canSubmit = reason.trim().length >= 10;
 
   return (
     <Dialog open={!!pending} onOpenChange={(open) => !open && onClose()}>
@@ -138,30 +143,17 @@ function ReviewDecisionDialog({
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="decision" className="text-sm font-medium text-[#232222]">
-              Decision <span className="text-red-500">*</span>
-            </Label>
-            <Select value={decision} onValueChange={(v) => { if (v !== null) setDecision(v); }}>
-              <SelectTrigger id="decision" className="border-[#C5C5C5]">
-                <SelectValue placeholder="Select a decision…" />
-              </SelectTrigger>
-              <SelectContent>
-                {decisionOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
             <Label htmlFor="reason" className="text-sm font-medium text-[#232222]">
-              Reason / Comments <span className="text-red-500">*</span>
+              {pending.action === "rejected" ? "Rejection Remarks" : "Reason / Comments"}{" "}
+              <span className="text-red-500">*</span>
             </Label>
             <Textarea
               id="reason"
-              placeholder="Provide a clear reason for this decision (min 10 characters)…"
+              placeholder={
+                pending.action === "rejected"
+                  ? "Explain why this lead is being rejected. The submitter will see this message (min 10 characters)…"
+                  : "Provide a clear reason for this decision (min 10 characters)…"
+              }
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={4}
@@ -172,6 +164,11 @@ function ReviewDecisionDialog({
               {reason.trim().length < 10 && reason.length > 0 && (
                 <span className="text-red-400 ml-1">— please add more detail</span>
               )}
+              {pending.action === "rejected" && (
+                <span className="block mt-1 text-red-500/80">
+                  These remarks will be shown to the submitter on their lead and in the rejection email.
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -181,14 +178,228 @@ function ReviewDecisionDialog({
           </Button>
           <Button
             disabled={!canSubmit || submitting}
-            onClick={() => onConfirm(pending.assignmentId, decision, reason.trim())}
+            onClick={() => onConfirm(pending.assignmentId, pending.action, reason.trim())}
             className={
-              decision === "rejected"
+              pending.action === "rejected"
                 ? "bg-red-600 hover:bg-red-700 text-white"
                 : "bg-green-600 hover:bg-green-700 text-white"
             }
           >
-            {submitting ? "Submitting…" : decision === "rejected" ? "Confirm Rejection" : "Confirm Approval"}
+            {submitting ? "Submitting…" : pending.action === "rejected" ? "Confirm Rejection" : "Confirm Approval"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Assign Reviewer Dialog (new-account flow) ──────────────────────────────
+type AssignReviewerPending = {
+  assignmentId: string;
+  leadTitle: string;
+  accountName: string | null | undefined;
+};
+
+type ExecutiveOption = {
+  id: string;
+  full_name: string | null;
+  email: string;
+};
+
+function AssignReviewerDialog({
+  pending,
+  currentUserId,
+  token,
+  onClose,
+  onAssigned,
+}: {
+  pending: AssignReviewerPending | null;
+  currentUserId: string | undefined;
+  token: string | null;
+  onClose: () => void;
+  onAssigned: () => void;
+}) {
+  const [executives, setExecutives] = useState<ExecutiveOption[]>([]);
+  const [reviewerId, setReviewerId] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [loadingExecs, setLoadingExecs] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pending || !token) return;
+    setReviewerId("");
+    setNotes("");
+    setDropdownOpen(false);
+    setLoadingExecs(true);
+    (async () => {
+      try {
+        const users = await api<ExecutiveOption[]>(
+          "/api/users?role=executive&active_only=true",
+          { token }
+        );
+        setExecutives((users || []).filter((u) => u.id !== currentUserId));
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to load executives");
+      } finally {
+        setLoadingExecs(false);
+      }
+    })();
+  }, [pending, token, currentUserId]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
+
+  if (!pending) return null;
+
+  const selectedExec = executives.find((e) => e.id === reviewerId);
+  const canSubmit = !!reviewerId && !submitting;
+
+  const handleSubmit = async () => {
+    if (!token || !reviewerId) return;
+    setSubmitting(true);
+    try {
+      await api(`/api/assignments/${pending.assignmentId}/assign-reviewer`, {
+        method: "POST",
+        body: { reviewer_id: reviewerId, ...(notes.trim() ? { notes: notes.trim() } : {}) },
+        token,
+      });
+      toast.success("Reviewer assigned");
+      onAssigned();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to assign reviewer");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!pending} onOpenChange={(open) => !open && !submitting && onClose()}>
+      <DialogContent className="sm:max-w-md overflow-visible">
+        <DialogHeader>
+          <DialogTitle className="text-[#232222]">Assign Reviewer</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          {/* Lead / Account info */}
+          <div className="rounded-md bg-[#F9F9F9] border border-[#EDE7E6] px-3 py-2.5 text-sm space-y-0.5">
+            <div className="flex gap-2">
+              <span className="text-[#5D5D5D] w-16 shrink-0">Lead</span>
+              <span className="text-[#232222] font-medium">{pending.leadTitle}</span>
+            </div>
+            {pending.accountName && (
+              <div className="flex gap-2">
+                <span className="text-[#5D5D5D] w-16 shrink-0">Account</span>
+                <span className="text-[#232222] font-medium">{pending.accountName}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Reviewer custom dropdown */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-[#232222]">
+              Reviewer <span className="text-red-500">*</span>
+            </Label>
+            <div ref={dropdownRef} className="relative">
+              {/* Trigger */}
+              <button
+                type="button"
+                onClick={() => !loadingExecs && setDropdownOpen((o) => !o)}
+                className={`w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm bg-white transition-colors
+                  ${dropdownOpen ? "border-[#003466] ring-2 ring-[#003466]/20" : "border-[#C5C5C5] hover:border-[#003466]/40"}
+                  ${loadingExecs ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                {loadingExecs ? (
+                  <span className="text-[#5D5D5D]">Loading executives…</span>
+                ) : selectedExec ? (
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-7 w-7 rounded-full bg-[#003466] text-white text-xs font-semibold flex items-center justify-center shrink-0">
+                      {(selectedExec.full_name || selectedExec.email).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="text-left min-w-0">
+                      <div className="font-medium text-[#232222] truncate">{selectedExec.full_name || selectedExec.email}</div>
+                      <div className="text-xs text-[#5D5D5D] truncate">{selectedExec.email}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-[#5D5D5D]">Select a reviewer…</span>
+                )}
+                <svg className={`h-4 w-4 text-[#5D5D5D] shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Dropdown list */}
+              {dropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-[9999] bg-white border border-[#EDE7E6] rounded-lg shadow-xl overflow-hidden">
+                  {executives.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-[#5D5D5D] text-center">No executives available</div>
+                  ) : (
+                    <ul className="max-h-48 overflow-y-auto py-1">
+                      {executives.map((u) => (
+                        <li key={u.id}>
+                          <button
+                            type="button"
+                            onClick={() => { setReviewerId(u.id); setDropdownOpen(false); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[#F0F4F9] transition-colors
+                              ${reviewerId === u.id ? "bg-[#EEF3FA]" : ""}`}
+                          >
+                            <div className="h-8 w-8 rounded-full bg-[#003466] text-white text-sm font-semibold flex items-center justify-center shrink-0">
+                              {(u.full_name || u.email).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-[#232222] text-sm truncate">{u.full_name || u.email}</div>
+                              <div className="text-xs text-[#5D5D5D] truncate">{u.email}</div>
+                            </div>
+                            {reviewerId === u.id && (
+                              <svg className="h-4 w-4 text-[#003466] ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label htmlFor="assign-notes" className="text-sm font-medium text-[#232222]">
+              Notes <span className="text-[#5D5D5D] font-normal">(optional)</span>
+            </Label>
+            <Textarea
+              id="assign-notes"
+              placeholder="Add any context for the reviewer…"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="border-[#C5C5C5] resize-none text-sm focus-visible:border-[#003466] focus-visible:ring-[#003466]/20"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={submitting} className="border-[#C5C5C5]">
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSubmit}
+            onClick={handleSubmit}
+            className="bg-[#003466] hover:bg-[#002a52] text-white"
+          >
+            {submitting ? "Assigning…" : "Assign Reviewer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -200,17 +411,23 @@ function AssignmentCard({
   assignment,
   onAction,
   onOpenReview,
+  onOpenAssignReviewer,
   actioning,
   readOnly = false,
 }: {
   assignment: AssignmentWithRelations;
   onAction: (id: string, action: string, notes?: string) => void;
   onOpenReview: (pending: ReviewPending) => void;
+  onOpenAssignReviewer: (pending: AssignReviewerPending) => void;
   actioning: string | null;
   readOnly?: boolean;
 }) {
   const due = getDaysRemaining(assignment.due_date);
-  const agingBorder = getAgingBorder(assignment.assignment_date);
+  const agingBorder = getStatusBorder(
+    assignment.action_taken,
+    assignment.submission_status,
+    assignment.assignment_date,
+  );
   const href =
     assignment.submission_type === "lead"
       ? `/leads/${assignment.submission_id}`
@@ -254,7 +471,7 @@ function AssignmentCard({
               {assignment.submission_status && (
                 <>
                   <span>·</span>
-                  <span>Status: <span className="text-foreground">{assignment.submission_status.replace(/_/g, " ")}</span></span>
+                  <span>Status: <span className="text-foreground">{assignment.submission_status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span></span>
                 </>
               )}
             </div>
@@ -271,7 +488,7 @@ function AssignmentCard({
                 variant="secondary"
                 className={`text-[11px] px-2 py-0 ${actionColors[assignment.action_taken]}`}
               >
-                {assignment.action_taken}
+                {assignment.action_taken.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
               </Badge>
             </div>
 
@@ -290,6 +507,26 @@ function AssignmentCard({
                 <Eye className="h-3 w-3" />
                 Open
               </Link>
+
+              {/* Assign Reviewer — new-account flow: routing_pending + 'New Account Review' role */}
+              {assignment.assigned_role === "New Account Review" &&
+                assignment.submission_status === "routing_pending" && (
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={actioning === assignment.assignment_id}
+                    onClick={() =>
+                      onOpenAssignReviewer({
+                        assignmentId: assignment.assignment_id,
+                        leadTitle: assignment.submission_title ?? "Untitled",
+                        accountName: assignment.account_name,
+                      })
+                    }
+                  >
+                    <UserPlus className="h-3 w-3" />
+                    Assign Reviewer
+                  </Button>
+                )}
 
               {/* Qualify / Reject / Escalate — Stage 1: under_review leads */}
               {(assignment.submission_status === "under_review" || assignment.submission_type === "idea") && (
@@ -559,6 +796,7 @@ export default function AssignmentsPage() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
+  const [assignReviewerPending, setAssignReviewerPending] = useState<AssignReviewerPending | null>(null);
   const [wlConfirm, setWlConfirm] = useState<{ assignmentId: string; action: "won" | "lost"; title: string } | null>(null);
 
   // Set the default tab once we know the user's role (avoids Base UI uncontrolled warning)
@@ -568,9 +806,12 @@ export default function AssignmentsPage() {
     }
   }, [user, isOrgRole, activeTab]);
 
-  const fetchAssignments = useCallback(async () => {
+  // Don't render the page content until the user role is resolved to prevent tab flash
+  const userResolved = user !== null && user !== undefined;
+
+  const fetchAssignments = useCallback(async (showSpinner = false) => {
     if (!token || !user) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       const mine = await api<AssignmentWithRelations[]>("/api/assignments/mine", { token });
       setMyAssignments(mine);
@@ -592,17 +833,28 @@ export default function AssignmentsPage() {
     }
   }, [token, isOrgRole, user]);
 
+  const initialLoadDone = useRef(false);
   useEffect(() => {
-    fetchAssignments();
+    // Show spinner only on first load; subsequent calls (tab-switch refetch) are silent
+    fetchAssignments(!initialLoadDone.current);
+    initialLoadDone.current = true;
   }, [fetchAssignments]);
 
   const handleAction = async (assignmentId: string, action: string, notes?: string) => {
     if (!token) return;
     setActioning(assignmentId);
     try {
+      const body: Record<string, unknown> = { action_taken: action };
+      if (notes) {
+        body.notes = notes;
+        // BRD AC-06: rejection captures reviewer remarks shown back to the submitter
+        if (action === "rejected") {
+          body.rejection_remarks = notes;
+        }
+      }
       await api(`/api/assignments/${assignmentId}`, {
         method: "PATCH",
-        body: { action_taken: action, ...(notes ? { notes } : {}) },
+        body,
         token,
       });
       toast.success(`Marked as ${action}`);
@@ -615,15 +867,47 @@ export default function AssignmentsPage() {
     }
   };
 
-  const myPending = myAssignments.filter((a) => a.action_taken === "pending");
-  // Reviewed: all actioned assignments, sorted by action_date descending (most recent first)
-  const myActioned = [...myAssignments.filter((a) => a.action_taken !== "pending")].sort(
-    (a, b) => new Date(b.action_date ?? b.created_at).getTime() - new Date(a.action_date ?? a.created_at).getTime()
-  );
-  // Organisation tab: sort latest assignment_date / created_at first so newest items appear on top
+  // Pending Review tab: ONLY Stage-1 qualify decisions.
+  // Once a lead is qualified, the Stage-2 "Opportunity" assignment is created (still
+  // action_taken="pending" but lead.submission_status is "qualified"); that belongs in
+  // the Opportunity Created tab. Same for "opportunity_created" leads → Won/Loss tab.
+  const STAGE1_LEAD_STATUSES = new Set([
+    "submitted",
+    "routing_pending",
+    "under_review",
+  ]);
+  const myPending = myAssignments.filter((a) => {
+    if (a.action_taken !== "pending") return false;
+    // Non-lead assignments (e.g. ideas) keep the old behaviour
+    if (a.submission_type !== "lead") return true;
+    // Lead assignments: only show in Pending Review when lead is still pre-qualified
+    return !a.submission_status || STAGE1_LEAD_STATUSES.has(a.submission_status);
+  });
+  // Reviewed: deduplicated by submission_id — one row per lead, showing the latest assignment.
+  // Sort by action_date descending first, then keep only the first (most recent) per submission.
+  const myActionedDeduped = (() => {
+    const sorted = [...myAssignments.filter((a) => a.action_taken !== "pending")].sort(
+      (a, b) => new Date(b.action_date ?? b.created_at).getTime() - new Date(a.action_date ?? a.created_at).getTime()
+    );
+    const seen = new Set<string>();
+    return sorted.filter((a) => {
+      if (seen.has(a.submission_id)) return false;
+      seen.add(a.submission_id);
+      return true;
+    });
+  })();
+  const myActioned = myActionedDeduped;
+  // Overview tab: sort latest assignment_date / created_at first, then deduplicate by submission_id
+  // so each lead appears only once (showing its most recent assignment when status changes).
   const allAssignmentsSorted = [...allAssignments].sort(
     (a, b) => new Date(b.assignment_date ?? b.created_at).getTime() - new Date(a.assignment_date ?? a.created_at).getTime()
   );
+  const _overviewSeen = new Set<string>();
+  const allAssignmentsDeduped = allAssignmentsSorted.filter((a) => {
+    if (_overviewSeen.has(a.submission_id)) return false;
+    _overviewSeen.add(a.submission_id);
+    return true;
+  });
 
   // User-perspective tabs (non-org role):
   const myUnderReview = myLeads.filter((l) =>
@@ -667,6 +951,16 @@ export default function AssignmentsPage() {
 
   return (
     <div className="space-y-6">
+      <AssignReviewerDialog
+        pending={assignReviewerPending}
+        currentUserId={user?.id}
+        token={token}
+        onClose={() => setAssignReviewerPending(null)}
+        onAssigned={() => {
+          setAssignReviewerPending(null);
+          fetchAssignments();
+        }}
+      />
       <ReviewDecisionDialog
         pending={reviewPending}
         onClose={() => setReviewPending(null)}
@@ -727,6 +1021,11 @@ export default function AssignmentsPage() {
         )}
       </div>
 
+      {!userResolved ? (
+        <div className="space-y-3 mt-4">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : (
       <Tabs value={activeTab ?? (isOrgRole ? "pending" : "submissions")} onValueChange={setActiveTab}>
         <TabsList>
           {/* My Submissions tracker — end users only */}
@@ -768,16 +1067,6 @@ export default function AssignmentsPage() {
             </TabsTrigger>
           )}
           {isOrgRole && (
-            <TabsTrigger value="all">
-              Organisation
-              {allAssignments.length > 0 && (
-                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                  {allAssignments.length}
-                </span>
-              )}
-            </TabsTrigger>
-          )}
-          {isOrgRole && (
             <TabsTrigger value="opportunity_created">
               Opportunity Created
               {oppPendingAssignments.length > 0 && (
@@ -797,13 +1086,23 @@ export default function AssignmentsPage() {
               )}
             </TabsTrigger>
           )}
-          {/* Reviewed — placed last for org-role so it sits after Won/Loss */}
           {isOrgRole && (
             <TabsTrigger value="actioned">
               Reviewed
               {myActioned.length > 0 && (
                 <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
                   {myActioned.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+          {/* Overview — placed last, deduplicated view of all org assignments */}
+          {isOrgRole && (
+            <TabsTrigger value="all">
+              Overview
+              {allAssignmentsDeduped.length > 0 && (
+                <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                  {allAssignmentsDeduped.length}
                 </span>
               )}
             </TabsTrigger>
@@ -837,6 +1136,7 @@ export default function AssignmentsPage() {
                   assignment={a}
                   onAction={handleAction}
                   onOpenReview={setReviewPending}
+                  onOpenAssignReviewer={setAssignReviewerPending}
                   actioning={actioning}
                 />
               ))
@@ -932,12 +1232,13 @@ export default function AssignmentsPage() {
                     Viewing all organisation assignments — use <strong>Pending Review</strong> to action your own assignments.
                   </p>
                 )}
-                {allAssignmentsSorted.map((a) => (
+                {allAssignmentsDeduped.map((a) => (
                   <AssignmentCard
                     key={a.assignment_id}
                     assignment={a}
                     onAction={handleAction}
                     onOpenReview={setReviewPending}
+                    onOpenAssignReviewer={setAssignReviewerPending}
                     actioning={actioning}
                     readOnly={user?.role === "executive"}
                   />
@@ -1149,6 +1450,7 @@ export default function AssignmentsPage() {
           </TabsContent>
         )}
       </Tabs>
+      )}
     </div>
   );
 }

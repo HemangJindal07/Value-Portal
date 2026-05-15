@@ -74,7 +74,8 @@ export interface Lead {
   expected_close_date: string | null;
   status: LeadStatus;
   priority: Priority;
-  supporting_docs: string[];
+  supporting_docs: (string | { url: string; name: string })[];
+  rejection_remarks: string | null;
   ai_category: string | null;
   ai_confidence: number | null;
   ai_summary: string | null;
@@ -155,7 +156,8 @@ export type AssignedRole =
   | "account_owner"
   | "sales_lead"
   | "practice_leader"
-  | "review_committee";
+  | "review_committee"
+  | (string & {});
 export type ActionTaken =
   | "pending"
   | "reviewed"
