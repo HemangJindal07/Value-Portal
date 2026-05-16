@@ -274,18 +274,24 @@ export default function AccountDetailPage() {
                         <FileText className="h-3 w-3" />
                         Documents:
                       </span>
-                      {l.supporting_docs.map((url) => (
-                        <a
-                          key={url}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#2E75B6] hover:underline inline-flex items-center gap-1 max-w-full break-all"
-                        >
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                          {decodeURIComponent(url.split("/").pop() || url)}
-                        </a>
-                      ))}
+                      {l.supporting_docs.map((doc, i) => {
+                        const href = typeof doc === "string" ? doc : doc.url;
+                        const label = typeof doc === "string"
+                          ? decodeURIComponent(doc.split("/").pop() || doc)
+                          : doc.name;
+                        return (
+                          <a
+                            key={`${href}-${i}`}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#2E75B6] hover:underline inline-flex items-center gap-1 max-w-full break-all"
+                          >
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            {label}
+                          </a>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground">

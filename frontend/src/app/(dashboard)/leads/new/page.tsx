@@ -36,7 +36,42 @@ const TX_SERVICES = [
   { value: "Insurance",              label: "Insurance",              reviewer: "Yuvraj" },
 ];
 
-const REGIONS = ["North America", "EMEA", "APAC"];
+const COUNTRIES = [
+  "Australia",
+  "Bahrain",
+  "Belgium",
+  "Canada",
+  "Denmark",
+  "France",
+  "Germany",
+  "Hong Kong",
+  "India",
+  "Indonesia",
+  "Ireland",
+  "Kenya",
+  "Kuwait",
+  "Malaysia",
+  "Netherlands",
+  "New Zealand",
+  "Nigeria",
+  "North America",
+  "Norway",
+  "Oman",
+  "Philippines",
+  "Qatar",
+  "Saudi Arabia",
+  "Singapore",
+  "South Africa",
+  "South Korea",
+  "Spain",
+  "Sweden",
+  "Switzerland",
+  "Thailand",
+  "United Arab Emirates",
+  "United Kingdom",
+  "United States",
+  "Vietnam",
+];
 
 export default function NewLeadPage() {
   const { token } = useAuth();
@@ -46,7 +81,7 @@ export default function NewLeadPage() {
   const [accountId, setAccountId] = useState("");
   const [accountType, setAccountType] = useState<"current_lead" | "new_lead" | null>(null);
   const [service, setService] = useState("");
-  const [contactRegion, setContactRegion] = useState("");
+  const [contactCountry, setContactCountry] = useState("");
   const [priority, setPriority] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [estimatedValueError, setEstimatedValueError] = useState(false);
@@ -124,8 +159,8 @@ export default function NewLeadPage() {
       const contactEmail = (fd.get("contact_email") as string) || null;
       const contactTitle = (fd.get("contact_title") as string) || null;
       const contactDetails =
-        contactName || contactEmail || contactRegion || contactTitle
-          ? { name: contactName, email: contactEmail, region: contactRegion || null, title: contactTitle }
+        contactName || contactEmail || contactCountry || contactTitle
+          ? { name: contactName, email: contactEmail, country: contactCountry || null, title: contactTitle }
           : null;
 
       const payload = {
@@ -245,14 +280,33 @@ export default function NewLeadPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Region</Label>
-                <Select value={contactRegion} onValueChange={(v) => setContactRegion(v ?? "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select region…" />
+                <Label>Country</Label>
+                <Select value={contactCountry} onValueChange={(v) => setContactCountry(v ?? "")}>
+                  <SelectTrigger className="w-full h-9">
+                    {contactCountry ? (
+                      <span className="flex flex-1 items-center justify-between text-sm">
+                        <span>{contactCountry}</span>
+                        <span
+                          role="button"
+                          aria-label="Clear country"
+                          onClick={(e) => { e.stopPropagation(); setContactCountry(""); }}
+                          className="ml-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-[#B12B35]/10 hover:text-[#B12B35] transition-colors cursor-pointer text-[10px]"
+                        >
+                          ✕
+                        </span>
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select country…" />
+                    )}
                   </SelectTrigger>
-                  <SelectContent>
-                    {REGIONS.map((r) => (
-                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                  <SelectContent
+                    alignItemWithTrigger={false}
+                    side="bottom"
+                    sideOffset={4}
+                    className="z-[200] w-[var(--anchor-width)] min-w-[var(--anchor-width)] bg-white border border-[#EDE7E6] shadow-lg"
+                  >
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

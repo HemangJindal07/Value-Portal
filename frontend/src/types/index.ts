@@ -67,7 +67,7 @@ export interface Lead {
   account_id: string;
   submitted_by: string;
   service: ServiceType | null;
-  contact_details: { name?: string; email?: string; region?: string; title?: string } | null;
+  contact_details: { name?: string; email?: string; country?: string; title?: string } | null;
   estimated_value: number | null;
   currency: string;
   probability: number | null;

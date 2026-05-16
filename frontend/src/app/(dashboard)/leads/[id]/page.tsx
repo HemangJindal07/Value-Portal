@@ -202,6 +202,16 @@ export default function LeadDetailPage() {
             <Field label="Account" value={lead.account?.account_name ?? null} />
             <Field label="Service" value={lead.service ?? null} />
             <Field label="Submitted By" value={lead.submitter?.full_name ?? null} />
+            {lead.contact_details && (lead.contact_details.name || lead.contact_details.email || lead.contact_details.country || lead.contact_details.title) && (
+              <>
+                <Separator />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Key Contact</p>
+                {lead.contact_details.name && <Field label="Contact Name" value={lead.contact_details.name} />}
+                {lead.contact_details.email && <Field label="Contact Email" value={lead.contact_details.email} />}
+                {lead.contact_details.title && <Field label="Contact Title" value={lead.contact_details.title} />}
+                {lead.contact_details.country && <Field label="Country" value={lead.contact_details.country} />}
+              </>
+            )}
             <Field
               label="Estimated Value"
               value={

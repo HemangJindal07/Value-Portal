@@ -65,7 +65,16 @@ function LeadsPageInner() {
   const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  // Initialize status filter from ?status= URL param so dashboard cards
+  // (e.g. "Under Review" → /leads?status=under_review) pre-filter the list.
+  // Only a single status value pre-applies — comma-separated values are used
+  // for highlighting only (see highlightPending below).
+  const initialStatus = (() => {
+    const raw = (searchParams.get("status") ?? "").trim();
+    if (!raw || raw.includes(",")) return "";
+    return raw;
+  })();
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [loading, setLoading] = useState(true);
   // Highlight routing_pending rows when navigated from dashboard alert
   const highlightPending = (searchParams.get("status") ?? "")

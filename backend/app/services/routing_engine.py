@@ -623,15 +623,7 @@ async def start_routing(
             f'Your {submission_type} "{title}" was submitted and routed to {first["role_label"]} for review.',
         )
 
-    # Region for UK/US extra recipients comes from the lead's contact_details
-    # (what the user filled in on the form), NOT from accounts.region.
     contact_region: str | None = None
-    if submission_type == "lead":
-        cd = sub.get("contact_details") or {}
-        if isinstance(cd, dict):
-            cd_region = cd.get("region")
-            if isinstance(cd_region, str) and cd_region.strip():
-                contact_region = cd_region.strip()
 
     # ── Trigger email to ALL stakeholders + (UK/US extras only if user-entered) ──
     _dispatch_submission_email(

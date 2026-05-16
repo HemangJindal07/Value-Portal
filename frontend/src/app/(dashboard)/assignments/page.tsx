@@ -705,7 +705,7 @@ function MySubmissionsTab({
               </TableHeader>
               <TableBody>
                 {filtered.map((lead) => {
-                  const cd = lead.contact_details as { name?: string; email?: string; title?: string } | null;
+                  const cd = lead.contact_details as { name?: string; email?: string; country?: string; title?: string } | null;
                   const STATUS_DISPLAY: Record<string, string> = {
                     submitted:           "Submitted",
                     routing_pending:     "Routing Pending",
@@ -738,6 +738,7 @@ function MySubmissionsTab({
                           <p className="font-medium text-[#232222]">{cd.name}</p>
                           {cd.email && <p className="text-muted-foreground">{cd.email}</p>}
                           {cd.title && <p className="text-muted-foreground">{cd.title}</p>}
+                          {cd.country && <p className="text-muted-foreground">{cd.country}</p>}
                         </div>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
