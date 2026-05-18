@@ -92,6 +92,15 @@ export default function LoginPage() {
           </div>
         </div>
 
+        <div className="flex justify-end">
+          <Link
+            href="/forgot-password"
+            className="text-xs text-[#B12B35] hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
+
         <Button
           type="submit"
           className="w-full h-11 text-base font-semibold bg-[#B12B35] hover:bg-[#9a2330] text-white rounded-lg mt-2 transition-colors"

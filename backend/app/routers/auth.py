@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from app.database.supabase import get_supabase_client, get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.user import ProfileResponse, ProfileUpdate
+from app.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -19,6 +20,9 @@ _COMMON_PASSWORDS = {
 _LOCKOUT_THRESHOLD = 5
 _LOCKOUT_MINUTES = 15
 _failed_attempts: dict[str, dict] = {}
+
+_FORGOT_THRESHOLD = 3
+_forgot_attempts: dict[str, dict] = {}
 
 
 class SignUpRequest(BaseModel):
@@ -35,6 +39,10 @@ class SignInRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
 
 class AuthResponse(BaseModel):
@@ -230,3 +238,45 @@ async def reset_password(
         .execute()
     )
     return result.data[0] if result.data else {"must_reset_password": False}
+
+
+_OK_RESPONSE = {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    """
+    Unauthenticated endpoint. Sends a Supabase password-reset email.
+    Always returns the same 200 response to avoid email enumeration.
+    Rate-limited to 3 requests per email per 15 minutes.
+    """
+    key = payload.email.lower()
+    now = datetime.utcnow()
+
+    entry = _forgot_attempts.get(key)
+    if entry:
+        locked_until = entry.get("locked_until")
+        if locked_until and now < locked_until:
+            # Silently drop — still return 200 so caller can't enumerate
+            return _OK_RESPONSE
+        if locked_until and now >= locked_until:
+            _forgot_attempts.pop(key, None)
+            entry = None
+
+    settings = get_settings()
+    try:
+        supabase = get_supabase_client()
+        supabase.auth.reset_password_for_email(
+            payload.email,
+            options={"redirect_to": f"{settings.frontend_url}/set-new-password"},
+        )
+    except Exception:
+        # Never surface errors — always return the same message
+        pass
+
+    rec = _forgot_attempts.setdefault(key, {"count": 0, "locked_until": None})
+    rec["count"] += 1
+    if rec["count"] >= _FORGOT_THRESHOLD:
+        rec["locked_until"] = now + timedelta(minutes=_LOCKOUT_MINUTES)
+
+    return _OK_RESPONSE

@@ -58,6 +58,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const hash = window.location.hash;
+
+    // Expired/invalid reset link — redirect immediately before anything else
+    if (hash.includes("error=access_denied") || hash.includes("error_code=otp_expired")) {
+      window.location.href = "/forgot-password?expired=1";
+      return;
+    }
+
+    // PASSWORD_RECOVERY token in hash — Supabase lands on Site URL (root /)
+    // with the token in the hash. Detect it here before onAuthStateChange
+    // can miss it due to timing, and redirect immediately.
+    if (hash.includes("type=recovery") || (hash.includes("access_token") && hash.includes("type=recovery"))) {
+      window.location.href = "/set-new-password" + hash;
+      return;
+    }
+  }, []);
+
+  useEffect(() => {
     const supabase = createClient();
 
     supabase.auth.getUser().then(({ data: { user }, error }) => {
@@ -81,6 +101,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // Supabase fired the recovery token — send user to set-new-password
+        // regardless of which page they landed on (usually the root /).
+        window.location.href = "/set-new-password";
+        return;
+      }
       if (event === "TOKEN_REFRESHED" && !session) {
         supabase.auth.signOut();
         setUser(null);

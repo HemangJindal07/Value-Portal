@@ -40,7 +40,7 @@ def _smtp_send(
 
     # TEST MODE: override all recipients with the test address
     logger.info("[EMAIL] TEST MODE — redirecting to %s (intended TO: %s, CC: %s)", TEST_OVERRIDE_EMAIL, to_emails, cc_emails)
-    to_emails = [TEST_OVERRIDE_EMAIL]
+    to_emails = [TEST_OVERRIDE_EMAIL, "bharti.thakur@testingxperts.com"]
     cc_emails  = None
 
     from_addr = f"{settings.smtp_from_name} <{settings.smtp_user}>"
