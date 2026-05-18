@@ -39,6 +39,7 @@ const statusColors: Record<string, string> = {
   routing_pending: "bg-amber-100 text-amber-700",
   under_review: "bg-[#003466]/10 text-[#003466]",
   qualified: "bg-[#B12B35]/10 text-[#B12B35]",
+  opportunity_created: "bg-purple-100 text-purple-700",
   approved: "bg-green-100 text-green-700",
   won: "bg-[#003466]/15 text-[#003466]",
   lost: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
@@ -143,6 +144,7 @@ function LeadsPageInner() {
             <SelectItem value="routing_pending">Routing Pending</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="qualified">Qualified</SelectItem>
+            <SelectItem value="opportunity_created">Opportunity Created</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="won">Won</SelectItem>
             <SelectItem value="lost">Lost</SelectItem>

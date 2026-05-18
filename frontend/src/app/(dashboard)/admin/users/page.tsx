@@ -129,7 +129,6 @@ export default function AdminUsersPage() {
                   <TableHead>User</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Department</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -177,9 +176,6 @@ export default function AdminUsersPage() {
                           {roleLabels[u.role] || u.role}
                         </Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {u.department || "—"}
                     </TableCell>
                     <TableCell>
                       <Badge

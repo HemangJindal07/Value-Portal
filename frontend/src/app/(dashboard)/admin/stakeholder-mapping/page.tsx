@@ -202,7 +202,7 @@ function StakeholderRow({
         <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle className="text-[#232222]">Remove Reviewer</DialogTitle>
+              <DialogTitle className="text-[#232222]">Remove Reviewer from Chain</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-[#5D5D5D]">
               Are you sure you want to remove <span className="font-medium text-[#232222]">{item.user?.full_name ?? item.role_label}</span> from the routing chain? This cannot be undone.

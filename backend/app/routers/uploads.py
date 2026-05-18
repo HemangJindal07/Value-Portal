@@ -42,10 +42,10 @@ async def upload_attachment(
     content_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or ""
 
     if not _is_allowed(content_type):
+        ext = (file.filename or "").rsplit(".", 1)[-1].upper() if file.filename and "." in file.filename else content_type
         raise HTTPException(
             status_code=400,
-            detail=f"File type '{content_type}' is not allowed. "
-                   "Only PDF, Word (.doc/.docx), and Excel (.xls/.xlsx) files are accepted.",
+            detail=f"{ext} files are not supported. Please upload a PDF, Word (.doc/.docx), or Excel (.xls/.xlsx) file.",
         )
 
     contents = await file.read()
@@ -84,12 +84,18 @@ async def upload_attachment(
             detail=f"Storage upload failed: {str(exc)}",
         )
 
-    # Build the public URL
-    public_url = supabase.storage.from_(BUCKET).get_public_url(storage_path)
+    # Build the public URL. Pass the original filename via the `download`
+    # option so the browser saves it with the real name (e.g. "Report.pdf")
+    # instead of opening a blank inline preview of the UUID object.
+    original_name = file.filename or f"document.{ext}"
+    public_url = supabase.storage.from_(BUCKET).get_public_url(
+        storage_path,
+        options={"download": original_name},
+    )
 
     return {
         "url": public_url,
-        "filename": file.filename,
+        "filename": original_name,
         "size": len(contents),
         "content_type": content_type,
     }

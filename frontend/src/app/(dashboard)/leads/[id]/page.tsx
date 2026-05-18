@@ -24,6 +24,7 @@ const statusColors: Record<string, string> = {
   routing_pending: "bg-orange-500/10 text-orange-700",
   under_review: "bg-amber-500/10 text-amber-400",
   qualified: "bg-green-500/10 text-green-400",
+  opportunity_created: "bg-purple-500/10 text-purple-700",
   approved: "bg-emerald-600/10 text-emerald-700",
   won: "bg-emerald-500/10 text-emerald-400",
   lost: "bg-red-500/10 text-red-400",
@@ -173,11 +174,28 @@ export default function LeadDetailPage() {
                       }
                       const docObj = parsed ?? (typeof doc === "object" ? doc as { url: string; name: string } : null);
                       const url  = docObj ? docObj.url  : (doc as string);
-                      const name = docObj ? docObj.name : (doc as string).split("/").pop() || (doc as string);
+                      // Legacy plain-URL docs have no stored name — derive a clean
+                      // label from the storage path (the last segment is a UUID,
+                      // so fall back to a generic "Document.<ext>").
+                      let name = docObj?.name ?? "";
+                      if (!name) {
+                        const segment = decodeURIComponent((doc as string).split("?")[0].split("/").pop() || "");
+                        const ext = segment.includes(".") ? segment.slice(segment.lastIndexOf(".")) : "";
+                        // If the segment is just a UUID (optionally with extension), show a generic name
+                        name = /^[0-9a-f-]{36}(\.\w+)?$/i.test(segment)
+                          ? `Document${ext}`
+                          : (segment || "Document");
+                      }
+                      // Force a download (with the real filename) instead of
+                      // opening a blank inline preview of the storage object.
+                      const downloadUrl = url.includes("download=")
+                        ? url
+                        : `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(name)}`;
                       return (
                         <li key={i}>
                           <a
-                            href={url}
+                            href={downloadUrl}
+                            download={name}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-[#2E75B6] hover:underline inline-flex items-center gap-1.5 break-all"
@@ -233,7 +251,12 @@ export default function LeadDetailPage() {
               <>
                 <Separator />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">AI Insights</p>
-                <Field label="Category" value={lead.ai_category.replace(/_/g, " ")} />
+                <Field
+                  label="Category"
+                  value={lead.ai_category
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (c) => c.toUpperCase())}
+                />
                 <Field
                   label="Confidence"
                   value={
@@ -243,7 +266,10 @@ export default function LeadDetailPage() {
                   }
                 />
                 {lead.ai_suggested_priority && (
-                  <Field label="Suggested Priority" value={lead.ai_suggested_priority} />
+                  <Field
+                    label="Suggested Priority"
+                    value={lead.ai_suggested_priority.replace(/\b\w/g, (c) => c.toUpperCase())}
+                  />
                 )}
                 {lead.ai_win_probability != null && lead.ai_win_probability > 0 && (
                   <Field label="Win Probability" value={`${(lead.ai_win_probability * 100).toFixed(0)}%`} />

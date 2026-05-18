@@ -72,13 +72,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# NOTE: Starlette runs the LAST-added middleware OUTERMOST. CORSMiddleware must
+# be outermost so it can short-circuit OPTIONS preflight requests before they
+# reach BaseHTTPMiddleware/the router (otherwise preflight 400s and login breaks).
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Cron-Secret"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router, prefix="/api")

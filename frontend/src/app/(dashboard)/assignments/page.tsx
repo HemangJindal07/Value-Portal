@@ -660,6 +660,7 @@ function MySubmissionsTab({
             <StatusSelectItem value="routing_pending">Routing Pending</StatusSelectItem>
             <StatusSelectItem value="under_review">Under Review</StatusSelectItem>
             <StatusSelectItem value="qualified">Qualified</StatusSelectItem>
+            <StatusSelectItem value="opportunity_created">Opportunity Created</StatusSelectItem>
             <StatusSelectItem value="approved">Approved</StatusSelectItem>
             <StatusSelectItem value="won">Won</StatusSelectItem>
             <StatusSelectItem value="lost">Lost</StatusSelectItem>

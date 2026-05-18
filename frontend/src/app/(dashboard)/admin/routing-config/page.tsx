@@ -15,6 +15,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -46,6 +53,40 @@ interface RegionSalesEntry {
   sales: UserRef | null;
 }
 
+// ── Shared delete-confirm dialog ──────────────────────────────────────────────
+
+interface DeleteConfirmDialogProps {
+  open: boolean;
+  label: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function DeleteConfirmDialog({ open, label, onConfirm, onCancel }: DeleteConfirmDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-[#232222]">Remove Mapping</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-[#5D5D5D]">
+          Are you sure you want to remove the mapping for{" "}
+          <span className="font-medium text-[#232222]">&ldquo;{label}&rdquo;</span>?
+          This cannot be undone.
+        </p>
+        <DialogFooter className="gap-2 mt-2">
+          <Button variant="outline" className="border-[#C5C5C5]" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onConfirm}>
+            Remove
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Vertical Routing Tab ──────────────────────────────────────────────────────
 
 function VerticalRoutingTab({ token }: { token: string }) {
@@ -53,6 +94,7 @@ function VerticalRoutingTab({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Add form state
   const [addVertical, setAddVertical] = useState("");
@@ -131,8 +173,10 @@ function VerticalRoutingTab({ token }: { token: string }) {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Remove vertical routing for "${name}"?`)) return;
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    setPendingDelete(null);
     try {
       await api(`/api/vertical-routing/${id}`, { method: "DELETE", token });
       toast.success("Entry removed.");
@@ -152,6 +196,13 @@ function VerticalRoutingTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
+      <DeleteConfirmDialog
+        open={!!pendingDelete}
+        label={pendingDelete?.name ?? ""}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+
       <div className="flex items-start gap-2 p-3 rounded-lg bg-[#2E75B6]/8 border border-[#2E75B6]/20 text-sm text-[#003466]">
         <Info className="h-4 w-4 mt-0.5 shrink-0 text-[#2E75B6]" />
         <span>
@@ -161,7 +212,6 @@ function VerticalRoutingTab({ token }: { token: string }) {
         </span>
       </div>
 
-      {/* Existing entries */}
       {entries.length === 0 && !showAdd && (
         <p className="text-sm text-muted-foreground text-center py-8">
           No vertical routing entries yet. Add one to enable org-level routing.
@@ -225,7 +275,7 @@ function VerticalRoutingTab({ token }: { token: string }) {
                     size="icon"
                     variant="ghost"
                     className="h-8 w-8 text-[#B12B35] hover:text-[#B12B35] hover:bg-[#B12B35]/10"
-                    onClick={() => handleDelete(entry.id, entry.vertical_name)}
+                    onClick={() => setPendingDelete({ id: entry.id, name: entry.vertical_name })}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -236,7 +286,6 @@ function VerticalRoutingTab({ token }: { token: string }) {
         ))}
       </div>
 
-      {/* Add form */}
       {showAdd && (
         <div className="border border-[#B12B35]/30 rounded-lg p-4 bg-[#B12B35]/5 space-y-3">
           <p className="text-sm font-semibold text-[#232222]">New Vertical Entry</p>
@@ -287,6 +336,7 @@ function RegionSalesTab({ token }: { token: string }) {
   const [entries, setEntries] = useState<RegionSalesEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const [addRegion, setAddRegion] = useState("");
   const [addUserId, setAddUserId] = useState("");
@@ -339,8 +389,10 @@ function RegionSalesTab({ token }: { token: string }) {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Remove this mapping for "${name}"?`)) return;
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    setPendingDelete(null);
     try {
       await api(`/api/region-sales/${id}`, { method: "DELETE", token });
       toast.success("Entry removed.");
@@ -363,6 +415,13 @@ function RegionSalesTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
+      <DeleteConfirmDialog
+        open={!!pendingDelete}
+        label={pendingDelete?.name ?? ""}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+
       <div className="flex items-start gap-2 p-3 rounded-lg bg-[#2E75B6]/8 border border-[#2E75B6]/20 text-sm text-[#003466]">
         <Info className="h-4 w-4 mt-0.5 shrink-0 text-[#2E75B6]" />
         <span>
@@ -373,7 +432,6 @@ function RegionSalesTab({ token }: { token: string }) {
         </span>
       </div>
 
-      {/* Copy-All section */}
       {copyAllEntries.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -391,7 +449,7 @@ function RegionSalesTab({ token }: { token: string }) {
                   size="icon"
                   variant="ghost"
                   className="h-8 w-8 text-[#B12B35] hover:bg-[#B12B35]/10"
-                  onClick={() => handleDelete(entry.id, entry.sales?.full_name || "")}
+                  onClick={() => setPendingDelete({ id: entry.id, name: entry.sales?.full_name || "" })}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -401,7 +459,6 @@ function RegionSalesTab({ token }: { token: string }) {
         </div>
       )}
 
-      {/* Regional section */}
       {regionalEntries.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -422,7 +479,7 @@ function RegionSalesTab({ token }: { token: string }) {
                   size="icon"
                   variant="ghost"
                   className="h-8 w-8 text-[#B12B35] hover:bg-[#B12B35]/10"
-                  onClick={() => handleDelete(entry.id, entry.sales?.full_name || "")}
+                  onClick={() => setPendingDelete({ id: entry.id, name: entry.sales?.full_name || "" })}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -438,7 +495,6 @@ function RegionSalesTab({ token }: { token: string }) {
         </p>
       )}
 
-      {/* Add form */}
       {showAdd && (
         <div className="border border-[#B12B35]/30 rounded-lg p-4 bg-[#B12B35]/5 space-y-3">
           <p className="text-sm font-semibold text-[#232222]">New Region Sales Entry</p>

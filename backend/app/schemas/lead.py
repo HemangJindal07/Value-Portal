@@ -45,7 +45,7 @@ class LeadCreate(BaseModel):
     account_id: UUID
     service: ServiceType | None = None
     contact_details: dict | None = None
-    estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
+    estimated_value: float | None = Field(None, ge=0, le=999_999_999_999, description="Must be between 0 and 999,999,999,999")
     currency: str = Field("USD", pattern=r"^USD$", description="USD only per BRD")
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
@@ -57,7 +57,7 @@ class LeadUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     lead_type: LeadType | None = None
-    estimated_value: float | None = Field(None, ge=0, description="Must be zero or positive")
+    estimated_value: float | None = Field(None, ge=0, le=999_999_999_999, description="Must be between 0 and 999,999,999,999")
     currency: str | None = Field(None, pattern=r"^USD$", description="USD only per BRD")
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None

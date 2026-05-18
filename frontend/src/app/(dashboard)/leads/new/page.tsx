@@ -129,6 +129,13 @@ export default function NewLeadPage() {
     if (isNew) setService("");
   }
 
+  const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+
+  function getFileExt(filename: string) {
+    const idx = filename.lastIndexOf(".");
+    return idx >= 0 ? filename.slice(idx).toLowerCase() : "";
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -140,10 +147,28 @@ export default function NewLeadPage() {
     const fd = new FormData(e.currentTarget);
 
     const evRaw = ((fd.get("estimated_value") as string) || "").replace(/,/g, "");
-    if (evRaw && (isNaN(Number(evRaw)) || Number(evRaw) < 0)) {
-      setEstimatedValueError(true);
-      toast.error("Estimated value must be a valid positive number.");
-      return;
+    if (evRaw) {
+      const evNum = Number(evRaw);
+      if (isNaN(evNum) || evNum < 0) {
+        setEstimatedValueError(true);
+        toast.error("Estimated value must be a valid positive number.");
+        return;
+      }
+      if (evNum > 999_999_999_999) {
+        setEstimatedValueError(true);
+        toast.error("Estimated value cannot exceed $999,999,999,999. Please enter a valid amount.");
+        return;
+      }
+    }
+
+    if (attachment) {
+      const ext = getFileExt(attachment.name);
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        toast.error(
+          `"${attachment.name}" cannot be uploaded. Only PDF, Word (.doc/.docx), and Excel (.xls/.xlsx) files are accepted.`
+        );
+        return;
+      }
     }
 
     setLoading(true);
@@ -385,7 +410,7 @@ export default function NewLeadPage() {
                   }}
                 />
                 {estimatedValueError && (
-                  <p className="text-xs text-red-500">Estimated value cannot be negative.</p>
+                  <p className="text-xs text-red-500">Estimated value cannot be exceeded.</p>
                 )}
               </div>
               <div className="space-y-2">
