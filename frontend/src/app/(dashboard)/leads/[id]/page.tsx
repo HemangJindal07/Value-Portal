@@ -15,7 +15,6 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
-import Link from "next/link";
 import { ActivitySection } from "@/components/activity-section";
 
 const statusColors: Record<string, string> = {
@@ -94,11 +93,22 @@ export default function LeadDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/leads">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            // Return to wherever the user came from (My Submissions, Leads,
+            // Assignments, etc.). Fall back to /leads on a deep-link/refresh
+            // where there's no in-app history to go back to.
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.push("/leads");
+            }
+          }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{lead.title}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">

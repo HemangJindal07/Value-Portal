@@ -129,6 +129,11 @@ export default function NewLeadPage() {
     if (isNew) setService("");
   }
 
+  function handleAccountCleared() {
+    setAccountType(null);
+    setService("");
+  }
+
   const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
 
   function getFileExt(filename: string) {
@@ -261,6 +266,7 @@ export default function NewLeadPage() {
                   value={accountId}
                   onChange={setAccountId}
                   onAccountSelected={handleAccountSelected}
+                  onCleared={handleAccountCleared}
                   name="account_id"
                   required
                 />

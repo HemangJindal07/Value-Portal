@@ -290,87 +290,121 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
-// ── Funnel Chart — proper visual funnel, no text truncation ─────────────
+// ── Lead Status Breakdown — pipeline-stage data as a donut ──────────────────
 
 function FunnelChart({
   stages,
 }: {
   stages: { label: string; count: number; color: string }[];
 }) {
-  const maxCount = Math.max(...stages.map(s => s.count), 1);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const total = stages.reduce((sum, s) => sum + s.count, 0);
+
+  // Donut geometry
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 70;          // outer radius of the arc stroke
+  const stroke = 30;     // donut thickness
+  const circumference = 2 * Math.PI * r;
+
+  // Build cumulative arc segments. Each slice is a stroked circle with a
+  // dash gap, rotated to its start angle (classic SVG donut technique).
+  let cumulative = 0;
 
   return (
-    <div className="space-y-2 py-1">
-      {stages.map((stage, i) => {
-        // Width shrinks proportionally: min 36%, max 100%
-        const proportion = Math.max(stage.count / maxCount, 0);
-        const widthPct = Math.round(36 + proportion * 64);
-        const marginPct = (100 - widthPct) / 2;
-
-        // Conversion rate from previous stage
-        const prevCount = i === 0 ? maxCount : stages[i - 1].count;
-        const convRate = prevCount > 0 ? Math.round((stage.count / prevCount) * 100) : 0;
-
-        // % of largest stage (so widest bar = 100%)
-        const ofTotal = maxCount > 0 ? Math.round((stage.count / maxCount) * 100) : 0;
-
-        return (
-          <div key={i} className="group">
-            {/* Row: label left, count + % right — always readable */}
-            <div className="flex items-center justify-between mb-1 px-0.5">
-              <div className="flex items-center gap-2">
-                <div
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ background: stage.color }}
-                />
-                <span className="text-[12px] font-semibold text-[#232222]">
-                  {stage.label}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                {i > 0 && (
-                  <span className="text-[11px] text-[#5D5D5D]">
-                    {convRate}% conv.
-                  </span>
-                )}
-                <span
-                  className="text-[13px] font-bold"
-                  style={{ color: stage.color }}
+    <div className="flex flex-col sm:flex-row items-center gap-5 py-2">
+      {/* Donut */}
+      <div className="relative shrink-0">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {/* Track */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke="#EDE7E6"
+            strokeWidth={stroke}
+          />
+          {total > 0 &&
+            stages.map((stage, i) => {
+              const fraction = stage.count / total;
+              if (fraction <= 0) return null;
+              const dash = fraction * circumference;
+              const offset = -(cumulative / total) * circumference;
+              cumulative += stage.count;
+              const isHovered = hovered === i;
+              return (
+                <circle
+                  key={i}
+                  cx={cx}
+                  cy={cy}
+                  r={r}
+                  fill="none"
+                  stroke={stage.color}
+                  strokeWidth={isHovered ? stroke + 6 : stroke}
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={offset}
+                  transform={`rotate(-90 ${cx} ${cy})`}
+                  className="transition-all duration-200 cursor-pointer"
+                  style={{ opacity: hovered === null || isHovered ? 1 : 0.45 }}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
                 >
-                  {stage.count}
-                </span>
-              </div>
-            </div>
+                  <title>{`${stage.label}: ${stage.count}`}</title>
+                </circle>
+              );
+            })}
+          {/* Center: total, or the hovered slice's label + count */}
+          <text
+            x={cx}
+            y={hovered === null ? cy - 4 : cy - 6}
+            textAnchor="middle"
+            className="fill-[#232222]"
+            style={{ fontSize: 26, fontWeight: 700 }}
+          >
+            {hovered === null ? total : stages[hovered].count}
+          </text>
+          <text
+            x={cx}
+            y={hovered === null ? cy + 16 : cy + 14}
+            textAnchor="middle"
+            className="fill-[#5D5D5D]"
+            style={{ fontSize: 11 }}
+          >
+            {hovered === null ? "total" : stages[hovered].label}
+          </text>
+        </svg>
+      </div>
 
-            {/* Funnel bar — centered, narrows with data */}
-            <div
-              className="relative h-9 transition-all duration-700"
-              style={{
-                marginLeft:  `${marginPct}%`,
-                marginRight: `${marginPct}%`,
-              }}
-            >
+      {/* Legend — label + count only */}
+      <div className="flex-1 w-full space-y-2">
+        {stages.map((stage, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between px-0.5 rounded-md py-0.5 cursor-pointer transition-colors"
+            style={{ background: hovered === i ? "#F9F9F9" : "transparent" }}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className="flex items-center gap-2 min-w-0">
               <div
-                className="h-full w-full rounded-md flex items-center justify-center"
+                className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ background: stage.color }}
-              >
-                <span className="text-[11px] font-semibold text-white opacity-90">
-                  {ofTotal}%
-                </span>
-              </div>
+              />
+              <span className="text-[12px] font-semibold text-[#232222] truncate">
+                {stage.label}
+              </span>
             </div>
-
-            {/* Connector arrow between stages */}
-            {i < stages.length - 1 && (
-              <div className="flex justify-center my-1">
-                <svg width="20" height="8" viewBox="0 0 20 8">
-                  <polygon points="0,0 20,0 10,8" fill={stage.color} opacity="0.3" />
-                </svg>
-              </div>
-            )}
+            <span
+              className="text-[13px] font-bold shrink-0"
+              style={{ color: stage.color }}
+            >
+              {stage.count}
+            </span>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
@@ -1387,7 +1421,8 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
   const funnelStages = [
     { label: "Awaiting Review",     count: (s.leads_by_status["submitted"] || 0) + (s.leads_by_status["routing_pending"] || 0), color: "#2E75B6" },
     { label: "Under Review",        count: s.leads_by_status["under_review"] || 0,        color: "#003466" },
-    { label: "Qualified / Rejected",count: (s.leads_by_status["qualified"] || 0) + (s.leads_by_status["approved"] || 0) + (s.leads_by_status["rejected"] || 0), color: "#B12B35" },
+    { label: "Qualified",           count: (s.leads_by_status["qualified"] || 0) + (s.leads_by_status["approved"] || 0), color: "#0d9488" },
+    { label: "Rejected",            count: s.leads_by_status["rejected"] || 0,            color: "#B12B35" },
     { label: "Opportunity Created", count: s.leads_by_status["opportunity_created"] || 0, color: "#7c3aed" },
     { label: "Won / Lost",          count: (s.leads_by_status["won"] || 0) + (s.leads_by_status["lost"] || 0), color: "#22c55e" },
   ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Awaiting Review");
@@ -1504,20 +1539,20 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
         </Card>
       </div>
 
-      {/* ── Opportunity Funnel + Monthly Value Realization ── */}
+      {/* ── Lead Status Breakdown + Monthly Value Realization ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Opportunity Funnel */}
+        {/* Lead Status Breakdown */}
         <Card className="border-[#EDE7E6] bg-white">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
               <Activity className="h-4 w-4 text-[#B12B35]" />
-              Opportunity Funnel
+              Lead Status Breakdown
             </CardTitle>
             <CardDescription>Leads across all pipeline stages</CardDescription>
           </CardHeader>
           <CardContent>
             <FunnelChart stages={funnelStages} />
-            {/* Lost / dropped row below funnel */}
+            {/* Lost / dropped row below chart */}
             <div className="mt-4 pt-3 border-t border-[#EDE7E6] grid grid-cols-2 gap-2">
               <div className="flex items-center gap-2 text-xs">
                 <div className="h-2.5 w-2.5 rounded-sm bg-[#C5C5C5]" />
@@ -1715,7 +1750,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
       {/* ── Exception Queue Summary + Stakeholder Completeness + Leaderboard ── */}
       <SectionLabel icon={ShieldCheck} label="Operations & Engagement" color="#5D5D5D" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Exception Queue summary card */}
+        {/* Exception Queue summary card — executive read-only view */}
         <StatCard
           title="Routing Exceptions"
           value={an ? an.routing_pending_leads : 0}
@@ -1724,7 +1759,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
           iconColor="text-amber-500"
           iconBg="bg-amber-50"
           accent="#f59e0b"
-          href="/admin/exception-queue"
+          href="/executive/exception-queue"
         />
         {/* Placeholder to keep grid alignment */}
         <div className="hidden lg:block" />

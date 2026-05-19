@@ -609,6 +609,21 @@ const accountTypeLabels: Record<string, string> = {
   new_lead:     "New Account",
 };
 
+const SUBMISSION_STATUS_LABELS: Record<string, string> = {
+  "":                  "All Statuses",
+  submitted:           "Submitted",
+  routing_pending:     "Routing Pending",
+  under_review:        "Under Review",
+  qualified:           "Qualified",
+  opportunity_created: "Opportunity Created",
+  approved:            "Approved",
+  won:                 "Won",
+  lost:                "Lost",
+  rejected:            "Rejected",
+  dropped:             "Dropped",
+  draft:               "Draft",
+};
+
 function MySubmissionsTab({
   leads,
   loading,
@@ -652,7 +667,11 @@ function MySubmissionsTab({
         </div>
         <StatusSelect value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "")}>
           <StatusSelectTrigger className="w-44">
-            <StatusSelectValue placeholder="All Statuses" />
+            <StatusSelectValue placeholder="All Statuses">
+              {(val: string | null) =>
+                SUBMISSION_STATUS_LABELS[val ?? ""] ?? "All Statuses"
+              }
+            </StatusSelectValue>
           </StatusSelectTrigger>
           <StatusSelectContent>
             <StatusSelectItem value="">All Statuses</StatusSelectItem>
@@ -701,25 +720,14 @@ function MySubmissionsTab({
                   <TableHead>Account Type</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Date Submitted</TableHead>
                   <TableHead className="text-right">Est. Value</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((lead) => {
                   const cd = lead.contact_details as { name?: string; email?: string; country?: string; title?: string } | null;
-                  const STATUS_DISPLAY: Record<string, string> = {
-                    submitted:           "Submitted",
-                    routing_pending:     "Routing Pending",
-                    under_review:        "Under Review",
-                    qualified:           "Qualified",
-                    rejected:            "Rejected",
-                    opportunity_created: "Opportunity Created",
-                    won:                 "Won",
-                    lost:                "Lost",
-                    dropped:             "Dropped",
-                    draft:               "Draft",
-                  };
-                  const statusDisplay = STATUS_DISPLAY[lead.status] ?? lead.status.replace(/_/g, " ");
+                  const statusDisplay = SUBMISSION_STATUS_LABELS[lead.status] ?? lead.status.replace(/_/g, " ");
                   return (
                   <TableRow key={lead.lead_id}>
                     <TableCell>
@@ -768,6 +776,11 @@ function MySubmissionsTab({
                       <Badge variant="secondary" className={`text-[11px] ${submissionStatusColors[lead.status] ?? ""}`}>
                         {statusDisplay}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {lead.created_at
+                        ? new Date(lead.created_at).toLocaleDateString()
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       {lead.estimated_value

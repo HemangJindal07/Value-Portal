@@ -1,8 +1,84 @@
 from fastapi import APIRouter, Depends
+from collections import Counter
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/scores", tags=["Scoring"])
+
+# Roles excluded from the public leaderboard ranking. Kept here as the single
+# source of truth so /scores/me and /scores/leaderboard rank the SAME population
+# the SAME way (previously /scores/me used a stale stored rank computed over all
+# users, which disagreed with the displayed list — see Catalyst issue #13).
+LEADERBOARD_EXCLUDED_ROLES = {"admin", "executive"}
+
+
+def _build_ranked_entries(supabase) -> list[dict]:
+    """
+    Build the ranked leaderboard entry list (all active, non-excluded users),
+    sorted by total_points desc with ranks 1..N assigned. This is the single
+    ranking computation shared by /scores/leaderboard and /scores/me.
+    """
+    scores = (
+        supabase.table("user_scores")
+        .select("*")
+        .eq("period", "all_time")
+        .execute()
+    )
+
+    profiles = (
+        supabase.table("profiles")
+        .select("id, full_name, email, role, department, is_active")
+        .eq("is_active", True)
+        .execute()
+    )
+
+    score_by_user = {row["user_id"]: row for row in (scores.data or [])}
+
+    leads_res = supabase.table("leads").select("submitted_by").execute()
+    leads_count_by_user = Counter(
+        l["submitted_by"] for l in (leads_res.data or [])
+    )
+
+    won_res = (
+        supabase.table("leads")
+        .select("submitted_by")
+        .eq("status", "won")
+        .execute()
+    )
+    won_count_by_user = Counter(
+        l["submitted_by"] for l in (won_res.data or [])
+    )
+
+    entries: list[dict] = []
+    for user in profiles.data or []:
+        if user.get("role") in LEADERBOARD_EXCLUDED_ROLES:
+            continue
+        uid = user["id"]
+        score = score_by_user.get(uid, {})
+
+        entries.append({
+            "score_id": score.get("score_id") or f"no-score-{uid}",
+            "user_id": uid,
+            "total_points": score.get("total_points", 0),
+            "leads_submitted": leads_count_by_user.get(uid, 0),
+            "ideas_submitted": score.get("ideas_submitted", 0),
+            "deals_won": won_count_by_user.get(uid, 0),
+            "ideas_implemented": score.get("ideas_implemented", 0),
+            "rank": 0,
+            "user": {
+                "id": uid,
+                "full_name": user.get("full_name") or user.get("email"),
+                "email": user.get("email"),
+                "role": user.get("role"),
+                "department": user.get("department"),
+            },
+        })
+
+    # Sort by points and assign ranks so users with 0 points still appear.
+    entries.sort(key=lambda e: e["total_points"], reverse=True)
+    for idx, entry in enumerate(entries, start=1):
+        entry["rank"] = idx
+    return entries
 
 
 @router.get("/me")
@@ -40,13 +116,20 @@ async def my_score(current_user: dict = Depends(get_current_user)):
     )
     live_won = won_res.count or 0
 
+    # Derive rank from the SAME ranked list the leaderboard shows, so the
+    # "Your Rank" tile always agrees with the user's position in the list
+    # (Catalyst issue #13). Excluded-role users (admin/executive) aren't in
+    # the ranked set → rank 0 (frontend renders 0 as "—").
+    ranked = _build_ranked_entries(supabase)
+    my_rank = next((e["rank"] for e in ranked if e["user_id"] == uid), 0)
+
     return {
         "total_points":    row.get("total_points", 0),
         "leads_submitted": live_leads,
         "ideas_submitted": row.get("ideas_submitted", 0),
         "deals_won":       live_won,
         "ideas_implemented": row.get("ideas_implemented", 0),
-        "rank":            row.get("rank", 0),
+        "rank":            my_rank,
     }
 
 
@@ -80,77 +163,7 @@ async def leaderboard(
     on the leaderboard with 0 points.
     """
     supabase = get_supabase_admin()
-
-    # Fetch all-time scores (may be empty for new users)
-    scores = (
-        supabase.table("user_scores")
-        .select("*")
-        .eq("period", "all_time")
-        .execute()
-    )
-
-    # Fetch all active users
-    profiles = (
-        supabase.table("profiles")
-        .select("id, full_name, email, role, department, is_active")
-        .eq("is_active", True)
-        .execute()
-    )
-
-    score_by_user = {row["user_id"]: row for row in (scores.data or [])}
-
-    # Fetch real-time lead counts per user from the leads table
-    leads_res = (
-        supabase.table("leads")
-        .select("submitted_by")
-        .execute()
-    )
-    from collections import Counter
-    leads_count_by_user = Counter(l["submitted_by"] for l in (leads_res.data or []))
-
-    # Fetch real-time won counts per user
-    won_res = (
-        supabase.table("leads")
-        .select("submitted_by")
-        .eq("status", "won")
-        .execute()
-    )
-    won_count_by_user = Counter(l["submitted_by"] for l in (won_res.data or []))
-
-    EXCLUDED_ROLES = {"admin", "executive"}
-
-    entries: list[dict] = []
-    for user in profiles.data or []:
-        if user.get("role") in EXCLUDED_ROLES:
-            continue
-        uid = user["id"]
-        score = score_by_user.get(uid, {})
-
-        entry = {
-            "score_id": score.get("score_id") or f"no-score-{uid}",
-            "user_id": uid,
-            "total_points": score.get("total_points", 0),
-            "leads_submitted": leads_count_by_user.get(uid, 0),
-            "ideas_submitted": score.get("ideas_submitted", 0),
-            "deals_won": won_count_by_user.get(uid, 0),
-            "ideas_implemented": score.get("ideas_implemented", 0),
-            # Rank will be recomputed below
-            "rank": 0,
-            "user": {
-                "id": uid,
-                "full_name": user.get("full_name") or user.get("email"),
-                "email": user.get("email"),
-                "role": user.get("role"),
-                "department": user.get("department"),
-            },
-        }
-        entries.append(entry)
-
-    # Sort by points and assign ranks so users with 0 points still appear.
-    entries.sort(key=lambda e: e["total_points"], reverse=True)
-    for idx, entry in enumerate(entries, start=1):
-        entry["rank"] = idx
-
+    entries = _build_ranked_entries(supabase)
     return entries[:limit]
 
 

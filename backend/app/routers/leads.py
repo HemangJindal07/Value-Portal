@@ -53,12 +53,23 @@ async def list_leads(
         "*, account:accounts(account_id, account_name), submitter:profiles!submitted_by(id, full_name, email)"
     )
 
+    # Executives may view the org-wide unrouted-leads list (Exception Queue
+    # page / dashboard tile). For the routing_pending status query only, give
+    # them the same org-wide visibility as admin so the Exception Queue page
+    # matches the count shown on their dashboard tile (Catalyst issue #15).
+    exec_exception_view = (
+        role == "executive"
+        and status_filter is not None
+        and {s.strip() for s in status_filter.split(",") if s.strip()} == {"routing_pending"}
+    )
+
     # Role-based scoping:
     # - admin: sees all leads
     # - executive: sees leads they submitted + leads they have an assignment on
+    #   (plus the org-wide routing_pending list — see exec_exception_view above)
     # - all others (user, sales, practice_lead): own submissions only
-    if role == "admin":
-        pass  # no filter — admin sees everything
+    if role == "admin" or exec_exception_view:
+        pass  # no filter — admin (or executive viewing Exception Queue) sees all
     elif role == "executive":
         # Get submission IDs the executive has an assignment on
         asgn_res = (

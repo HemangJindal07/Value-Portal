@@ -57,6 +57,19 @@ const typeLabels: Record<string, string> = {
   new_lead: "New Lead",
 };
 
+const statusFilterLabels: Record<string, string> = {
+  "": "All Statuses",
+  submitted: "Submitted",
+  routing_pending: "Routing Pending",
+  under_review: "Under Review",
+  qualified: "Qualified",
+  opportunity_created: "Opportunity Created",
+  approved: "Approved",
+  won: "Won",
+  lost: "Lost",
+  rejected: "Rejected",
+};
+
 // Roles that can see ALL leads across the org
 const LEADS_ALL_ROLES = ["admin", "executive", "sales"];
 
@@ -136,7 +149,11 @@ function LeadsPageInner() {
           onValueChange={(val: string | null) => setStatusFilter(val || "")}
         >
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder="All Statuses">
+              {(val: string | null) =>
+                statusFilterLabels[val ?? ""] ?? "All Statuses"
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All Statuses</SelectItem>

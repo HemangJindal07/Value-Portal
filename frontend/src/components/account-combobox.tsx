@@ -37,6 +37,7 @@ type AccountComboboxProps = {
   value: string;
   onChange: (accountId: string) => void;
   onAccountSelected?: (account: Account, isNew: boolean) => void;
+  onCleared?: () => void;
   name: string;
   placeholder?: string;
   required?: boolean;
@@ -49,6 +50,7 @@ export function AccountCombobox({
   value,
   onChange,
   onAccountSelected,
+  onCleared,
   name,
   placeholder = "Type at least 3 characters to search...",
   required,
@@ -145,9 +147,14 @@ export function AccountCombobox({
     setQuery(val);
     updateDropdownPosition();
     setOpen(true);
-    if (!val) {
+    // Clear the prior selection when the box is emptied OR when the user
+    // edits the query while an account was already selected (the old pick
+    // is stale until they choose again — keeps the derived Account Type
+    // from showing the previous account's type).
+    if (!val || value) {
       onChange("");
       setSelectedName("");
+      onCleared?.();
     }
   }
 

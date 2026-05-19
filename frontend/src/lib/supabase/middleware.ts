@@ -8,9 +8,15 @@ import { NextResponse, type NextRequest } from "next/server";
 // gated here so URL manipulation cannot reach the full admin-only forms.
 const PROTECTED_ROUTES: { pattern: RegExp; allowedRoles: string[] }[] = [
   {
-    // All /admin/* pages — admin only
+    // All /admin/* pages — admin only (unchanged)
     pattern: /^\/admin(\/|$)/,
     allowedRoles: ["admin"],
+  },
+  {
+    // Executive Exception Queue — read-only org-wide context surfaced via the
+    // executive dashboard's "Routing Exceptions" tile. Admin + executive only.
+    pattern: /^\/executive\/exception-queue(\/|$)/,
+    allowedRoles: ["admin", "executive"],
   },
   {
     // New account page and account edit page — admin, executive, sales only
