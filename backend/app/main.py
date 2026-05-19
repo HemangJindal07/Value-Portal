@@ -2,17 +2,35 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from contextlib import asynccontextmanager
+import logging
+import sys
 from app.config import get_settings
 # Value Ideas API disabled — leads-only portal (re-enable: add `ideas` back to import + router below)
 from app.routers import auth, accounts, users, leads, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing
 # from app.routers import ideas
 
+logger = logging.getLogger("main")
 settings = get_settings()
+
+_REQUIRED_SETTINGS = ["supabase_url", "supabase_anon_key", "supabase_service_role_key"]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    missing = [k for k in _REQUIRED_SETTINGS if not getattr(settings, k, "")]
+    if missing:
+        logger.critical("Missing required environment variables: %s — refusing to start.", missing)
+        sys.exit(1)
+    logger.info("TX Catalyst API starting — all required env vars present.")
+    yield
+
 
 app = FastAPI(
     title="TX Catalyst API",
     version="0.1.0",
     description="Backend API for TX Catalyst — lead tracking and AI-powered classification.",
+    lifespan=lifespan,
 )
 
 _extra_origins = [o.strip() for o in settings.extra_cors_origins.split(",") if o.strip()]
@@ -54,13 +72,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# NOTE: Starlette runs the LAST-added middleware OUTERMOST. CORSMiddleware must
+# be outermost so it can short-circuit OPTIONS preflight requests before they
+# reach BaseHTTPMiddleware/the router (otherwise preflight 400s and login breaks).
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Cron-Secret"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router, prefix="/api")

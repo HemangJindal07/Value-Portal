@@ -58,11 +58,9 @@ async def classify_idea(idea_id: str) -> None:
     settings = get_settings()
 
     if not settings.anthropic_api_key:
-        print(f"[AI] ⚠  ANTHROPIC_API_KEY not set — skipping classification for idea {idea_id}")
         logger.warning("ANTHROPIC_API_KEY not set — skipping AI classification for idea %s", idea_id)
         return
 
-    print(f"[AI] 🔍 Starting classification for idea {idea_id}")
     logger.info("Starting AI classification for idea %s", idea_id)
 
     try:
@@ -77,12 +75,10 @@ async def classify_idea(idea_id: str) -> None:
         )
 
         if not result.data:
-            print(f"[AI] ❌ Idea {idea_id} not found in DB")
             logger.error("AI classifier: idea %s not found in DB", idea_id)
             return
 
         idea = result.data
-        print(f"[AI] 📄 Fetched idea: \"{idea.get('title', '')}\"")
 
         prompt = CLASSIFICATION_PROMPT.format(
             title=idea.get("title", ""),
@@ -94,7 +90,7 @@ async def classify_idea(idea_id: str) -> None:
             tools_involved=", ".join(idea.get("tools_involved") or []) or "Not specified",
         )
 
-        print(f"[AI] 🤖 Sending to Claude (claude-sonnet-4-6)...")
+        logger.info("Sending idea %s to Claude for classification", idea_id)
         client = Anthropic(api_key=settings.anthropic_api_key)
         message = client.messages.create(
             model="claude-sonnet-4-6",
@@ -103,7 +99,6 @@ async def classify_idea(idea_id: str) -> None:
         )
 
         raw = message.content[0].text.strip()
-        print(f"[AI] 📨 Claude raw response: {raw}")
 
         try:
             parsed = json.loads(raw)
@@ -120,7 +115,6 @@ async def classify_idea(idea_id: str) -> None:
         ai_confidence = float(parsed.get("ai_confidence", 0.0))
 
         if ai_category not in VALID_CATEGORIES:
-            print(f"[AI] ⚠  Invalid category '{ai_category}' — defaulting to '{idea.get('idea_category')}'")
             logger.warning(
                 "Claude returned invalid category '%s' for idea %s — defaulting to user category '%s'",
                 ai_category, idea_id, idea.get("idea_category"),
@@ -137,17 +131,10 @@ async def classify_idea(idea_id: str) -> None:
             }
         ).eq("idea_id", idea_id).execute()
 
-        print(
-            f"[AI] ✅ Classification complete for idea {idea_id}\n"
-            f"     Category  : {ai_category}\n"
-            f"     Confidence: {ai_confidence:.0%}\n"
-            f"     Summary   : {ai_summary[:120]}{'...' if len(ai_summary) > 120 else ''}"
-        )
         logger.info(
             "AI classification complete for idea %s — category: %s, confidence: %.2f",
             idea_id, ai_category, ai_confidence,
         )
 
     except Exception as exc:
-        print(f"[AI] ❌ Classification FAILED for idea {idea_id}: {exc}")
         logger.exception("AI classification failed for idea %s: %s", idea_id, exc)

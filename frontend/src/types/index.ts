@@ -67,14 +67,15 @@ export interface Lead {
   account_id: string;
   submitted_by: string;
   service: ServiceType | null;
-  contact_details: { name?: string; email?: string; region?: string; title?: string } | null;
+  contact_details: { name?: string; email?: string; country?: string; title?: string } | null;
   estimated_value: number | null;
   currency: string;
   probability: number | null;
   expected_close_date: string | null;
   status: LeadStatus;
   priority: Priority;
-  supporting_docs: string[];
+  supporting_docs: (string | { url: string; name: string })[];
+  rejection_remarks: string | null;
   ai_category: string | null;
   ai_confidence: number | null;
   ai_summary: string | null;
@@ -155,7 +156,8 @@ export type AssignedRole =
   | "account_owner"
   | "sales_lead"
   | "practice_leader"
-  | "review_committee";
+  | "review_committee"
+  | (string & {});
 export type ActionTaken =
   | "pending"
   | "reviewed"
@@ -186,6 +188,7 @@ export interface AssignmentWithRelations extends Assignment {
   submission_title?: string;
   submission_status?: string;
   account_name?: string;
+  submitter_name?: string;
 }
 
 // ── M6: Notifications ──

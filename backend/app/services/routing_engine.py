@@ -22,6 +22,7 @@ from app.services.email_service import (
     send_submission_email,
     send_reviewer_assignment_email,
     send_submitter_status_email,
+    send_new_lead_under_review_email,
 )
 
 logger = logging.getLogger("routing_engine")
@@ -190,7 +191,7 @@ def _update_submission_status(supabase, submission_type: str, submission_id: str
 
 def _get_submission(supabase, submission_type: str, submission_id: str) -> dict:
     if submission_type == "lead":
-        res = supabase.table("leads").select("title, description, submitted_by, account_id, service, contact_details").eq("lead_id", submission_id).single().execute()
+        res = supabase.table("leads").select("title, description, submitted_by, account_id, service, contact_details, lead_type").eq("lead_id", submission_id).single().execute()
     else:
         res = supabase.table("value_ideas").select("title, problem_statement, submitted_by, account_id").eq("idea_id", submission_id).single().execute()
     return res.data or {}
@@ -253,7 +254,8 @@ def _get_profile(supabase, user_id: str) -> dict:
             .execute()
         )
         return res.data or {}
-    except Exception:
+    except Exception as exc:
+        logger.warning("_get_profile: failed to fetch profile for user %s: %s", user_id, exc)
         return {}
 
 
@@ -381,6 +383,7 @@ async def start_routing(
         logger.info("[ROUTE] No per-account stakeholders for %s — trying vertical routing", account_id)
         stakeholders = _get_vertical_stakeholders(supabase, account_id)
 
+    sub_early: dict = {}
     if not stakeholders and submission_type == "lead":
         # Final fallback: use the lead's service field to resolve a DU
         sub_early = _get_submission(supabase, "lead", submission_id)
@@ -392,21 +395,135 @@ async def start_routing(
     if not stakeholders:
         logger.warning("[ROUTE] No stakeholders resolved for account %s — routing_pending", account_id)
         _update_submission_status(supabase, submission_type, submission_id, "routing_pending")
-        # Notify admins so they can add stakeholder mappings
-        admins_res = (
-            supabase.table("profiles")
-            .select("id")
-            .eq("role", "admin")
-            .execute()
-        )
-        for admin in (admins_res.data or []):
+
+        # In-app submission confirmation to submitter even when routing is pending
+        if not sub_early:
+            sub_early = _get_submission(supabase, submission_type, submission_id)
+        _submitter_id_rp = sub_early.get("submitted_by") or submitter_id
+        _title_rp = sub_early.get("title", "")
+        if _submitter_id_rp:
             _send_notification(
-                supabase, admin["id"], submission_type, submission_id,
+                supabase, _submitter_id_rp, submission_type, submission_id,
                 "info",
-                f"A new {submission_type} was submitted but could not be routed — "
-                f"no stakeholder or vertical routing config found for account {account_id}. "
-                "Please configure stakeholders or vertical routing.",
+                f'Your {submission_type} "{_title_rp}" was submitted. Routing is pending — '
+                f'an admin will assign a reviewer shortly.',
             )
+
+        # Audit: submitted → routing_pending (AC-15)
+        if submission_type == "lead" and _submitter_id_rp:
+            try:
+                from app.services.tracking import record_status_change
+                record_status_change(
+                    submission_type="lead",
+                    submission_id=submission_id,
+                    from_status="submitted",
+                    to_status="routing_pending",
+                    changed_by=_submitter_id_rp,
+                    reason="No stakeholders configured for account",
+                )
+            except Exception as exc:
+                logger.exception("[ROUTE] Failed to record routing_pending audit entry: %s", exc)
+
+        # For new-account leads with no service line: assign Adeesh Jain as reviewer
+        # and notify her, but keep the status as routing_pending.
+        if submission_type == "lead":
+            if not sub_early:
+                sub_early = _get_submission(supabase, "lead", submission_id)
+            if sub_early.get("lead_type") == "new_lead" and not sub_early.get("service"):
+                try:
+                    adeesh_res = (
+                        supabase.table("profiles")
+                        .select("id, full_name, email")
+                        .eq("email", "adeesh.jain@testingxperts.com")
+                        .limit(1)
+                        .execute()
+                    )
+                    adeesh_rows = adeesh_res.data or []
+                    if adeesh_rows:
+                        adeesh = adeesh_rows[0]
+                        adeesh_uid = adeesh["id"]
+
+                        # Create an assignment so Adeesh sees it in her review queue
+                        _create_assignment(
+                            supabase,
+                            "lead", submission_id,
+                            adeesh_uid,
+                            "New Account Review",
+                            "system",
+                        )
+
+                        lead_title = sub_early.get("title", "")
+
+                        # In-app notification to Adeesh
+                        _send_notification(
+                            supabase, adeesh_uid, "lead", submission_id,
+                            "approval",
+                            f'A new-account lead "{lead_title}" has been submitted without a service line '
+                            f'and requires your review.',
+                        )
+
+                        # Email Adeesh
+                        from app.config import get_settings as _gs
+                        sub_profile = _get_profile(supabase, sub_early.get("submitted_by", ""))
+                        acct_res = (
+                            supabase.table("accounts")
+                            .select("account_name")
+                            .eq("account_id", account_id)
+                            .single()
+                            .execute()
+                        )
+                        acct_name = (acct_res.data or {}).get("account_name", "Unknown Account")
+
+                        send_new_lead_under_review_email(
+                            title=lead_title,
+                            account_name=acct_name,
+                            submitter_name=sub_profile.get("full_name", "Unknown"),
+                            submitter_email=sub_profile.get("email", ""),
+                            submission_id=submission_id,
+                            portal_url=_gs().portal_url,
+                            to_email=adeesh.get("email", "adeesh.jain@testingxperts.com"),
+                        )
+                        logger.info(
+                            "[ROUTE] New-account lead %s (no service) assigned to Adeesh for review; status stays routing_pending",
+                            submission_id,
+                        )
+                    else:
+                        logger.warning("[ROUTE] Adeesh profile not found — cannot assign new-account lead %s", submission_id)
+                except Exception as exc:
+                    logger.exception("[ROUTE] Failed to assign Adeesh for new-account lead %s: %s", submission_id, exc)
+            else:
+                # Notify admins for other unroutable leads
+                admins_res = (
+                    supabase.table("profiles")
+                    .select("id")
+                    .eq("role", "admin")
+                    .execute()
+                )
+                for admin in (admins_res.data or []):
+                    _send_notification(
+                        supabase, admin["id"], submission_type, submission_id,
+                        "info",
+                        f"A new {submission_type} was submitted but could not be routed — "
+                        f"no stakeholder or vertical routing config found for account {account_id}. "
+                        "Please configure stakeholders or vertical routing.",
+                    )
+        else:
+            # Non-lead submissions: notify admins
+            admins_res = (
+                supabase.table("profiles")
+                .select("id")
+                .eq("role", "admin")
+                .execute()
+            )
+            for admin in (admins_res.data or []):
+                _send_notification(
+                    supabase, admin["id"], submission_type, submission_id,
+                    "info",
+                    f"A new {submission_type} was submitted but could not be routed — "
+                    f"no stakeholder or vertical routing config found for account {account_id}. "
+                    "Please configure stakeholders or vertical routing.",
+                )
+
         # No points awarded — submission is stuck in routing_pending
         return
 
@@ -429,6 +546,68 @@ async def start_routing(
     description = sub.get("description") or sub.get("problem_statement") or ""
     actual_submitter_id = sub.get("submitted_by", submitter_id)
 
+    # Audit trail entry: submitted → under_review (AC-15)
+    if submission_type == "lead":
+        try:
+            from app.services.tracking import record_status_change
+            record_status_change(
+                submission_type="lead",
+                submission_id=submission_id,
+                from_status="submitted",
+                to_status="under_review",
+                changed_by=actual_submitter_id,
+                reason=f'Auto-routed to {first["role_label"]}',
+            )
+        except Exception as exc:
+            logger.exception("[ROUTE] Failed to record under_review audit entry: %s", exc)
+
+    # ── Notify Adeesh when a new-account lead goes under review ──────────────
+    if submission_type == "lead" and sub.get("lead_type") == "new_lead":
+        try:
+            acct_res = (
+                supabase.table("accounts")
+                .select("account_name")
+                .eq("account_id", account_id)
+                .single()
+                .execute()
+            )
+            acct_name = (acct_res.data or {}).get("account_name", "Unknown Account")
+
+            sub_profile = _get_profile(supabase, actual_submitter_id)
+            sub_name    = sub_profile.get("full_name", "Unknown")
+            sub_email   = sub_profile.get("email", "")
+
+            # In-app notification to Adeesh (lookup by email)
+            adeesh_res = (
+                supabase.table("profiles")
+                .select("id")
+                .eq("email", "adeesh.jain@testingxperts.com")
+                .limit(1)
+                .execute()
+            )
+            adeesh_rows = adeesh_res.data or []
+            if adeesh_rows:
+                _send_notification(
+                    supabase, adeesh_rows[0]["id"], "lead", submission_id,
+                    "info",
+                    f'New account lead "{title}" for "{acct_name}" is now under review. Submitted by {sub_name}.',
+                )
+
+            # Email Adeesh
+            from app.config import get_settings as _gs
+            _portal_url = _gs().portal_url
+            send_new_lead_under_review_email(
+                title=title,
+                account_name=acct_name,
+                submitter_name=sub_name,
+                submitter_email=sub_email,
+                submission_id=submission_id,
+                portal_url=_portal_url,
+            )
+            logger.info("[ROUTE] Adeesh notified of new-account lead %s under review", submission_id)
+        except Exception as exc:
+            logger.exception("[ROUTE] Failed to notify Adeesh for new-account lead %s: %s", submission_id, exc)
+
     # In-app notification to the first reviewer
     _send_notification(
         supabase, first["user_id"], submission_type, submission_id,
@@ -436,15 +615,15 @@ async def start_routing(
         f'You have a new {submission_type} awaiting your review as {first["role_label"]}: "{title}".',
     )
 
-    # Region for UK/US extra recipients comes from the lead's contact_details
-    # (what the user filled in on the form), NOT from accounts.region.
+    # In-app submission confirmation to submitter (BRD §5.3.2 / §6.1 stage 1 / AC-04)
+    if actual_submitter_id:
+        _send_notification(
+            supabase, actual_submitter_id, submission_type, submission_id,
+            "info",
+            f'Your {submission_type} "{title}" was submitted and routed to {first["role_label"]} for review.',
+        )
+
     contact_region: str | None = None
-    if submission_type == "lead":
-        cd = sub.get("contact_details") or {}
-        if isinstance(cd, dict):
-            cd_region = cd.get("region")
-            if isinstance(cd_region, str) and cd_region.strip():
-                contact_region = cd_region.strip()
 
     # ── Trigger email to ALL stakeholders + (UK/US extras only if user-entered) ──
     _dispatch_submission_email(
@@ -478,8 +657,14 @@ async def advance_routing(
     assignment_id: str,
     action: str,
     actor_id: str,
+    rejection_remarks: str | None = None,
 ) -> None:
-    """Called after an assignment is marked approved or rejected."""
+    """Called after an assignment is marked approved or rejected.
+
+    rejection_remarks: optional free-text reviewer remarks captured when the
+    assignment is rejected. Persisted on the lead row and surfaced in the
+    submitter notification + email (BRD AC-06).
+    """
     supabase = get_supabase_admin()
 
     asgn_res = (
@@ -520,12 +705,37 @@ async def advance_routing(
 
     # ── Rejection ───────────────────────────────────────────────────────────
     if action == "rejected":
-        _update_submission_status(supabase, sub_type, sub_id, "rejected")
+        remarks = (rejection_remarks or "").strip() or None
+
+        # Persist rejection_remarks on the lead row (leads-only; ideas have their own flow)
+        if sub_type == "lead":
+            update_payload: dict = {"status": "rejected"}
+            if remarks is not None:
+                update_payload["rejection_remarks"] = remarks
+            supabase.table("leads").update(update_payload).eq("lead_id", sub_id).execute()
+        else:
+            _update_submission_status(supabase, sub_type, sub_id, "rejected")
+
+        # Audit-trail entry for the rejection (AC-15)
+        try:
+            from app.services.tracking import record_status_change
+            record_status_change(
+                submission_type=sub_type,
+                submission_id=sub_id,
+                from_status="under_review",
+                to_status="rejected",
+                changed_by=actor_id,
+                reason=remarks,
+            )
+        except Exception as exc:
+            logger.exception("[ROUTE] Failed to record rejection audit entry: %s", exc)
+
         if submitter_id:
+            remarks_suffix = f' Reviewer remarks: "{remarks}"' if remarks else ""
             _send_notification(
                 supabase, submitter_id, sub_type, sub_id,
                 "status_update",
-                f'Your {sub_type} "{title}" was rejected by {actor_name} ({current_label}).',
+                f'Your {sub_type} "{title}" was rejected by {actor_name} ({current_label}).{remarks_suffix}',
             )
             # Email submitter about rejection
             if submitter_email:
@@ -540,6 +750,7 @@ async def advance_routing(
                         new_status="rejected",
                         actor_name=actor_name,
                         actor_role=current_label,
+                        rejection_remarks=remarks,
                     )
                 except Exception as exc:
                     logger.exception("[ROUTE] Email failed on rejection: %s", exc)
@@ -558,6 +769,19 @@ async def advance_routing(
             if current_lead_status == "qualified":
                 from app.services.scoring import award_points as _award
                 _update_submission_status(supabase, "lead", sub_id, "opportunity_created")
+                # Audit: qualified → opportunity_created (AC-15)
+                try:
+                    from app.services.tracking import record_status_change
+                    record_status_change(
+                        submission_type="lead",
+                        submission_id=sub_id,
+                        from_status="qualified",
+                        to_status="opportunity_created",
+                        changed_by=actor_id,
+                        reason=f"Opportunity created by {actor_name} ({current_label})",
+                    )
+                except Exception as exc:
+                    logger.exception("[ROUTE] Failed to record opportunity_created audit entry: %s", exc)
                 if submitter_id:
                     try:
                         _award(submitter_id, "lead", sub_id, "opportunity_created")
@@ -626,19 +850,35 @@ async def advance_routing(
             )
 
         if current_idx is None:
-            logger.error(
-                "[ROUTE] Approved reviewer %s (assignment assignee) not found in account %s chain. "
-                "Chain length=%s steps=%s. Will not create next assignment or spuriously finalize — "
-                "check account_stakeholders.user_id matches assignments.assigned_to.",
-                assignee_key,
-                account_id,
-                len(stakeholders),
-                [
-                    (s.get("step_order"), _uuid_key(s.get("user_id")), s.get("role_label"))
-                    for s in stakeholders
-                ],
-            )
-            return
+            # Reviewer was assigned manually (e.g. via new-account "Assign Reviewer" flow)
+            # and is not in the account_stakeholders chain. Treat as a single-step final approval.
+            if sub_type == "lead":
+                lead_status_res2 = supabase.table("leads").select("status").eq("lead_id", sub_id).single().execute()
+                if (lead_status_res2.data or {}).get("status") == "under_review":
+                    logger.info(
+                        "[ROUTE] Reviewer %s not in stakeholder chain for account %s — "
+                        "treating as single-step final approval for lead %s",
+                        assignee_key, account_id, sub_id,
+                    )
+                    # Jump to the final-approval block by setting current_idx to last position
+                    current_idx = len(stakeholders) - 1 if stakeholders else -1
+                    # Fall through to final approval below (current_idx + 1 >= len means no next step)
+                else:
+                    logger.error(
+                        "[ROUTE] Approved reviewer %s not found in account %s chain and lead is not under_review. "
+                        "Chain length=%s steps=%s.",
+                        assignee_key, account_id, len(stakeholders),
+                        [(s.get("step_order"), _uuid_key(s.get("user_id")), s.get("role_label")) for s in stakeholders],
+                    )
+                    return
+            else:
+                logger.error(
+                    "[ROUTE] Approved reviewer %s not found in account %s chain. "
+                    "Chain length=%s steps=%s.",
+                    assignee_key, account_id, len(stakeholders),
+                    [(s.get("step_order"), _uuid_key(s.get("user_id")), s.get("role_label")) for s in stakeholders],
+                )
+                return
 
         # Intermediate step approval — email submitter that it's progressing
         if submitter_email:
@@ -698,7 +938,22 @@ async def advance_routing(
         # For leads: status becomes "qualified" (reviewer has qualified it).
         # For ideas: keep "approved".
         final_status = "qualified" if sub_type == "lead" else "approved"
+        prev_status = "under_review" if sub_type == "lead" else "under_review"
         _update_submission_status(supabase, sub_type, sub_id, final_status)
+
+        # Audit: under_review → qualified (AC-15)
+        try:
+            from app.services.tracking import record_status_change
+            record_status_change(
+                submission_type=sub_type,
+                submission_id=sub_id,
+                from_status=prev_status,
+                to_status=final_status,
+                changed_by=actor_id,
+                reason=f"Qualified by {actor_name} ({current_label})",
+            )
+        except Exception as exc:
+            logger.exception("[ROUTE] Failed to record qualified audit entry: %s", exc)
 
         # Award qualified points (20 pts) to submitter
         if sub_type == "lead" and submitter_id:

@@ -33,7 +33,7 @@ export default function AuthLayout({
           <div className="flex items-center gap-2">
             <div className="h-px w-5 bg-white/40" />
             <p className="text-white text-lg font-extrabold tracking-[0.12em]">
-              Tx-Catalyst
+              Tx Catalyst
             </p>
             <div className="h-px flex-1 bg-white/20" />
           </div>
@@ -49,8 +49,7 @@ export default function AuthLayout({
             Win More.
           </h1>
           <p className="text-white/70 text-[15px] leading-relaxed max-w-xs mb-8">
-            A centralised platform for delivery teams to capture, track, and
-            measure the business value they generate at client accounts.
+            A centralised platform for delivery teams to capture and track
           </p>
 
           {/* Hero illustration (lightbulb icon is decorative only) */}

@@ -23,6 +23,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
@@ -72,6 +79,7 @@ function StakeholderRow({
   const [labelDraft, setLabelDraft] = useState(item.role_label);
   const [editingUser, setEditingUser] = useState(false);
   const [newUserId, setNewUserId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function saveLabel() {
     if (labelDraft.trim() && labelDraft !== item.role_label) {
@@ -185,11 +193,33 @@ function StakeholderRow({
         <Button
           size="icon" variant="ghost"
           className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
-          onClick={onRemove}
+          onClick={() => setConfirmDelete(true)}
           title="Remove reviewer"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
+
+        <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-[#232222]">Remove Reviewer from Chain</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-[#5D5D5D]">
+              Are you sure you want to remove <span className="font-medium text-[#232222]">{item.user?.full_name ?? item.role_label}</span> from the routing chain? This cannot be undone.
+            </p>
+            <DialogFooter className="gap-2 mt-2">
+              <Button variant="outline" className="border-[#C5C5C5]" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => { setConfirmDelete(false); onRemove(); }}
+              >
+                Remove
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -211,12 +241,11 @@ function AddReviewerForm({
   onCancel: () => void;
 }) {
   const [userId, setUserId] = useState<string | null>(null);
-  const [roleLabel, setRoleLabel] = useState("");
+  const [selectedName, setSelectedName] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   async function handleAdd() {
     if (!userId) { toast.error("Please select a reviewer."); return; }
-    if (!roleLabel.trim()) { toast.error("Please enter a role label."); return; }
     setSaving(true);
     try {
       await api("/api/stakeholders", {
@@ -224,7 +253,7 @@ function AddReviewerForm({
         body: {
           account_id: accountId,
           user_id: userId,
-          role_label: roleLabel.trim(),
+          role_label: selectedName || "Reviewer",
           step_order: nextStep,
         },
         token,
@@ -242,25 +271,16 @@ function AddReviewerForm({
     <div className="rounded-lg border border-dashed border-[#B12B35]/30 bg-[#B12B35]/5 p-4 space-y-3">
       <p className="text-sm font-medium text-[#B12B35]">Add Reviewer — Step {nextStep}</p>
       <div className="space-y-2">
-        <Label className="text-xs">Role Label</Label>
-        <Input
-          value={roleLabel}
-          onChange={(e) => setRoleLabel(e.target.value)}
-          placeholder="e.g. Delivery Head, DU Manager, Sales Executive…"
-          className="h-8 text-sm"
-        />
-      </div>
-      <div className="space-y-2">
         <Label className="text-xs">Reviewer</Label>
         <UserCombobox
           value={userId}
-          onChange={(id) => setUserId(id)}
+          onChange={(id, user) => { setUserId(id); setSelectedName(user?.full_name ?? ""); }}
           token={token}
           placeholder="Search by name (3+ characters)…"
         />
       </div>
       <div className="flex gap-2 pt-1">
-        <Button size="sm" onClick={handleAdd} disabled={saving}>
+        <Button size="sm" onClick={handleAdd} disabled={saving || !userId}>
           {saving ? "Adding…" : "Add Reviewer"}
         </Button>
         <Button size="sm" variant="outline" onClick={onCancel} disabled={saving}>

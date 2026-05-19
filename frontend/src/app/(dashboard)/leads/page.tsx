@@ -39,6 +39,7 @@ const statusColors: Record<string, string> = {
   routing_pending: "bg-amber-100 text-amber-700",
   under_review: "bg-[#003466]/10 text-[#003466]",
   qualified: "bg-[#B12B35]/10 text-[#B12B35]",
+  opportunity_created: "bg-purple-100 text-purple-700",
   approved: "bg-green-100 text-green-700",
   won: "bg-[#003466]/15 text-[#003466]",
   lost: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
@@ -65,8 +66,18 @@ function LeadsPageInner() {
   const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
+  // Initialize status filter from ?status= URL param so dashboard cards
+  // (e.g. "Under Review" → /leads?status=under_review) pre-filter the list.
+  // Only a single status value pre-applies — comma-separated values are used
+  // for highlighting only (see highlightPending below).
+  const initialStatus = (() => {
+    const raw = (searchParams.get("status") ?? "").trim();
+    if (!raw || raw.includes(",")) return "";
+    return raw;
+  })();
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [loading, setLoading] = useState(true);
+  // Highlight routing_pending rows when navigated from dashboard alert
   const highlightPending = (searchParams.get("status") ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -133,6 +144,7 @@ function LeadsPageInner() {
             <SelectItem value="routing_pending">Routing Pending</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="qualified">Qualified</SelectItem>
+            <SelectItem value="opportunity_created">Opportunity Created</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="won">Won</SelectItem>
             <SelectItem value="lost">Lost</SelectItem>
@@ -227,7 +239,7 @@ function LeadsPageInner() {
                         variant="secondary"
                         className={statusColors[lead.status]}
                       >
-                        {lead.status.replace("_", " ")}
+                        {lead.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">

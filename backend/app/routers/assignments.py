@@ -4,10 +4,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from uuid import UUID
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
-from app.schemas.assignment import AssignmentUpdate
+from app.schemas.assignment import AssignmentUpdate, AssignReviewerRequest
 from app.services.routing_engine import advance_routing
 from app.services.scoring import award_points
 from app.services.notification_service import send_notification
+from app.services.email_service import send_reviewer_assignment_email
+from app.config import get_settings
 
 logger = logging.getLogger("assignments")
 router = APIRouter(prefix="/assignments", tags=["Assignments"])
@@ -15,7 +17,7 @@ router = APIRouter(prefix="/assignments", tags=["Assignments"])
 
 def _enrich_assignments(assignments: list[dict]) -> list[dict]:
     """
-    Joins submission title, status, and account_name onto each assignment row.
+    Joins submission title, status, account_name, and submitter_name onto each assignment row.
     Handles mixed lead/idea assignment lists in a single batch.
     """
     if not assignments:
@@ -32,7 +34,7 @@ def _enrich_assignments(assignments: list[dict]) -> list[dict]:
     if lead_ids:
         result = (
             supabase.table("leads")
-            .select("lead_id, title, status, account:accounts(account_name)")
+            .select("lead_id, title, status, submitted_by, account:accounts(account_name)")
             .in_("lead_id", lead_ids)
             .execute()
         )
@@ -41,11 +43,29 @@ def _enrich_assignments(assignments: list[dict]) -> list[dict]:
     if idea_ids:
         result = (
             supabase.table("value_ideas")
-            .select("idea_id, title, status, account:accounts(account_name)")
+            .select("idea_id, title, status, submitted_by, account:accounts(account_name)")
             .in_("idea_id", idea_ids)
             .execute()
         )
         ideas_map = {r["idea_id"]: r for r in (result.data or [])}
+
+    # Collect all unique submitter IDs to fetch in one batch
+    submitter_ids: set[str] = set()
+    for a in assignments:
+        sid = a["submission_id"]
+        sub = leads_map.get(sid) if a["submission_type"] == "lead" else ideas_map.get(sid)
+        if sub and sub.get("submitted_by"):
+            submitter_ids.add(sub["submitted_by"])
+
+    profiles_map: dict = {}
+    if submitter_ids:
+        profiles_result = (
+            supabase.table("profiles")
+            .select("id, full_name")
+            .in_("id", list(submitter_ids))
+            .execute()
+        )
+        profiles_map = {r["id"]: r for r in (profiles_result.data or [])}
 
     for a in assignments:
         sid = a["submission_id"]
@@ -57,6 +77,10 @@ def _enrich_assignments(assignments: list[dict]) -> list[dict]:
         a["submission_title"] = sub.get("title")
         a["submission_status"] = sub.get("status")
         a["account_name"] = (sub.get("account") or {}).get("account_name")
+
+        submitter_id = sub.get("submitted_by")
+        profile = profiles_map.get(submitter_id, {}) if submitter_id else {}
+        a["submitter_name"] = profile.get("full_name") or None
 
     return assignments
 
@@ -192,6 +216,7 @@ async def update_assignment(
             assignment_id=str(assignment_id),
             action=payload.action_taken,
             actor_id=current_user["id"],
+            rejection_remarks=payload.rejection_remarks,
         )
 
     # Stage 3 (opportunity_created): won / lost — update lead status, award points, notify
@@ -205,6 +230,162 @@ async def update_assignment(
         )
 
     return result.data[0]
+
+
+@router.post("/{assignment_id}/assign-reviewer")
+async def assign_reviewer(
+    assignment_id: UUID,
+    payload: AssignReviewerRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    For a 'New Account Review' assignment (status routing_pending), let the holder
+    pick a reviewer from the executive pool. This:
+      - Updates the lead to 'under_review'
+      - Creates a new pending assignment for the chosen reviewer (role='Reviewer')
+      - Closes the current assignment as 'reviewed' with notes "Routed to <Name>"
+      - Sends an in-app notification + email to the new reviewer
+    """
+    supabase = get_supabase_admin()
+    reviewer_id = str(payload.reviewer_id)
+
+    asgn_res = (
+        supabase.table("assignments")
+        .select("assignment_id, submission_type, submission_id, assigned_to, assigned_role, action_taken")
+        .eq("assignment_id", str(assignment_id))
+        .single()
+        .execute()
+    )
+    if not asgn_res.data:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    asgn = asgn_res.data
+
+    is_assigned = asgn["assigned_to"] == current_user["id"]
+    is_privileged = current_user["role"] in ("admin", "executive")
+    if not is_assigned and not is_privileged:
+        raise HTTPException(status_code=403, detail="Not authorized to assign reviewer for this assignment")
+
+    if asgn["assigned_role"] != "New Account Review" or asgn["action_taken"] != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="Not a routable new-account assignment (must be 'New Account Review' and pending)",
+        )
+
+    if asgn["submission_type"] != "lead":
+        raise HTTPException(status_code=400, detail="Only lead assignments can be routed to a reviewer")
+
+    if reviewer_id == asgn["assigned_to"]:
+        raise HTTPException(status_code=400, detail="Cannot assign the lead to yourself")
+
+    # Validate reviewer profile
+    reviewer_res = (
+        supabase.table("profiles")
+        .select("id, full_name, email, role, is_active")
+        .eq("id", reviewer_id)
+        .single()
+        .execute()
+    )
+    if not reviewer_res.data:
+        raise HTTPException(status_code=404, detail="Reviewer profile not found")
+    reviewer = reviewer_res.data
+    if reviewer.get("role") != "executive" or not reviewer.get("is_active", False):
+        raise HTTPException(status_code=400, detail="Reviewer must be an active executive")
+
+    lead_id = asgn["submission_id"]
+
+    # Load lead for status/title/account
+    lead_res = (
+        supabase.table("leads")
+        .select("title, status, account_id")
+        .eq("lead_id", lead_id)
+        .single()
+        .execute()
+    )
+    if not lead_res.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = lead_res.data
+
+    account_name = "Unknown Account"
+    if lead.get("account_id"):
+        try:
+            acct = (
+                supabase.table("accounts")
+                .select("account_name")
+                .eq("account_id", lead["account_id"])
+                .single()
+                .execute()
+            )
+            account_name = (acct.data or {}).get("account_name", account_name)
+        except Exception:
+            pass
+
+    # 1) Lead → under_review
+    supabase.table("leads").update({"status": "under_review"}).eq("lead_id", lead_id).execute()
+
+    # 2) Create new reviewer assignment
+    now = datetime.now(timezone.utc)
+    due = now.replace(microsecond=0)
+    from datetime import timedelta
+    due = now + timedelta(days=7)
+    new_asgn_payload = {
+        "submission_type": "lead",
+        "submission_id": lead_id,
+        "assigned_to": reviewer_id,
+        "assigned_role": "Reviewer",
+        "assigned_by": "manual",
+        "due_date": due.isoformat(),
+        "action_taken": "pending",
+    }
+    new_asgn_res = supabase.table("assignments").insert(new_asgn_payload).execute()
+    new_assignment = (new_asgn_res.data or [{}])[0]
+
+    # 3) Close original assignment
+    routing_note = f"Routed to {reviewer.get('full_name') or reviewer.get('email')}"
+    if payload.notes:
+        routing_note += f" — {payload.notes.strip()}"
+    supabase.table("assignments").update(
+        {
+            "action_taken": "reviewed",
+            "action_date": now.isoformat(),
+            "notes": routing_note,
+        }
+    ).eq("assignment_id", str(assignment_id)).execute()
+
+    # 4) In-app notification to new reviewer
+    try:
+        send_notification(
+            recipient_id=reviewer_id,
+            submission_type="lead",
+            submission_id=lead_id,
+            notification_type="approval",
+            message=(
+                f'You have been assigned to review the new-account lead "{lead.get("title", "")}" '
+                f'by {current_user.get("full_name") or current_user.get("email")}.'
+            ),
+        )
+    except Exception as exc:
+        logger.exception("[ASSIGN] Notification to reviewer %s failed: %s", reviewer_id, exc)
+
+    # 5) Email to new reviewer
+    try:
+        send_reviewer_assignment_email(
+            reviewer_email=reviewer.get("email", ""),
+            reviewer_name=reviewer.get("full_name") or reviewer.get("email", ""),
+            role_label="Reviewer",
+            submission_type="lead",
+            submission_id=lead_id,
+            title=lead.get("title", ""),
+            account_name=account_name,
+        )
+    except Exception as exc:
+        logger.exception("[ASSIGN] Email to reviewer %s failed: %s", reviewer.get("email"), exc)
+
+    logger.info(
+        "[ASSIGN] Lead %s routed: %s -> %s by actor %s",
+        lead_id, current_user.get("full_name"), reviewer.get("full_name"), current_user["id"],
+    )
+
+    return new_assignment
 
 
 async def _handle_post_qualified_action(
@@ -265,6 +446,20 @@ async def _handle_post_qualified_action(
     new_status = action  # "won" or "lost"
     supabase.table("leads").update({"status": new_status}).eq("lead_id", lead_id).execute()
     logger.info("[ASSIGN] Lead %s → %s by actor %s", lead_id, new_status, actor_id)
+
+    # Audit: opportunity_created → won/lost (AC-15)
+    try:
+        from app.services.tracking import record_status_change
+        record_status_change(
+            submission_type="lead",
+            submission_id=lead_id,
+            from_status="opportunity_created",
+            to_status=new_status,
+            changed_by=actor_id,
+            reason=(notes.strip() or None) if isinstance(notes, str) else None,
+        )
+    except Exception as exc:
+        logger.exception("[ASSIGN] Failed to record %s audit entry: %s", action, exc)
 
     # Award points
     points_event = "deal_won" if action == "won" else "deal_lost"

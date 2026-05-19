@@ -30,6 +30,12 @@ class ActionTaken(str, Enum):
 class AssignmentUpdate(BaseModel):
     action_taken: ActionTaken
     notes: str | None = None
+    rejection_remarks: str | None = None  # AC-06: captured when action_taken == "rejected"
+
+
+class AssignReviewerRequest(BaseModel):
+    reviewer_id: UUID
+    notes: str | None = None
 
 
 class AssignmentResponse(BaseModel):

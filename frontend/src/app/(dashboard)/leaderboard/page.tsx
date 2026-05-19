@@ -175,10 +175,9 @@ export default function LeaderboardPage() {
           ) : (
             <div className="divide-y divide-[#EDE7E6]">
               {/* Header */}
-              <div className="grid grid-cols-[48px_1fr_auto_80px_64px_72px] gap-3 px-5 py-2.5 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
+              <div className="grid grid-cols-[48px_1fr_80px_64px_72px] gap-3 px-5 py-2.5 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
                 <span className="text-center">Rank</span>
                 <span>Contributor</span>
-                <span>Role</span>
                 <span className="text-right">Points</span>
                 <span className="text-right">Leads</span>
                 <span className="text-right">Deals Won</span>
@@ -188,7 +187,7 @@ export default function LeaderboardPage() {
                 return (
                   <div
                     key={entry.score_id}
-                    className={`grid grid-cols-[48px_1fr_auto_80px_64px_72px] gap-3 px-5 py-3 items-center ${isMe ? "bg-[#B12B35]/5" : ""}`}
+                    className={`grid grid-cols-[48px_1fr_80px_64px_72px] gap-3 px-5 py-3 items-center ${isMe ? "bg-[#B12B35]/5" : ""}`}
                   >
                     <div className="flex items-center justify-center">
                       {getRankIcon(entry.rank)}
@@ -208,11 +207,6 @@ export default function LeaderboardPage() {
                           {entry.user?.email}
                         </p>
                       </div>
-                    </div>
-                    <div>
-                      <Badge variant="secondary" className="text-[11px]">
-                        {roleLabels[entry.user?.role || ""] || entry.user?.role}
-                      </Badge>
                     </div>
                     <p className="text-right font-bold text-[#B12B35] text-base tabular-nums">
                       {entry.total_points.toLocaleString()}

@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
         token: token!,
       });
       await refreshProfile();
-      toast.success("Password updated. Welcome to Tx-Catalyst.");
+      toast.success("Password updated. Welcome to Tx Catalyst.");
       router.replace("/");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to reset password.";

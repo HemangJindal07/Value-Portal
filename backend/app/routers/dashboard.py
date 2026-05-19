@@ -31,9 +31,10 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
     for s in ["submitted", "under_review", "qualified", "won", "lost"]:
         leads_by_status[s] = sum(1 for l in all_leads if l["status"] == s)
 
+    _active_statuses = {"submitted", "routing_pending", "under_review", "qualified", "opportunity_created"}
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in all_leads if l["status"] == "qualified"
+        for l in all_leads if l["status"] in _active_statuses
     )
     won_value = sum(
         float(l.get("estimated_value") or 0)
@@ -170,10 +171,10 @@ async def admin_analytics(
     ideas = ideas_res.data or []
 
     # ── 4. Revenue / savings ──────────────────────────────────────────────────
-    # Pipeline = qualified leads only (pre-qualification stages are not real pipeline)
+    _active_statuses = {"submitted", "routing_pending", "under_review", "qualified", "opportunity_created"}
     pipeline_value = sum(
         float(l.get("estimated_value") or 0)
-        for l in non_draft if l["status"] == "qualified"
+        for l in non_draft if l["status"] in _active_statuses
     )
     won_value = sum(
         float(l.get("estimated_value") or 0) for l in non_draft if l["status"] == "won"

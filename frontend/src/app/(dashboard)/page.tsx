@@ -297,22 +297,22 @@ function FunnelChart({
 }: {
   stages: { label: string; count: number; color: string }[];
 }) {
-  const total = stages[0]?.count || 1;
+  const maxCount = Math.max(...stages.map(s => s.count), 1);
 
   return (
     <div className="space-y-2 py-1">
       {stages.map((stage, i) => {
         // Width shrinks proportionally: min 36%, max 100%
-        const proportion = Math.max(stage.count / total, 0);
+        const proportion = Math.max(stage.count / maxCount, 0);
         const widthPct = Math.round(36 + proportion * 64);
         const marginPct = (100 - widthPct) / 2;
 
         // Conversion rate from previous stage
-        const prevCount = i === 0 ? total : stages[i - 1].count;
+        const prevCount = i === 0 ? maxCount : stages[i - 1].count;
         const convRate = prevCount > 0 ? Math.round((stage.count / prevCount) * 100) : 0;
 
-        // % of total (top of funnel)
-        const ofTotal = total > 0 ? Math.round((stage.count / total) * 100) : 0;
+        // % of largest stage (so widest bar = 100%)
+        const ofTotal = maxCount > 0 ? Math.round((stage.count / maxCount) * 100) : 0;
 
         return (
           <div key={i} className="group">
@@ -355,7 +355,7 @@ function FunnelChart({
                 style={{ background: stage.color }}
               >
                 <span className="text-[11px] font-semibold text-white opacity-90">
-                  {ofTotal}% of total
+                  {ofTotal}%
                 </span>
               </div>
             </div>
@@ -1383,14 +1383,14 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
     (s.leads_by_status["opportunity_created"] || 0) +
     (s.leads_by_status["won"] || 0);
 
+  // BRD §5.2.2 — pipeline reflects the 5 high-level stages
   const funnelStages = [
-    { label: "Submitted",           count: s.leads_by_status["submitted"] || 0,           color: "#2E75B6" },
-    { label: "Routing Pending",     count: s.leads_by_status["routing_pending"] || 0,     color: "#f59e0b" },
+    { label: "Awaiting Review",     count: (s.leads_by_status["submitted"] || 0) + (s.leads_by_status["routing_pending"] || 0), color: "#2E75B6" },
     { label: "Under Review",        count: s.leads_by_status["under_review"] || 0,        color: "#003466" },
-    { label: "Qualified",           count: s.leads_by_status["qualified"] || 0,           color: "#B12B35" },
+    { label: "Qualified / Rejected",count: (s.leads_by_status["qualified"] || 0) + (s.leads_by_status["approved"] || 0) + (s.leads_by_status["rejected"] || 0), color: "#B12B35" },
     { label: "Opportunity Created", count: s.leads_by_status["opportunity_created"] || 0, color: "#7c3aed" },
-    { label: "Won",                 count: s.leads_by_status["won"] || 0,                 color: "#22c55e" },
-  ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Submitted");
+    { label: "Won / Lost",          count: (s.leads_by_status["won"] || 0) + (s.leads_by_status["lost"] || 0), color: "#22c55e" },
+  ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Awaiting Review");
 
   return (
     <div className="space-y-6">
@@ -1415,8 +1415,8 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
         <Badge className="bg-[#003466] text-white border-0 text-[11px] px-3 py-1">Leadership View</Badge>
       </div>
 
-      {/* ── 4 Primary KPIs ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── 5 Primary KPIs ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
           <div className="h-1 bg-[#B12B35]" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
@@ -1429,8 +1429,24 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
             <div className="text-2xl font-bold text-[#232222] tracking-tight">
               ${(an?.pipeline_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </div>
+            <p className="text-xs text-[#5D5D5D] mt-1">Total active pipeline</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
+          <div className="h-1 bg-green-500" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Won to Date</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50">
+              <Trophy className="h-4 w-4 text-green-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-[#232222] tracking-tight">
+              ${(an?.won_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </div>
             <p className="text-xs text-[#5D5D5D] mt-1">
-              ${(an?.won_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} won to date
+              {s.leads_by_status["won"] || 0} deal{(s.leads_by_status["won"] || 0) !== 1 ? "s" : ""} closed
             </p>
           </CardContent>
         </Card>
@@ -1819,23 +1835,20 @@ function UserDashboard({
         </p>
       </div>
 
-      {/* 4 personal KPI cards */}
+      {/* BRD §5.2.1 — exactly 3 KPI cards: Leads Submitted, Score, Under Review */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          title="My Leads Submitted"
+          title="Leads Submitted"
           value={d.myLeads}
-          desc={`${d.leadsByStatus["qualified"] || 0} qualified · ${d.leadsByStatus["opportunity_created"] || 0} in progress · ${d.leadsByStatus["won"] || 0} won`}
+          desc={`${d.leadsByStatus["submitted"] || 0} Submitted · ${d.leadsByStatus["qualified"] || 0} Qualified · ${d.leadsByStatus["opportunity_created"] || 0} Opportunity · ${d.leadsByStatus["won"] || 0} Won`}
           icon={Target}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"
           accent="#B12B35"
           href="/leads"
         />
-        {/* Value Ideas stat card disabled
-        <StatCard title="My Value Ideas" ... href="/ideas" />
-        */}
         <StatCard
-          title="My Score"
+          title="Score"
           value={d.myScore.toLocaleString()}
           icon={Trophy}
           iconColor="text-[#B12B35]"
@@ -1845,13 +1858,13 @@ function UserDashboard({
         />
         <StatCard
           title="Under Review"
-          value={d.myUnderReview}
-          desc="Submitted · routing pending · under review"
+          value={d.leadsByStatus["under_review"] || 0}
+          desc="Leads currently being reviewed"
           icon={ClipboardList}
           iconColor="text-[#2E75B6]"
           iconBg="bg-[#2E75B6]/10"
           accent="#2E75B6"
-          href="/leads?status=submitted,routing_pending,under_review"
+          href="/leads?status=under_review"
         />
       </div>
 

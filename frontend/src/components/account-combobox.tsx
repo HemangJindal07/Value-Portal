@@ -11,11 +11,25 @@ import type { Account } from "@/types";
 const MIN_CHARS = 3;
 const DEBOUNCE_MS = 300;
 
-const REGIONS = [
-  "Australia", "Brazil", "Canada", "China", "France", "Germany",
-  "India", "Japan", "Malaysia", "Mexico", "Middle East", "Netherlands",
-  "New Zealand", "Philippines", "Poland", "Singapore", "South Africa",
-  "South Korea", "Sweden", "UAE", "United Kingdom", "United States", "Other",
+const REGIONS = ["North America", "EMEA", "APAC"];
+
+const INDUSTRIES = [
+  "Banking & Financial Services",
+  "Credit Unions",
+  "Education & EduTech",
+  "Gaming",
+  "Insurance",
+  "Non-Profit & Public Sector",
+  "Healthcare & Life Sciences",
+  "Energy & Utilities",
+  "QSR",
+  "Retail & e-commerce",
+  "ISV & High Tech",
+  "Travel & Logistics",
+  "Media & Entertainment",
+  "Telecom",
+  "Manufacturing & Logistics",
+  "Others",
 ];
 
 type AccountComboboxProps = {
@@ -160,14 +174,16 @@ export function AccountCombobox({
     e.stopPropagation();
     const name = newName.trim();
     if (!name) return;
+    if (!newRegion) { setCreateError("Please select a region."); return; }
+    if (!newIndustry) { setCreateError("Please select an industry."); return; }
     setCreating(true);
     setCreateError("");
     setCreateSuccessMsg("");
 
     const payload = {
       account_name: name,
-      industry: newIndustry.trim() || null,
-      region: newRegion || null,
+      industry: newIndustry,
+      region: newRegion,
       account_status: "prospect",
     };
     console.log("[AccountCombobox] Submitting create:", payload, "| token present:", !!token);
@@ -328,7 +344,7 @@ export function AccountCombobox({
               <div>
                 <h2 className="text-base font-semibold text-[#232222]">Add New Account</h2>
                 <p className="text-xs text-[#5D5D5D] mt-0.5">
-                  Account name is required. Industry and region are optional.
+                  All fields marked <span className="text-[#B12B35]">*</span> are required.
                 </p>
               </div>
               <button
@@ -361,25 +377,30 @@ export function AccountCombobox({
               {/* Industry */}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-[#232222]">
-                  Industry <span className="text-[#5D5D5D] font-normal text-xs">— optional</span>
+                  Industry <span className="text-[#B12B35]">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={newIndustry}
                   onChange={(e) => setNewIndustry(e.target.value)}
-                  placeholder="e.g. Financial Services, Healthcare…"
-                  className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-[#B12B35] focus-visible:ring-2 focus-visible:ring-[#B12B35]/20"
-                />
+                  required
+                  className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors text-[#232222] focus-visible:border-[#B12B35] focus-visible:ring-2 focus-visible:ring-[#B12B35]/20"
+                >
+                  <option value="">Select industry…</option>
+                  {INDUSTRIES.map((i) => (
+                    <option key={i} value={i}>{i}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Region */}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-[#232222]">
-                  Region <span className="text-[#5D5D5D] font-normal text-xs">— optional</span>
+                  Region <span className="text-[#B12B35]">*</span>
                 </label>
                 <select
                   value={newRegion}
                   onChange={(e) => setNewRegion(e.target.value)}
+                  required
                   className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors text-[#232222] focus-visible:border-[#B12B35] focus-visible:ring-2 focus-visible:ring-[#B12B35]/20"
                 >
                   <option value="">Select region…</option>
@@ -405,7 +426,7 @@ export function AccountCombobox({
               <div className="flex gap-3 pt-1">
                 <button
                   type="submit"
-                  disabled={creating || !newName.trim()}
+                  disabled={creating || !newName.trim() || !newRegion || !newIndustry}
                   className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#B12B35] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#9a2330] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {creating ? (

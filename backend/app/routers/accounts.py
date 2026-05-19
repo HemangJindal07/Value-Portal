@@ -6,6 +6,8 @@ from app.dependencies import get_current_user, require_role
 from app.schemas.account import AccountCreate, AccountUpdate, AccountResponse
 from app.services.notification_service import send_notification
 from app.services.account_stakeholders_sync import refresh_du_dh_and_renumber
+from app.services.email_service import send_new_account_email
+from app.config import get_settings
 from app.services.sanitize import sanitize_dict
 from postgrest.exceptions import APIError
 
@@ -146,6 +148,57 @@ async def create_account(
                 f'You will receive leads and ideas for review after DU approval.'
             ),
         )
+
+    # ── Notify Adeesh Jain of the new account (in-app + email) ───────────────
+    creator_id = current_user.get("id", "")
+    try:
+        # Fetch creator's profile for the email body
+        creator_res = (
+            supabase.table("profiles")
+            .select("full_name, email")
+            .eq("id", creator_id)
+            .single()
+            .execute()
+        )
+        creator_profile = creator_res.data or {}
+        creator_name  = creator_profile.get("full_name") or current_user.get("email", "Unknown")
+        creator_email = creator_profile.get("email", "")
+
+        # Look up Adeesh's user_id so we can create an in-app notification
+        adeesh_res = (
+            supabase.table("profiles")
+            .select("id")
+            .eq("email", "adeesh.jain@testingxperts.com")
+            .limit(1)
+            .execute()
+        )
+        adeesh_rows = adeesh_res.data or []
+        if adeesh_rows:
+            adeesh_uid = adeesh_rows[0]["id"]
+            send_notification(
+                recipient_id=adeesh_uid,
+                submission_type="account",
+                submission_id=account_id,
+                notification_type="info",
+                message=(
+                    f'New account "{account_name}" has been created by {creator_name} ({creator_email}).'
+                ),
+            )
+
+        # Send email regardless of whether Adeesh has a portal account
+        settings = get_settings()
+        send_new_account_email(
+            account_name=account_name,
+            account_id=account_id,
+            industry=account.get("industry"),
+            region=account.get("region"),
+            creator_name=creator_name,
+            creator_email=creator_email,
+            portal_url=settings.portal_url,
+        )
+        logger.info("[ACCOUNT CREATE] Adeesh notified of new account %s", account_id)
+    except Exception as exc:
+        logger.exception("[ACCOUNT CREATE] Failed to notify Adeesh for account %s: %s", account_id, exc)
 
     return account
 

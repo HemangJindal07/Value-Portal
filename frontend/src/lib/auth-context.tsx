@@ -174,17 +174,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    console.log("[LOGOUT] signOut() called — clearing Supabase session");
     const supabase = createClient();
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("[LOGOUT] supabase.auth.signOut() returned error:", error);
-    } else {
-      console.log("[LOGOUT] supabase.auth.signOut() succeeded");
-    }
+    // scope: 'local' wipes the browser session immediately so the cookie is
+    // gone before the page redirects — prevents the 307 redirect loop back to /
+    await supabase.auth.signOut({ scope: "local" });
     setUser(null);
     setToken(null);
-    console.log("[LOGOUT] user and token cleared from state");
   };
 
   const refreshProfile = async () => {

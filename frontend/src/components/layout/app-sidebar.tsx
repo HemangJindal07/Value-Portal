@@ -11,8 +11,6 @@ import {
   Trophy,
   Bell,
   Settings,
-  ShieldCheck,
-  BarChart3,
   GitMerge,
   Route,
   AlertTriangle,
@@ -49,7 +47,6 @@ const ADMIN_NAV = [
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
       // { title: "Reports",  href: "/reports",     icon: BarChart3 }, // Reports hidden
-      { title: "Reviews",     href: "/reviews",     icon: ShieldCheck },
     ],
   },
   {
@@ -80,7 +77,6 @@ const EXECUTIVE_NAV = [
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
       // { title: "Reports",  href: "/reports",     icon: BarChart3 }, // Reports hidden
-      { title: "Reviews",     href: "/reviews",     icon: ShieldCheck },
     ],
   },
   {
@@ -201,7 +197,7 @@ export function AppSidebar() {
           {/* Product name */}
           <div className="min-w-0">
             <p className="text-white text-[13px] font-extrabold leading-none tracking-wider">
-              Tx-Catalyst
+              Tx Catalyst
             </p>
           </div>
         </button>
