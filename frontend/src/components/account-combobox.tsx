@@ -106,6 +106,31 @@ export function AccountCombobox({
     };
   }, [query, token]);
 
+  // Resolve the display name when a value is supplied externally (e.g. the
+  // account_id arrives as a URL param) but no account has been picked in this
+  // session yet. Without this the input would render blank / placeholder even
+  // though an account is selected. Skipped while the dropdown is open so it
+  // never overwrites what the user is actively typing.
+  React.useEffect(() => {
+    if (!value || !token || open) return;
+    // Already showing the right account — nothing to do.
+    if (selectedName) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const acct = await api<Account>(`/api/accounts/${value}`, { token });
+        if (!cancelled && acct?.account_name) {
+          setSelectedName(acct.account_name);
+        }
+      } catch {
+        /* leave blank — user can still search */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [value, token, selectedName, open]);
+
   // Close on outside click (but not when modal is open)
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

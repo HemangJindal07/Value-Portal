@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { Notification } from "@/types";
@@ -55,8 +56,42 @@ function timeAgo(dateStr: string) {
   return `${days}d ago`;
 }
 
+// The Opportunity Created / Won-Loss / Pending Review tabs only exist for
+// org roles (admin / executive). For everyone else those tab URLs would land
+// on a blank page, so non-org users are always routed to the lead detail page.
+function notificationHref(n: Notification, isOrgRole: boolean): string | null {
+  if (!n.submission_id) return null;
+  if (n.submission_type !== "lead") return null;
+  // Regular users don't have the assignment tabs — open the lead directly.
+  if (!isOrgRole) return `/leads/${n.submission_id}`;
+  const msg = (n.message || "").toLowerCase();
+  // Map message → destination + tab on the assignments page. Highlight uses the
+  // ?highlight=<lead_id> query param picked up by the assignments page.
+  if (
+    msg.includes("awaiting your review") ||
+    msg.includes("assigned to review") ||
+    msg.includes("new lead awaiting") ||
+    msg.includes("new-account lead")
+  ) {
+    return `/assignments?tab=pending&highlight=${n.submission_id}`;
+  }
+  if (msg.includes("opportunity") && (msg.includes("won") || msg.includes("lost"))) {
+    return `/assignments?tab=won_loss&highlight=${n.submission_id}`;
+  }
+  if (msg.includes("now qualified") || msg.includes("create an opportunity")) {
+    return `/assignments?tab=opportunity_created&highlight=${n.submission_id}`;
+  }
+  if (msg.includes("now an opportunity")) {
+    return `/assignments?tab=won_loss&highlight=${n.submission_id}`;
+  }
+  // Fallback — open the lead detail page.
+  return `/leads/${n.submission_id}`;
+}
+
 export default function NotificationsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const router = useRouter();
+  const isOrgRole = user?.role === "admin" || user?.role === "executive";
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
@@ -122,7 +157,7 @@ export default function NotificationsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="text-muted-foreground">
-            Reminders, escalations, and status updates.
+            Reminders, Status updates, and Escalations
           </p>
         </div>
         {unreadCount > 0 && (
@@ -161,14 +196,21 @@ export default function NotificationsPage() {
             filtered.map((n) => {
               const cfg = typeConfig[n.type] || typeConfig.info;
               const Icon = cfg.icon;
+              const href = notificationHref(n, isOrgRole);
+              const handleOpen = () => {
+                if (!href) return;
+                if (!n.is_read) markAsRead([n.notification_id]);
+                router.push(href);
+              };
               return (
                 <Card
                   key={n.notification_id}
+                  onClick={href ? handleOpen : undefined}
                   className={`transition-colors ${
                     !n.is_read
                       ? "border-l-4 border-l-primary bg-accent/30"
                       : "opacity-75"
-                  }`}
+                  } ${href ? "cursor-pointer hover:bg-accent/50" : ""}`}
                 >
                   <CardContent className="flex items-start gap-4 py-4">
                     <div className={`mt-0.5 ${cfg.color}`}>
@@ -193,7 +235,10 @@ export default function NotificationsPage() {
                         variant="ghost"
                         size="sm"
                         className="shrink-0"
-                        onClick={() => markAsRead([n.notification_id])}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markAsRead([n.notification_id]);
+                        }}
                       >
                         Mark Read
                       </Button>

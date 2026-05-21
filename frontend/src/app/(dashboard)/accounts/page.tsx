@@ -101,7 +101,6 @@ export default function AccountsPage() {
                   <TableHead>Industry</TableHead>
                   <TableHead>Region</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Contract Value</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -128,11 +127,6 @@ export default function AccountsPage() {
                       >
                         {acct.account_status}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {acct.contract_value
-                        ? `$${Number(acct.contract_value).toLocaleString()}`
-                        : "—"}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -28,9 +28,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserCombobox } from "@/components/user-combobox";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import type { LeadWithRelations } from "@/types";
 
 // "admin"     → full remediation UI (Fix Mapping, yellow banner, help footer)
@@ -56,10 +65,12 @@ function LeadsTable({
   leads,
   loading,
   showFixMapping,
+  onFixMapping,
 }: {
   leads: LeadWithRelations[];
   loading: boolean;
   showFixMapping: boolean;
+  onFixMapping: (lead: LeadWithRelations) => void;
 }) {
   if (loading) {
     return (
@@ -142,19 +153,16 @@ function LeadsTable({
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-2">
                 {showFixMapping && (
-                  <Link
-                    href={`/admin/stakeholder-mapping`}
-                    title="Fix stakeholder mapping for this account"
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-[#B12B35]/30 text-[#B12B35] hover:bg-[#B12B35]/5"
+                    title="Assign a reviewer to this lead"
+                    onClick={() => onFixMapping(lead)}
                   >
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs border-[#B12B35]/30 text-[#B12B35] hover:bg-[#B12B35]/5"
-                    >
-                      <GitMerge className="h-3 w-3 mr-1" />
-                      Fix Mapping
-                    </Button>
-                  </Link>
+                    <GitMerge className="h-3 w-3 mr-1" />
+                    Fix Mapping
+                  </Button>
                 )}
                 <Link href={`/leads/${lead.lead_id}`}>
                   <Button size="sm" variant="ghost" className="h-7 text-xs">
@@ -182,6 +190,12 @@ export function ExceptionQueueView({
   const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
 
+  // Per-lead "Fix Mapping" reviewer-assignment dialog state.
+  const [fixLead, setFixLead] = useState<LeadWithRelations | null>(null);
+  const [reviewerId, setReviewerId] = useState<string | null>(null);
+  const [reviewerName, setReviewerName] = useState<string>("");
+  const [assigning, setAssigning] = useState(false);
+
   // Admin sees the full remediation surface; executive gets a read-only view.
   const isAdminView = variant === "admin";
 
@@ -208,6 +222,45 @@ export function ExceptionQueueView({
   const refresh = () => {
     loadLeads();
   };
+
+  // ── Per-lead "Fix Mapping" ────────────────────────────────────────────────
+  function openFixDialog(lead: LeadWithRelations) {
+    setFixLead(lead);
+    setReviewerId(null);
+    setReviewerName("");
+  }
+
+  function closeFixDialog() {
+    setFixLead(null);
+    setReviewerId(null);
+    setReviewerName("");
+  }
+
+  async function confirmAssignReviewer() {
+    if (!token || !fixLead || !reviewerId) {
+      toast.error("Select a reviewer first.");
+      return;
+    }
+    setAssigning(true);
+    try {
+      // Assigns the reviewer to THIS lead only — the account's permanent
+      // routing chain is not modified.
+      await api(`/api/leads/${fixLead.lead_id}/assign-reviewer`, {
+        method: "POST",
+        token,
+        body: { reviewer_id: reviewerId },
+      });
+      toast.success(
+        `"${fixLead.title}" assigned to ${reviewerName || "the reviewer"} — now under review.`
+      );
+      closeFixDialog();
+      loadLeads();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to assign reviewer.");
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   // Admin view: admin only. Executive view: executive (admins can also reach
   // it but are normally routed to the admin variant).
@@ -304,11 +357,12 @@ export function ExceptionQueueView({
             leads={leads}
             loading={loadingLeads}
             showFixMapping={isAdminView}
+            onFixMapping={openFixDialog}
           />
         </CardContent>
       </Card>
 
-      {/* Help footer — admin only (links to admin-only config pages) */}
+      {/* Help footer — admin only */}
       {isAdminView && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-[#F9F9F9] border border-[#EDE7E6] text-sm text-[#5D5D5D]">
           <Route className="h-4 w-4 mt-0.5 shrink-0 text-[#2E75B6]" />
@@ -318,38 +372,89 @@ export function ExceptionQueueView({
             </p>
             <ol className="list-decimal list-inside space-y-1 text-xs">
               <li>
-                Check the <strong>Industry</strong> and <strong>Region</strong>{" "}
-                fields on the account — they must match your routing config.
+                Click <strong>Fix Mapping</strong> on a lead to assign a reviewer
+                directly — this fixes <em>that lead only</em> and does not change
+                the account&apos;s routing for future leads.
               </li>
               <li>
-                Go to{" "}
-                <Link
-                  href="/admin/routing-config"
-                  className="text-[#2E75B6] underline"
-                >
-                  Routing Config
-                </Link>{" "}
-                and add a vertical entry for the account&apos;s industry.
-              </li>
-              <li>
-                Alternatively, go to{" "}
+                To fix routing permanently for an account, go to{" "}
                 <Link
                   href="/admin/stakeholder-mapping"
                   className="text-[#2E75B6] underline"
                 >
                   Stakeholder Mapping
                 </Link>{" "}
-                and add per-account reviewers directly.
-              </li>
-              <li>
-                Once mapping is configured, open the submission and manually
-                update its status from <em>Routing Pending</em> to{" "}
-                <em>Submitted</em> to trigger re-routing.
+                or{" "}
+                <Link
+                  href="/admin/routing-config"
+                  className="text-[#2E75B6] underline"
+                >
+                  Routing Config
+                </Link>{" "}
+                — those changes apply to all future submissions.
               </li>
             </ol>
           </div>
         </div>
       )}
+
+      {/* ── Fix Mapping dialog — assign a reviewer to one lead ── */}
+      <Dialog open={!!fixLead} onOpenChange={(open) => !open && closeFixDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#232222]">
+              Assign Reviewer
+            </DialogTitle>
+          </DialogHeader>
+          {fixLead && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-[#5D5D5D]">
+                Assign a reviewer to{" "}
+                <span className="font-medium text-[#232222]">
+                  &ldquo;{fixLead.title}&rdquo;
+                </span>{" "}
+                ({fixLead.account?.account_name ?? "—"}). The lead will move to{" "}
+                <strong>Under Review</strong> and the reviewer is notified by
+                email and in the portal.
+              </p>
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                This assigns the reviewer to <strong>this lead only</strong> —
+                the account&apos;s routing for future leads is not changed.
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[#232222]">
+                  Reviewer
+                </label>
+                <UserCombobox
+                  value={reviewerId}
+                  onChange={(id, u) => {
+                    setReviewerId(id);
+                    setReviewerName(u?.full_name ?? "");
+                  }}
+                  token={token ?? ""}
+                  placeholder="Search reviewer by name (3+ characters)…"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={closeFixDialog}
+              disabled={assigning}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#B12B35] hover:bg-[#9a2330] text-white"
+              onClick={confirmAssignReviewer}
+              disabled={assigning || !reviewerId}
+            >
+              {assigning ? "Assigning…" : "Assign Reviewer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

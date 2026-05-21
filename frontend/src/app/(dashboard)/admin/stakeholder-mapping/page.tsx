@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   GitMerge,
   Plus,
@@ -293,9 +294,12 @@ function AddReviewerForm({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export default function StakeholderMappingPage() {
+function StakeholderMappingInner() {
   const { token, user } = useAuth();
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  // An account_id may arrive as a URL param (e.g. deep-link) — pre-select it.
+  const presetAccountId = searchParams.get("account_id");
+  const [accountId, setAccountId] = useState<string | null>(presetAccountId || null);
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -502,6 +506,7 @@ export default function StakeholderMappingPage() {
                 </Button>
               )
             )}
+
           </CardContent>
         </Card>
       )}
@@ -520,5 +525,14 @@ export default function StakeholderMappingPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function StakeholderMappingPage() {
+  // useSearchParams() requires a Suspense boundary in the App Router.
+  return (
+    <Suspense fallback={null}>
+      <StakeholderMappingInner />
+    </Suspense>
   );
 }
