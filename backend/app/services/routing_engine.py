@@ -608,11 +608,20 @@ async def start_routing(
         except Exception as exc:
             logger.exception("[ROUTE] Failed to notify Adeesh for new-account lead %s: %s", submission_id, exc)
 
+    # Routing label for notifications. Prefer the lead's own service field so the
+    # message names the service the user actually picked — `first["role_label"]`
+    # is derived from the resolved stakeholder/service_routing row, which can
+    # mismatch the lead's service if that table has stale data.
+    lead_service = sub.get("service")
+    routing_label = (
+        f"Delivery Unit ({lead_service})" if lead_service else first["role_label"]
+    )
+
     # In-app notification to the first reviewer
     _send_notification(
         supabase, first["user_id"], submission_type, submission_id,
         "approval",
-        f'You have a new {submission_type} awaiting your review as {first["role_label"]}: "{title}".',
+        f'You have a new {submission_type} awaiting your review as {routing_label}: "{title}".',
     )
 
     # In-app submission confirmation to submitter (BRD §5.3.2 / §6.1 stage 1 / AC-04)
@@ -620,8 +629,52 @@ async def start_routing(
         _send_notification(
             supabase, actual_submitter_id, submission_type, submission_id,
             "info",
-            f'Your {submission_type} "{title}" was submitted and routed to {first["role_label"]} for review.',
+            f'Your {submission_type} "{title}" was submitted and routed to {routing_label} for review.',
         )
+
+    # ── Oversight notification: Adeesh Jain + all admins ────────────────────────
+    # Every new lead notifies Adeesh and every admin so leadership has visibility
+    # of submissions regardless of who routing assigned the lead to.
+    try:
+        sub_profile = _get_profile(supabase, actual_submitter_id)
+        sub_name = sub_profile.get("full_name") or "a user"
+
+        oversight_ids: set[str] = set()
+
+        admin_res = (
+            supabase.table("profiles")
+            .select("id")
+            .eq("role", "admin")
+            .execute()
+        )
+        for row in (admin_res.data or []):
+            if row.get("id"):
+                oversight_ids.add(row["id"])
+
+        adeesh_res = (
+            supabase.table("profiles")
+            .select("id")
+            .eq("email", "adeesh.jain@testingxperts.com")
+            .limit(1)
+            .execute()
+        )
+        for row in (adeesh_res.data or []):
+            if row.get("id"):
+                oversight_ids.add(row["id"])
+
+        # Don't double-notify the submitter or the assigned reviewer.
+        oversight_ids.discard(actual_submitter_id)
+        oversight_ids.discard(first["user_id"])
+
+        for recipient_id in oversight_ids:
+            _send_notification(
+                supabase, recipient_id, submission_type, submission_id,
+                "info",
+                f'New {submission_type} "{title}" was submitted by {sub_name} '
+                f'and routed to {routing_label}.',
+            )
+    except Exception as exc:
+        logger.exception("[ROUTE] Failed to send oversight notifications for %s: %s", submission_id, exc)
 
     contact_region: str | None = None
 

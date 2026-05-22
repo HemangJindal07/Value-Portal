@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2, Pencil, Check, X, Info, MapPin, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,8 +91,13 @@ function DeleteConfirmDialog({ open, label, onConfirm, onCancel }: DeleteConfirm
 // ── Vertical Routing Tab ──────────────────────────────────────────────────────
 
 function VerticalRoutingTab({ token }: { token: string }) {
-  const [entries, setEntries] = useState<VerticalEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Cached vertical-routing config — `load` re-runs the query after a mutation.
+  const { data: entries = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ["vertical-routing"],
+    queryFn: () => api<VerticalEntry[]>("/api/vertical-routing", { token }),
+    enabled: !!token,
+  });
+  const load = () => { refetch(); };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
@@ -106,19 +112,6 @@ function VerticalRoutingTab({ token }: { token: string }) {
   const [editDuId, setEditDuId] = useState("");
   const [editDhId, setEditDhId] = useState("");
   const [editSaving, setEditSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await api<VerticalEntry[]>("/api/vertical-routing", { token });
-      setEntries(data);
-    } catch {
-      toast.error("Failed to load vertical routing config.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleAdd = async () => {
     if (!addVertical.trim()) {
@@ -333,8 +326,13 @@ function VerticalRoutingTab({ token }: { token: string }) {
 // ── Region Sales Tab ──────────────────────────────────────────────────────────
 
 function RegionSalesTab({ token }: { token: string }) {
-  const [entries, setEntries] = useState<RegionSalesEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Cached region-sales config — `load` re-runs the query after a mutation.
+  const { data: entries = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ["region-sales"],
+    queryFn: () => api<RegionSalesEntry[]>("/api/region-sales", { token }),
+    enabled: !!token,
+  });
+  const load = () => { refetch(); };
   const [showAdd, setShowAdd] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
@@ -342,19 +340,6 @@ function RegionSalesTab({ token }: { token: string }) {
   const [addUserId, setAddUserId] = useState("");
   const [addCopyAll, setAddCopyAll] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await api<RegionSalesEntry[]>("/api/region-sales", { token });
-      setEntries(data);
-    } catch {
-      toast.error("Failed to load region sales config.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => { load(); }, [load]);
 
   const handleAdd = async () => {
     if (!addUserId) {

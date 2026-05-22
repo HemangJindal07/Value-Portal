@@ -180,6 +180,7 @@ export default function NewLeadPage() {
   }
 
   const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+  const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB — matches the backend upload limit
 
   function getFileExt(filename: string) {
     const idx = filename.lastIndexOf(".");
@@ -216,6 +217,13 @@ export default function NewLeadPage() {
       if (!ALLOWED_EXTENSIONS.includes(ext)) {
         toast.error(
           `"${attachment.name}" cannot be uploaded. Only PDF, Word (.doc/.docx), and Excel (.xls/.xlsx) files are accepted.`
+        );
+        return;
+      }
+      if (attachment.size > MAX_FILE_BYTES) {
+        const sizeMb = (attachment.size / (1024 * 1024)).toFixed(1);
+        toast.error(
+          `"${attachment.name}" is ${sizeMb} MB. Maximum file size is 20 MB.`
         );
         return;
       }
@@ -496,12 +504,17 @@ export default function NewLeadPage() {
               <div className="space-y-2">
                 <Label>Priority</Label>
                 <Select value={priority} onValueChange={(v) => setPriority(v ?? "")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full h-9">
                     <SelectValue placeholder="Select priority…">
                       {priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : undefined}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    alignItemWithTrigger={false}
+                    side="bottom"
+                    sideOffset={4}
+                    className="z-[200] w-[var(--anchor-width)] min-w-[var(--anchor-width)] bg-white border border-[#EDE7E6] shadow-lg"
+                  >
                     <SelectItem value="high">High</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
                     <SelectItem value="low">Low</SelectItem>

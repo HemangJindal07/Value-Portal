@@ -73,6 +73,42 @@ def _smtp_send(
         logger.exception("[EMAIL] Network error sending '%s': %s", subject, exc)
 
 
+def _smtp_send_direct(to_email: str, subject: str, html_body: str) -> None:
+    """
+    Send an HTML email to the real recipient, bypassing the TEST_OVERRIDE_EMAIL
+    redirect. Used for transactional auth emails (e.g. password-reset OTP) that
+    must reach the actual user even while the portal is in test mode.
+    """
+    settings = get_settings()
+
+    if not settings.smtp_user or not settings.smtp_pass:
+        logger.warning("[EMAIL] SMTP credentials not configured — skipping email.")
+        return
+
+    from_addr = f"{settings.smtp_from_name} <{settings.smtp_user}>"
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(settings.smtp_user, settings.smtp_pass)
+            server.sendmail(settings.smtp_user, [to_email], msg.as_string())
+        logger.info("[EMAIL] Sent '%s' → %s", subject, to_email)
+    except smtplib.SMTPAuthenticationError:
+        logger.error("[EMAIL] SMTP authentication failed — check SMTP_USER / SMTP_PASS.")
+    except smtplib.SMTPException as exc:
+        logger.exception("[EMAIL] SMTP error sending '%s': %s", subject, exc)
+    except OSError as exc:
+        logger.exception("[EMAIL] Network error sending '%s': %s", subject, exc)
+
+
 # ── HTML templates ────────────────────────────────────────────────────────────
 
 def _build_submission_html(
@@ -516,6 +552,87 @@ def send_reviewer_assignment_email(
         submission_id=submission_id,
     )
     _smtp_send(to_emails=[reviewer_email], subject=subject, html_body=html)
+
+
+def send_password_reset_otp_email(
+    recipient_email: str,
+    recipient_name: str,
+    code: str,
+    expiry_minutes: int,
+) -> None:
+    """
+    Email a 6-digit one-time code to a user who requested a password reset.
+    Sent directly to the user's real email (not the TEST_OVERRIDE address) so
+    the forgot-password flow works end to end.
+    """
+    subject = "[Tx-Catalyst] Your password reset code"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Password Reset Code</title>
+</head>
+<body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
+        <tr>
+          <td style="background:#B12B35;padding:20px 28px;">
+            <span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
+            <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 28px 8px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#B12B35;font-weight:600;
+                      text-transform:uppercase;letter-spacing:0.8px;">Password Reset</p>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#232222;line-height:1.3;">
+              Verify it's you
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:12px 28px 8px;">
+            <p style="margin:0;font-size:14px;color:#232222;line-height:1.6;">
+              Hi {recipient_name}, use the code below to reset your Tx-Catalyst password.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;">
+            <div style="background:#F9F9F9;border:1px solid #EDE7E6;border-radius:6px;
+                        text-align:center;padding:20px 12px;">
+              <span style="font-size:34px;font-weight:700;letter-spacing:10px;
+                           color:#232222;font-family:monospace;">{code}</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px 24px;">
+            <p style="margin:0;font-size:13px;color:#5D5D5D;line-height:1.6;">
+              This code expires in <strong>{expiry_minutes} minutes</strong>.
+              If you didn't request a password reset, you can safely ignore this email —
+              your password will not be changed.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
+            <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    _smtp_send_direct(to_email=recipient_email, subject=subject, html_body=html)
 
 
 def send_submitter_status_email(

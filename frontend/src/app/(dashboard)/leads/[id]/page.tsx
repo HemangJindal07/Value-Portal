@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, CheckCircle2, XCircle, Clock, CircleDot, AlertOctagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,33 +52,38 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
+type RoutingStep = {
+  step_order: number;
+  role_label: string;
+  reviewer_name: string;
+  action_taken: string | null;
+  action_date: string | null;
+};
+
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const router = useRouter();
-  const [lead, setLead] = useState<LeadWithRelations | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [routingSteps, setRoutingSteps] = useState<{
-    step_order: number;
-    role_label: string;
-    reviewer_name: string;
-    action_taken: string | null;
-    action_date: string | null;
-  }[]>([]);
+
+  // Cached lead detail. A missing/forbidden lead redirects to the list.
+  const { data: lead, isLoading: loading, isError } = useQuery({
+    queryKey: ["lead", id],
+    queryFn: () => api<LeadWithRelations>(`/api/leads/${id}`, { token: token! }),
+    enabled: !!token && !!id,
+  });
 
   useEffect(() => {
-    if (!token || !id) return;
-    api<LeadWithRelations>(`/api/leads/${id}`, { token })
-      .then((data) => {
-        setLead(data);
-      })
-      .catch(() => router.push("/leads"))
-      .finally(() => setLoading(false));
+    if (isError) router.push("/leads");
+  }, [isError, router]);
 
-    api<{ steps: typeof routingSteps }>(`/api/leads/${id}/routing`, { token })
-      .then((data) => setRoutingSteps(data.steps))
-      .catch(() => {});
-  }, [token, id, router]);
+  // Cached routing steps for this lead.
+  const { data: routingData } = useQuery({
+    queryKey: ["lead-routing", id],
+    queryFn: () =>
+      api<{ steps: RoutingStep[] }>(`/api/leads/${id}/routing`, { token: token! }),
+    enabled: !!token && !!id,
+  });
+  const routingSteps = routingData?.steps ?? [];
 
 
   if (loading) {

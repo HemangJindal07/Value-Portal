@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import {
@@ -59,8 +60,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string }> =
 
 export default function ReviewsPage() {
   const { token, user } = useAuth();
-  const [cycles, setCycles] = useState<ReviewCycle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({
     cycle_type: "monthly",
@@ -72,23 +72,18 @@ export default function ReviewsPage() {
 
   const isPrivileged = user?.role === "admin" || user?.role === "executive";
 
-  const fetchCycles = useCallback(async () => {
-    if (!token) return;
-    try {
-      const data = await api<ReviewCycle[]>("/api/governance/review-cycles", {
-        token,
-      });
-      setCycles(data);
-    } catch {
-      toast.error("Failed to load review cycles");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  // Cached review cycles — instant on revisit, refreshed in the background.
+  const { data: cyclesData, isLoading: loading } = useQuery({
+    queryKey: ["review-cycles"],
+    queryFn: () =>
+      api<ReviewCycle[]>("/api/governance/review-cycles", { token: token! }),
+    enabled: !!token,
+  });
+  const cycles = cyclesData ?? [];
 
-  useEffect(() => {
-    fetchCycles();
-  }, [fetchCycles]);
+  // Refresh the cached cycles after a create/status change.
+  const refreshCycles = () =>
+    queryClient.invalidateQueries({ queryKey: ["review-cycles"] });
 
   const createCycle = async () => {
     if (!token || !form.period_label || !form.start_date || !form.end_date) {
@@ -110,7 +105,7 @@ export default function ReviewsPage() {
         end_date: "",
         notes: "",
       });
-      fetchCycles();
+      refreshCycles();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to create cycle");
     }
@@ -125,7 +120,7 @@ export default function ReviewsPage() {
         body: { status: newStatus },
       });
       toast.success(`Cycle moved to ${newStatus.replace("_", " ")}`);
-      fetchCycles();
+      refreshCycles();
     } catch {
       toast.error("Failed to update cycle");
     }

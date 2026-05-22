@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Plus, Building2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,19 +34,18 @@ const statusColors: Record<string, string> = {
 
 export default function AccountsPage() {
   const { token } = useAuth();
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    const params = search ? `?search=${encodeURIComponent(search)}` : "";
-    api<Account[]>(`/api/accounts${params}`, { token })
-      .then(setAccounts)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [token, search]);
+  // Cached account list keyed by search term — instant on revisit.
+  const { data: accountsData, isLoading: loading } = useQuery({
+    queryKey: ["accounts", { search }],
+    queryFn: () => {
+      const params = search ? `?search=${encodeURIComponent(search)}` : "";
+      return api<Account[]>(`/api/accounts${params}`, { token: token! });
+    },
+    enabled: !!token,
+  });
+  const accounts = accountsData ?? [];
 
   return (
     <div className="space-y-6">

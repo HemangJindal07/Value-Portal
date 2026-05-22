@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import {
@@ -16,14 +17,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Trophy, Medal, Award, Star, TrendingUp, Zap, Target } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,45 +63,31 @@ function getRankIcon(rank: number) {
   return <span className="text-sm font-mono text-muted-foreground">#{rank}</span>;
 }
 
-const roleLabels: Record<string, string> = {
-  user: "User",
-  sales: "Sales",
-  practice_lead: "Practice Lead",
-  admin: "Admin",
-  executive: "Executive",
-};
-
 export default function LeaderboardPage() {
   const { token, user } = useAuth();
   // Admin/executive don't compete on the leaderboard, so hide the personal
   // "Your Rank / Total Points / Leads / Deals Won" stat cards for them.
   const isLeadershipRole = user?.role === "admin" || user?.role === "executive";
-  const [entries, setEntries] = useState<LeaderboardUser[]>([]);
-  const [myScore, setMyScore] = useState<MyScore | null>(null);
-  const [loading, setLoading] = useState(true);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [allEntries, setAllEntries] = useState<LeaderboardUser[]>([]);
   const [allLoading, setAllLoading] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    if (!token) return;
-    try {
+  // Cached leaderboard + personal score — instant on revisit, refreshed in
+  // the background and on tab refocus.
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["leaderboard"],
+    queryFn: async () => {
       const [lb, me] = await Promise.all([
-        api<LeaderboardUser[]>("/api/scores/leaderboard?limit=10", { token }),
-        api<MyScore>("/api/scores/me", { token }),
+        api<LeaderboardUser[]>("/api/scores/leaderboard?limit=10", { token: token! }),
+        api<MyScore>("/api/scores/me", { token: token! }),
       ]);
-      setEntries(lb.slice(0, 10));
-      setMyScore(me);
-    } catch {
-      toast.error("Failed to load leaderboard");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      return { entries: lb.slice(0, 10), myScore: me };
+    },
+    enabled: !!token,
+    refetchInterval: 15_000,
+  });
+  const entries = data?.entries ?? [];
+  const myScore = data?.myScore ?? null;
 
   const openViewAll = async () => {
     setViewAllOpen(true);
@@ -270,7 +249,7 @@ export default function LeaderboardPage() {
               All Contributors
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto -mx-6 px-6">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {allLoading ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
             ) : allEntries.length === 0 ? (

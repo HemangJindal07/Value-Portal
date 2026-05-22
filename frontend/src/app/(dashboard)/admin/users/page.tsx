@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -57,21 +57,17 @@ function getInitials(name: string) {
 
 export default function AdminUsersPage() {
   const { token, user: currentUser } = useAuth();
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const isAdmin = currentUser?.role === "admin";
 
-  useEffect(() => {
-    if (!token || !isAdmin) {
-      setLoading(false);
-      return;
-    }
-    api<Profile[]>("/api/users", { token })
-      .then(setUsers)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [token, isAdmin]);
+  // Cached user list — instant on revisit, refreshed in the background.
+  const { data: usersData, isLoading: loading } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: () => api<Profile[]>("/api/users", { token: token! }),
+    enabled: !!token && !!isAdmin,
+  });
+  const users = usersData ?? [];
 
   if (currentUser && !isAdmin) {
     return (
@@ -88,11 +84,8 @@ export default function AdminUsersPage() {
         body: { role: newRole },
         token: token!,
       });
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, role: newRole as Profile["role"] } : u
-        )
-      );
+      // Refresh the cached list so the new role shows immediately.
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast.success("Role updated");
     } catch (err: unknown) {
       const message =

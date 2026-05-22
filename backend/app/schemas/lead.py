@@ -46,7 +46,7 @@ class LeadCreate(BaseModel):
     service: ServiceType | None = None
     contact_details: dict | None = None
     estimated_value: float | None = Field(None, ge=0, le=999_999_999_999, description="Must be between 0 and 999,999,999,999")
-    currency: str = Field("USD", pattern=r"^USD$", description="USD only per BRD")
+    currency: str = Field("USD", pattern=r"^[A-Z]{3}$", description="ISO 4217 currency code (e.g. USD, INR, AUD)")
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
     priority: Priority = Priority.medium
@@ -58,7 +58,7 @@ class LeadUpdate(BaseModel):
     description: str | None = None
     lead_type: LeadType | None = None
     estimated_value: float | None = Field(None, ge=0, le=999_999_999_999, description="Must be between 0 and 999,999,999,999")
-    currency: str | None = Field(None, pattern=r"^USD$", description="USD only per BRD")
+    currency: str | None = Field(None, pattern=r"^[A-Z]{3}$", description="ISO 4217 currency code (e.g. USD, INR, AUD)")
     probability: int | None = Field(None, ge=0, le=100, description="0–100 percent")
     expected_close_date: date | None = None
     status: LeadStatus | None = None

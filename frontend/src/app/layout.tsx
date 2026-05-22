@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/components/query-provider";
 import "./globals.css";
 
 // Server-only: not inlined by Turbopack — always read fresh from .env.local
@@ -37,10 +38,12 @@ export default function RootLayout({
       </head>
       <body className={`${plusJakartaSans.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider>
-          <AuthProvider>
-            {children}
-            <Toaster richColors position="top-right" />
-          </AuthProvider>
+          <QueryProvider>
+            <AuthProvider>
+              {children}
+              <Toaster richColors position="top-right" />
+            </AuthProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
