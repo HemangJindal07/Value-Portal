@@ -569,7 +569,7 @@ export default function RoutingConfigPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Routing Configuration</h1>
         <p className="text-muted-foreground mt-1">
-          Configure org-level routing rules. These are used as a fallback when no
+          Configure org-level routing. These are used as a fallback when no
           per-account stakeholders are set in Stakeholder Mapping.
         </p>
       </div>

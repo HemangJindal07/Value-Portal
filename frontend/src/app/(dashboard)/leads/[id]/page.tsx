@@ -15,7 +15,6 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
-import Link from "next/link";
 import { ActivitySection } from "@/components/activity-section";
 
 const statusColors: Record<string, string> = {
@@ -94,11 +93,22 @@ export default function LeadDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/leads">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            // Return to wherever the user came from (My Submissions, Leads,
+            // Assignments, etc.). Fall back to /leads on a deep-link/refresh
+            // where there's no in-app history to go back to.
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.push("/leads");
+            }
+          }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{lead.title}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -239,10 +249,13 @@ export default function LeadDetailPage() {
               }
             />
             <Field
-              label="Probability"
-              value={lead.probability ? `${lead.probability}%` : null}
+              label="Expected Close Date"
+              value={
+                lead.expected_close_date
+                  ? new Date(lead.expected_close_date).toLocaleDateString()
+                  : null
+              }
             />
-            <Field label="Expected Close" value={lead.expected_close_date} />
             <Field
               label="Created"
               value={new Date(lead.created_at).toLocaleDateString()}
@@ -293,11 +306,19 @@ export default function LeadDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="relative">
-              {routingSteps.map((step, i) => {
+              {/* When a lead is closed without reaching a step (e.g. rejected at
+                  Step 1), the remaining steps will never run — show them as
+                  "Not required" rather than a misleading "Waiting". */}
+              {(() => {
+                const leadClosed = ["rejected", "lost", "dropped"].includes(
+                  lead.status
+                );
+                return routingSteps.map((step, i) => {
                 const isApproved = step.action_taken === "approved";
                 const isRejected = step.action_taken === "rejected";
                 const isPending = step.action_taken === "pending";
                 const isWaiting = !step.action_taken;
+                const isSkipped = isWaiting && leadClosed;
                 const isLast = i === routingSteps.length - 1;
 
                 return (
@@ -311,7 +332,9 @@ export default function LeadDetailPage() {
                       {isApproved && <CheckCircle2 className="h-[26px] w-[26px] text-green-500" />}
                       {isRejected && <XCircle className="h-[26px] w-[26px] text-red-500" />}
                       {isPending && <Clock className="h-[26px] w-[26px] text-amber-500 animate-pulse" />}
-                      {isWaiting && <CircleDot className="h-[26px] w-[26px] text-gray-300" />}
+                      {isWaiting && (
+                        <CircleDot className="h-[26px] w-[26px] text-gray-300" />
+                      )}
                     </div>
                     <div className={`pb-6 ${isLast ? "pb-0" : ""}`}>
                       <p className="text-sm font-medium">
@@ -330,12 +353,18 @@ export default function LeadDetailPage() {
                           </span>
                         )}
                         {isPending && <span className="text-amber-600 ml-2">Awaiting review</span>}
-                        {isWaiting && <span className="text-gray-400 ml-2">Waiting</span>}
+                        {isWaiting && !isSkipped && (
+                          <span className="text-gray-400 ml-2">Waiting</span>
+                        )}
+                        {isSkipped && (
+                          <span className="text-gray-400 ml-2">Not required</span>
+                        )}
                       </p>
                     </div>
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           </CardContent>
         </Card>

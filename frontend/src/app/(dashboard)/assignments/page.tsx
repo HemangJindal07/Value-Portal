@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Briefcase, Trophy, TrendingDown, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -414,6 +415,8 @@ function AssignmentCard({
   onOpenAssignReviewer,
   actioning,
   readOnly = false,
+  highlight = false,
+  showReviewer = false,
 }: {
   assignment: AssignmentWithRelations;
   onAction: (id: string, action: string, notes?: string) => void;
@@ -421,6 +424,9 @@ function AssignmentCard({
   onOpenAssignReviewer: (pending: AssignReviewerPending) => void;
   actioning: string | null;
   readOnly?: boolean;
+  highlight?: boolean;
+  // Admin org-wide view: surface which reviewer the lead is assigned to.
+  showReviewer?: boolean;
 }) {
   const due = getDaysRemaining(assignment.due_date);
   const agingBorder = getStatusBorder(
@@ -435,8 +441,22 @@ function AssignmentCard({
 
   const isPending = assignment.action_taken === "pending" && !readOnly;
 
+  // When this card is the one targeted by a ?highlight= deep-link, scroll it
+  // into view so the executive immediately sees which lead to act on.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (highlight && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlight]);
+
   return (
-    <Card className={`hover:bg-muted/30 transition-colors overflow-hidden ${agingBorder}`}>
+    <Card
+      ref={cardRef}
+      className={`hover:bg-muted/30 transition-colors overflow-hidden ${agingBorder} ${
+        highlight ? "ring-2 ring-amber-400 bg-amber-50/60" : ""
+      }`}
+    >
       <CardContent className="py-4 px-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0 space-y-2">
@@ -467,7 +487,19 @@ function AssignmentCard({
             <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
               <span>{assignment.account_name ?? "—"}</span>
               <span>·</span>
-              <span>Your role: <span className="text-foreground font-medium">{roleLabels[assignment.assigned_role] ?? assignment.assigned_role}</span></span>
+              {showReviewer ? (
+                <span>
+                  Assigned to:{" "}
+                  <span className="text-foreground font-medium">
+                    {assignment.assignee?.full_name ?? "Unassigned"}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {" "}({roleLabels[assignment.assigned_role] ?? assignment.assigned_role})
+                  </span>
+                </span>
+              ) : (
+                <span>Your role: <span className="text-foreground font-medium">{roleLabels[assignment.assigned_role] ?? assignment.assigned_role}</span></span>
+              )}
               {assignment.submission_status && (
                 <>
                   <span>·</span>
@@ -609,12 +641,29 @@ const accountTypeLabels: Record<string, string> = {
   new_lead:     "New Account",
 };
 
+const SUBMISSION_STATUS_LABELS: Record<string, string> = {
+  "":                  "All Statuses",
+  submitted:           "Submitted",
+  routing_pending:     "Routing Pending",
+  under_review:        "Under Review",
+  qualified:           "Qualified",
+  opportunity_created: "Opportunity Created",
+  approved:            "Approved",
+  won:                 "Won",
+  lost:                "Lost",
+  rejected:            "Rejected",
+  dropped:             "Dropped",
+  draft:               "Draft",
+};
+
 function MySubmissionsTab({
   leads,
   loading,
+  highlightId,
 }: {
   leads: LeadWithRelations[];
   loading: boolean;
+  highlightId?: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -652,7 +701,11 @@ function MySubmissionsTab({
         </div>
         <StatusSelect value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "")}>
           <StatusSelectTrigger className="w-44">
-            <StatusSelectValue placeholder="All Statuses" />
+            <StatusSelectValue placeholder="All Statuses">
+              {(val: string | null) =>
+                SUBMISSION_STATUS_LABELS[val ?? ""] ?? "All Statuses"
+              }
+            </StatusSelectValue>
           </StatusSelectTrigger>
           <StatusSelectContent>
             <StatusSelectItem value="">All Statuses</StatusSelectItem>
@@ -701,27 +754,16 @@ function MySubmissionsTab({
                   <TableHead>Account Type</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Date Submitted</TableHead>
                   <TableHead className="text-right">Est. Value</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((lead) => {
                   const cd = lead.contact_details as { name?: string; email?: string; country?: string; title?: string } | null;
-                  const STATUS_DISPLAY: Record<string, string> = {
-                    submitted:           "Submitted",
-                    routing_pending:     "Routing Pending",
-                    under_review:        "Under Review",
-                    qualified:           "Qualified",
-                    rejected:            "Rejected",
-                    opportunity_created: "Opportunity Created",
-                    won:                 "Won",
-                    lost:                "Lost",
-                    dropped:             "Dropped",
-                    draft:               "Draft",
-                  };
-                  const statusDisplay = STATUS_DISPLAY[lead.status] ?? lead.status.replace(/_/g, " ");
+                  const statusDisplay = SUBMISSION_STATUS_LABELS[lead.status] ?? lead.status.replace(/_/g, " ");
                   return (
-                  <TableRow key={lead.lead_id}>
+                  <TableRow key={lead.lead_id} className={highlightId && lead.lead_id === highlightId ? "bg-amber-100/60 dark:bg-amber-500/15 ring-1 ring-amber-400/60" : ""}>
                     <TableCell>
                       <Link
                         href={`/leads/${lead.lead_id}`}
@@ -769,6 +811,11 @@ function MySubmissionsTab({
                         {statusDisplay}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {lead.created_at
+                        ? new Date(lead.created_at).toLocaleDateString()
+                        : "—"}
+                    </TableCell>
                     <TableCell className="text-right">
                       {lead.estimated_value
                         ? `$${Number(lead.estimated_value).toLocaleString()}`
@@ -786,9 +833,17 @@ function MySubmissionsTab({
   );
 }
 
-export default function AssignmentsPage() {
+function AssignmentsPageInner() {
   const { token, user } = useAuth();
   const isOrgRole = user?.role === "admin" || user?.role === "executive";
+  // Admin has full control: the action tabs (Pending Review / Opportunity
+  // Created / Won-Loss) operate org-wide so the admin can act on any
+  // reviewer's lead. Executives keep their personal-scoped view.
+  const isAdmin = user?.role === "admin";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const highlightId = searchParams.get("highlight");
 
   const [myAssignments, setMyAssignments] = useState<AssignmentWithRelations[]>([]);
   const [allAssignments, setAllAssignments] = useState<AssignmentWithRelations[]>([]);
@@ -801,12 +856,26 @@ export default function AssignmentsPage() {
   const [assignReviewerPending, setAssignReviewerPending] = useState<AssignReviewerPending | null>(null);
   const [wlConfirm, setWlConfirm] = useState<{ assignmentId: string; action: "won" | "lost"; title: string } | null>(null);
 
-  // Set the default tab once we know the user's role (avoids Base UI uncontrolled warning)
+  // Set the default tab once we know the user's role (avoids Base UI uncontrolled warning).
+  // If a ?tab= query param is present (e.g. when navigated from a notification),
+  // honor it instead of the role default.
   useEffect(() => {
     if (user && activeTab === null) {
-      setActiveTab(isOrgRole ? "pending" : "submissions");
+      setActiveTab(urlTab || (isOrgRole ? "pending" : "submissions"));
     }
-  }, [user, isOrgRole, activeTab]);
+  }, [user, isOrgRole, activeTab, urlTab]);
+
+  // Keep the active tab in the URL so opening a lead and pressing browser
+  // "Back" returns to the same tab instead of falling back to the default.
+  const handleTabChange = (value: string | null) => {
+    const next = value || (isOrgRole ? "pending" : "submissions");
+    setActiveTab(next);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", next);
+    // A different tab's highlight is no longer relevant.
+    params.delete("highlight");
+    router.replace(`/assignments?${params.toString()}`, { scroll: false });
+  };
 
   // Don't render the page content until the user role is resolved to prevent tab flash
   const userResolved = user !== null && user !== undefined;
@@ -878,13 +947,34 @@ export default function AssignmentsPage() {
     "routing_pending",
     "under_review",
   ]);
-  const myPending = myAssignments.filter((a) => {
-    if (a.action_taken !== "pending") return false;
-    // Non-lead assignments (e.g. ideas) keep the old behaviour
-    if (a.submission_type !== "lead") return true;
-    // Lead assignments: only show in Pending Review when lead is still pre-qualified
-    return !a.submission_status || STAGE1_LEAD_STATUSES.has(a.submission_status);
-  });
+  // Newest assignment first so freshly-added leads appear at the top.
+  const _byNewest = (a: AssignmentWithRelations, b: AssignmentWithRelations) =>
+    new Date(b.assignment_date ?? b.created_at).getTime() -
+    new Date(a.assignment_date ?? a.created_at).getTime();
+
+  // Admin acts org-wide: source from ALL assignments so the admin can action
+  // any reviewer's pending lead. Executives keep their own assignments only.
+  const _pendingSource = isAdmin ? allAssignments : myAssignments;
+  const myPending = (() => {
+    const filtered = _pendingSource
+      .filter((a) => {
+        if (a.action_taken !== "pending") return false;
+        // Non-lead assignments (e.g. ideas) keep the old behaviour
+        if (a.submission_type !== "lead") return true;
+        // Lead assignments: only show in Pending Review when lead is still pre-qualified
+        return !a.submission_status || STAGE1_LEAD_STATUSES.has(a.submission_status);
+      })
+      .sort(_byNewest);
+    // For the admin's org-wide view, a lead may carry several assignment rows;
+    // show one card per lead (the newest pending assignment).
+    if (!isAdmin) return filtered;
+    const seen = new Set<string>();
+    return filtered.filter((a) => {
+      if (seen.has(a.submission_id)) return false;
+      seen.add(a.submission_id);
+      return true;
+    });
+  })();
   // Reviewed: deduplicated by submission_id — one row per lead, showing the latest assignment.
   // Sort by action_date descending first, then keep only the first (most recent) per submission.
   const myActionedDeduped = (() => {
@@ -919,18 +1009,43 @@ export default function AssignmentsPage() {
     ["qualified", "rejected", "opportunity_created", "won", "lost"].includes(l.status)
   );
 
+  // One card per lead — keep the newest pending assignment when a lead has
+  // accumulated multiple assignment rows.
+  const _dedupeBySubmission = (rows: AssignmentWithRelations[]) => {
+    const seen = new Set<string>();
+    return rows.filter((a) => {
+      if (seen.has(a.submission_id)) return false;
+      seen.add(a.submission_id);
+      return true;
+    });
+  };
+
   // Org-role: Stage 2 — pending assignments on qualified leads (approve opportunity or reject)
-  const oppPendingAssignments = allAssignments.filter(
-    (a) => a.action_taken === "pending" && a.submission_status === "qualified" && a.submission_type === "lead"
+  const oppPendingAssignments = _dedupeBySubmission(
+    allAssignments
+      .filter(
+        (a) => a.action_taken === "pending" && a.submission_status === "qualified" && a.submission_type === "lead"
+      )
+      .sort(_byNewest)
   );
 
   // Org-role: Stage 3 — pending assignments on opportunity_created leads (won or lost)
-  const wonLostPendingAssignments = allAssignments.filter(
-    (a) => a.action_taken === "pending" && a.submission_status === "opportunity_created" && a.submission_type === "lead"
+  const wonLostPendingAssignments = _dedupeBySubmission(
+    allAssignments
+      .filter(
+        (a) => a.action_taken === "pending" && a.submission_status === "opportunity_created" && a.submission_type === "lead"
+      )
+      .sort(_byNewest)
   );
 
-  // Won/Loss history — closed leads
-  const wonLostLeads = orgLeads.filter((l) => ["won", "lost"].includes(l.status));
+  // Won/Loss history — closed leads, most recently updated first
+  const wonLostLeads = orgLeads
+    .filter((l) => ["won", "lost"].includes(l.status))
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at ?? b.created_at).getTime() -
+        new Date(a.updated_at ?? a.created_at).getTime()
+    );
 
   const handleWonLost = async (assignmentId: string, action: "won" | "lost", title: string) => {
     if (!token) return;
@@ -1011,7 +1126,9 @@ export default function AssignmentsPage() {
             {isOrgRole ? "My Assignments" : "My Submissions"}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {isOrgRole
+            {isAdmin
+              ? "Full control — review and act on every lead across all reviewers."
+              : isOrgRole
               ? "Review and act on leads assigned to you."
               : "Review and act on submissions assigned to you."}
           </p>
@@ -1028,7 +1145,7 @@ export default function AssignmentsPage() {
           {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : (
-      <Tabs value={activeTab ?? (isOrgRole ? "pending" : "submissions")} onValueChange={setActiveTab}>
+      <Tabs value={activeTab ?? (isOrgRole ? "pending" : "submissions")} onValueChange={handleTabChange}>
         <TabsList>
           {/* My Submissions tracker — end users only */}
           {!isOrgRole && (
@@ -1090,7 +1207,7 @@ export default function AssignmentsPage() {
           )}
           {isOrgRole && (
             <TabsTrigger value="actioned">
-              Reviewed
+              Review Status
               {myActioned.length > 0 && (
                 <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
                   {myActioned.length}
@@ -1117,6 +1234,7 @@ export default function AssignmentsPage() {
             <MySubmissionsTab
               leads={myLeads}
               loading={loading}
+              highlightId={highlightId}
             />
           </TabsContent>
         )}
@@ -1140,11 +1258,13 @@ export default function AssignmentsPage() {
                   onOpenReview={setReviewPending}
                   onOpenAssignReviewer={setAssignReviewerPending}
                   actioning={actioning}
+                  highlight={!!highlightId && a.submission_id === highlightId}
+                  showReviewer={isAdmin}
                 />
               ))
             )
           ) : (
-            <MySubmissionsTab leads={myUnderReview} loading={false} />
+            <MySubmissionsTab leads={myUnderReview} loading={false} highlightId={highlightId} />
           )}
         </TabsContent>
 
@@ -1186,7 +1306,7 @@ export default function AssignmentsPage() {
                           const statusColor = submissionStatusColors[liveStatus] ?? "bg-muted text-muted-foreground";
                           const actionDate = a.action_date ? new Date(a.action_date).toLocaleDateString() : "—";
                           return (
-                            <TableRow key={a.assignment_id}>
+                            <TableRow key={a.assignment_id} className={highlightId && a.submission_id === highlightId ? "bg-amber-100/60 dark:bg-amber-500/15 ring-1 ring-amber-400/60" : ""}>
                               <TableCell>
                                 {a.submission_type === "lead" ? (
                                   <Link href={`/leads/${a.submission_id}`} className="font-medium hover:underline flex items-center gap-1">
@@ -1215,7 +1335,7 @@ export default function AssignmentsPage() {
               </>
             )
           ) : (
-            <MySubmissionsTab leads={myQualifiedRejected} loading={false} />
+            <MySubmissionsTab leads={myQualifiedRejected} loading={false} highlightId={highlightId} />
           )}
         </TabsContent>
 
@@ -1243,6 +1363,7 @@ export default function AssignmentsPage() {
                     onOpenAssignReviewer={setAssignReviewerPending}
                     actioning={actioning}
                     readOnly={user?.role === "executive"}
+                    highlight={!!highlightId && a.submission_id === highlightId}
                   />
                 ))}
               </>
@@ -1276,12 +1397,13 @@ export default function AssignmentsPage() {
                         <TableHead>Lead</TableHead>
                         <TableHead>Account</TableHead>
                         <TableHead>Submitted By</TableHead>
+                        {isAdmin && <TableHead>Reviewer</TableHead>}
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {oppPendingAssignments.map((a) => (
-                        <TableRow key={a.assignment_id}>
+                        <TableRow key={a.assignment_id} className={highlightId && a.submission_id === highlightId ? "bg-amber-100/60 dark:bg-amber-500/15 ring-1 ring-amber-400/60" : ""}>
                           <TableCell>
                             <Link href={`/leads/${a.submission_id}`} className="font-medium hover:underline flex items-center gap-1">
                               {a.submission_title ?? "Untitled"}
@@ -1292,6 +1414,11 @@ export default function AssignmentsPage() {
                           <TableCell className="text-muted-foreground text-sm">
                             {a.submitter_name ?? "—"}
                           </TableCell>
+                          {isAdmin && (
+                            <TableCell className="text-muted-foreground text-sm">
+                              {a.assignee?.full_name ?? "Unassigned"}
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             <div className="flex gap-1.5 justify-end">
                               <Button
@@ -1344,12 +1471,13 @@ export default function AssignmentsPage() {
                           <TableHead>Lead</TableHead>
                           <TableHead>Account</TableHead>
                           <TableHead>Submitted By</TableHead>
+                          {isAdmin && <TableHead>Reviewer</TableHead>}
                           <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {wonLostPendingAssignments.map((a) => (
-                          <TableRow key={a.assignment_id}>
+                          <TableRow key={a.assignment_id} className={highlightId && a.submission_id === highlightId ? "bg-amber-100/60 dark:bg-amber-500/15 ring-1 ring-amber-400/60" : ""}>
                             <TableCell>
                               <Link href={`/leads/${a.submission_id}`} className="font-medium hover:underline flex items-center gap-1">
                                 {a.submission_title ?? "Untitled"}
@@ -1360,6 +1488,11 @@ export default function AssignmentsPage() {
                             <TableCell className="text-muted-foreground text-sm">
                               {a.submitter_name ?? "—"}
                             </TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-muted-foreground text-sm">
+                                {a.assignee?.full_name ?? "Unassigned"}
+                              </TableCell>
+                            )}
                             <TableCell className="text-right">
                               <div className="flex gap-1.5 justify-end">
                                 <Button
@@ -1416,7 +1549,7 @@ export default function AssignmentsPage() {
                       </TableHeader>
                       <TableBody>
                         {wonLostLeads.map((lead) => (
-                          <TableRow key={lead.lead_id}>
+                          <TableRow key={lead.lead_id} className={highlightId && lead.lead_id === highlightId ? "bg-amber-100/60 dark:bg-amber-500/15 ring-1 ring-amber-400/60" : ""}>
                             <TableCell>
                               <Link href={`/leads/${lead.lead_id}`} className="font-medium hover:underline flex items-center gap-1">
                                 {lead.title}
@@ -1454,5 +1587,14 @@ export default function AssignmentsPage() {
       </Tabs>
       )}
     </div>
+  );
+}
+
+export default function AssignmentsPage() {
+  // useSearchParams() requires a Suspense boundary for static prerendering.
+  return (
+    <Suspense fallback={null}>
+      <AssignmentsPageInner />
+    </Suspense>
   );
 }

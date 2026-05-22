@@ -28,11 +28,27 @@ import { toast } from "sonner";
 // const DU_VERTICALS = [ ... ];
 // const TX_SERVICES  = [ ... ];
 
-const REGIONS = [
-  "Australia", "Brazil", "Canada", "China", "France", "Germany",
-  "India", "Japan", "Malaysia", "Mexico", "Middle East", "Netherlands",
-  "New Zealand", "Philippines", "Poland", "Singapore", "South Africa",
-  "South Korea", "Sweden", "UAE", "United Kingdom", "United States", "Other",
+// Canonical regions — only org regions, no countries.
+const REGIONS = ["North America", "EMEA", "APAC"];
+
+// Canonical industry list (kept in sync with components/account-combobox.tsx).
+const INDUSTRIES = [
+  "Banking & Financial Services",
+  "Credit Unions",
+  "Education & EduTech",
+  "Gaming",
+  "Insurance",
+  "Non-Profit & Public Sector",
+  "Healthcare & Life Sciences",
+  "Energy & Utilities",
+  "QSR",
+  "Retail & e-commerce",
+  "ISV & High Tech",
+  "Travel & Logistics",
+  "Media & Entertainment",
+  "Telecom",
+  "Manufacturing & Logistics",
+  "Others",
 ];
 
 export default function NewAccountPage() {
@@ -40,6 +56,7 @@ export default function NewAccountPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [region, setRegion] = useState<string>("");
+  const [industry, setIndustry] = useState<string>("");
   const [status, setStatus] = useState<string>("prospect");
   const [engagementStart, setEngagementStart] = useState<string>("");
 
@@ -58,7 +75,7 @@ export default function NewAccountPage() {
 
     const payload = {
       account_name:     formData.get("account_name") as string,
-      industry:         (formData.get("industry") as string) || null,
+      industry:         industry || null,
       region:           region || null,
       contract_value:   formData.get("contract_value") ? Number(formData.get("contract_value")) : null,
       engagement_start: (formData.get("engagement_start") as string) || null,
@@ -107,15 +124,34 @@ export default function NewAccountPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="industry">Industry</Label>
-                <Input id="industry" name="industry" placeholder="e.g. Financial Services" />
+                <Select value={industry} onValueChange={(v) => setIndustry(v ?? "")}>
+                  <SelectTrigger id="industry" className="w-full">
+                    <SelectValue placeholder="Select industry…" />
+                  </SelectTrigger>
+                  <SelectContent
+                    alignItemWithTrigger={false}
+                    side="bottom"
+                    sideOffset={4}
+                    className="z-[200] w-[var(--anchor-width)] min-w-[var(--anchor-width)] max-h-72 overflow-y-auto bg-white border border-[#EDE7E6] shadow-lg"
+                  >
+                    {INDUSTRIES.map((ind) => (
+                      <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Region / Country</Label>
+                <Label>Region</Label>
                 <Select value={region} onValueChange={(v) => setRegion(v ?? "")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select region…" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    alignItemWithTrigger={false}
+                    side="bottom"
+                    sideOffset={4}
+                    className="z-[200] w-[var(--anchor-width)] min-w-[var(--anchor-width)] bg-white border border-[#EDE7E6] shadow-lg"
+                  >
                     {REGIONS.map((r) => (
                       <SelectItem key={r} value={r}>{r}</SelectItem>
                     ))}

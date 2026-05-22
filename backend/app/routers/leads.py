@@ -1,15 +1,20 @@
+import logging
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from uuid import UUID
 from app.database.supabase import get_supabase_admin
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_role
 from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
 from app.services.routing_engine import start_routing
 from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
-from app.services.notification_service import notify_status_change
+from app.services.notification_service import notify_status_change, send_notification
 from app.services.scoring import award_points, revoke_points_for_submission
 from app.services.sanitize import sanitize_dict
+from app.services.email_service import send_reviewer_assignment_email
 
+logger = logging.getLogger("leads")
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
 
@@ -53,12 +58,23 @@ async def list_leads(
         "*, account:accounts(account_id, account_name), submitter:profiles!submitted_by(id, full_name, email)"
     )
 
+    # Executives may view the org-wide unrouted-leads list (Exception Queue
+    # page / dashboard tile). For the routing_pending status query only, give
+    # them the same org-wide visibility as admin so the Exception Queue page
+    # matches the count shown on their dashboard tile (Catalyst issue #15).
+    exec_exception_view = (
+        role == "executive"
+        and status_filter is not None
+        and {s.strip() for s in status_filter.split(",") if s.strip()} == {"routing_pending"}
+    )
+
     # Role-based scoping:
     # - admin: sees all leads
     # - executive: sees leads they submitted + leads they have an assignment on
+    #   (plus the org-wide routing_pending list — see exec_exception_view above)
     # - all others (user, sales, practice_lead): own submissions only
-    if role == "admin":
-        pass  # no filter — admin sees everything
+    if role == "admin" or exec_exception_view:
+        pass  # no filter — admin (or executive viewing Exception Queue) sees all
     elif role == "executive":
         # Get submission IDs the executive has an assignment on
         asgn_res = (
@@ -91,7 +107,31 @@ async def list_leads(
     if priority:
         query = query.eq("priority", priority)
     if search:
-        query = query.ilike("title", f"%{search}%")
+        # Search across lead title, account name, and submitter name/email.
+        # Look up matching account_ids and submitter ids first, then OR them
+        # together against the leads table.
+        acc_res = (
+            supabase.table("accounts")
+            .select("account_id")
+            .ilike("account_name", f"%{search}%")
+            .execute()
+        )
+        matched_account_ids = [a["account_id"] for a in (acc_res.data or [])]
+
+        prof_res = (
+            supabase.table("profiles")
+            .select("id")
+            .or_(f"full_name.ilike.%{search}%,email.ilike.%{search}%")
+            .execute()
+        )
+        matched_profile_ids = [p["id"] for p in (prof_res.data or [])]
+
+        or_parts = [f"title.ilike.%{search}%"]
+        if matched_account_ids:
+            or_parts.append(f"account_id.in.({','.join(matched_account_ids)})")
+        if matched_profile_ids:
+            or_parts.append(f"submitted_by.in.({','.join(matched_profile_ids)})")
+        query = query.or_(",".join(or_parts))
 
     query = query.order("created_at", desc=True)
     result = query.execute()
@@ -140,6 +180,165 @@ async def get_lead(
         supabase, row, current_user
     )
     return row
+
+
+class AssignLeadReviewerRequest(BaseModel):
+    reviewer_id: UUID
+    notes: str | None = None
+
+
+@router.post("/{lead_id}/assign-reviewer")
+async def assign_lead_reviewer(
+    lead_id: UUID,
+    payload: AssignLeadReviewerRequest,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """
+    Admin: assign a reviewer to a single routing-pending lead (Exception Queue
+    "Fix Mapping"). This is a PER-LEAD fix — it does NOT modify the account's
+    permanent routing chain (`account_stakeholders`), so future leads on the
+    same account are unaffected.
+
+    Effect:
+      - Closes any stale pending assignment on the lead.
+      - Creates one pending assignment for the chosen reviewer.
+      - Moves the lead routing_pending → under_review.
+      - Notifies the reviewer by in-app notification + email.
+    """
+    supabase = get_supabase_admin()
+    reviewer_id = str(payload.reviewer_id)
+
+    # ── Load the lead ──────────────────────────────────────────────────────────
+    lead_res = (
+        supabase.table("leads")
+        .select("lead_id, title, status, account_id, submitted_by")
+        .eq("lead_id", str(lead_id))
+        .single()
+        .execute()
+    )
+    if not lead_res.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    lead = lead_res.data
+
+    if lead["status"] != "routing_pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lead is '{lead['status']}', not routing_pending — nothing to fix.",
+        )
+
+    # ── Validate the reviewer ──────────────────────────────────────────────────
+    reviewer_res = (
+        supabase.table("profiles")
+        .select("id, full_name, email, role, is_active")
+        .eq("id", reviewer_id)
+        .single()
+        .execute()
+    )
+    if not reviewer_res.data:
+        raise HTTPException(status_code=404, detail="Reviewer profile not found")
+    reviewer = reviewer_res.data
+    if not reviewer.get("is_active", False):
+        raise HTTPException(status_code=400, detail="Reviewer account is inactive")
+
+    # Account name for the email template
+    account_name = "Unknown Account"
+    if lead.get("account_id"):
+        try:
+            acct = (
+                supabase.table("accounts")
+                .select("account_name")
+                .eq("account_id", lead["account_id"])
+                .single()
+                .execute()
+            )
+            account_name = (acct.data or {}).get("account_name", account_name)
+        except Exception:
+            pass
+
+    # ── Close any stale pending assignment (e.g. New Account Review) ───────────
+    try:
+        supabase.table("assignments").update(
+            {"action_taken": "reviewed", "action_date": datetime.now(timezone.utc).isoformat()}
+        ).eq("submission_type", "lead").eq("submission_id", str(lead_id)).eq(
+            "action_taken", "pending"
+        ).execute()
+    except Exception as exc:
+        logger.warning("[FIX-MAP] Could not close stale assignments for lead %s: %s", lead_id, exc)
+
+    # ── Create the per-lead reviewer assignment ───────────────────────────────
+    due = datetime.now(timezone.utc) + timedelta(days=7)
+    new_asgn = (
+        supabase.table("assignments")
+        .insert({
+            "submission_type": "lead",
+            "submission_id":   str(lead_id),
+            "assigned_to":     reviewer_id,
+            "assigned_role":   "Reviewer",
+            "assigned_by":     "manual",
+            "due_date":        due.isoformat(),
+            "action_taken":    "pending",
+        })
+        .execute()
+    )
+
+    # ── Lead → under_review ───────────────────────────────────────────────────
+    supabase.table("leads").update({"status": "under_review"}).eq("lead_id", str(lead_id)).execute()
+
+    # Audit trail
+    try:
+        record_status_change(
+            submission_type="lead",
+            submission_id=str(lead_id),
+            from_status="routing_pending",
+            to_status="under_review",
+            changed_by=current_user["id"],
+            reason=f'Reviewer assigned via Fix Mapping by {current_user.get("full_name") or current_user.get("email")}',
+        )
+    except Exception as exc:
+        logger.warning("[FIX-MAP] Failed to record audit entry for lead %s: %s", lead_id, exc)
+
+    # ── Notify the reviewer — in-app + email ──────────────────────────────────
+    try:
+        send_notification(
+            recipient_id=reviewer_id,
+            submission_type="lead",
+            submission_id=str(lead_id),
+            notification_type="approval",
+            message=(
+                f'You have a new lead awaiting your review: "{lead.get("title", "")}" '
+                f'— assigned by {current_user.get("full_name") or current_user.get("email")}.'
+            ),
+        )
+    except Exception as exc:
+        logger.warning("[FIX-MAP] In-app notification failed for reviewer %s: %s", reviewer_id, exc)
+
+    try:
+        send_reviewer_assignment_email(
+            reviewer_email=reviewer.get("email", ""),
+            reviewer_name=reviewer.get("full_name") or reviewer.get("email", ""),
+            role_label="Reviewer",
+            submission_type="lead",
+            submission_id=str(lead_id),
+            title=lead.get("title", ""),
+            account_name=account_name,
+        )
+    except Exception as exc:
+        logger.warning("[FIX-MAP] Email failed for reviewer %s: %s", reviewer.get("email"), exc)
+
+    # Notify the submitter their lead is moving again
+    if lead.get("submitted_by"):
+        try:
+            send_notification(
+                recipient_id=lead["submitted_by"],
+                submission_type="lead",
+                submission_id=str(lead_id),
+                notification_type="status_update",
+                message=f'Your lead "{lead.get("title", "")}" has been assigned a reviewer and is now under review.',
+            )
+        except Exception:
+            pass
+
+    return (new_asgn.data or [{}])[0]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

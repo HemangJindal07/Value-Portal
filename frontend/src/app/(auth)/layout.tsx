@@ -49,7 +49,7 @@ export default function AuthLayout({
             Win More.
           </h1>
           <p className="text-white/70 text-[15px] leading-relaxed max-w-xs mb-8">
-            A centralised platform for delivery teams to capture and track
+            A centralised platform for delivery teams to capture and track every opportunity.
           </p>
 
           {/* Hero illustration (lightbulb icon is decorative only) */}
@@ -87,9 +87,9 @@ export default function AuthLayout({
           {/* Feature icon trio — matches Template 1 */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: Crosshair, label: "Capture", desc: "Log leads instantly" },
-              { icon: Layers,    label: "Track",   desc: "Full pipeline visibility" },
-              { icon: TrendingUp,label: "Build",   desc: "Measure real business impact" },
+              { icon: Crosshair, label: "Capture", desc: "Log Leads Instantly" },
+              { icon: Layers,    label: "Track",   desc: "Full Pipeline Visibility" },
+              { icon: TrendingUp,label: "Build",   desc: "Measure Real Business Impact" },
             ].map((f) => (
               <div key={f.label} className="flex flex-col items-center text-center gap-2 bg-white/10 border border-white/15 rounded-xl p-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">

@@ -202,7 +202,7 @@ async def admin_analytics(
     leads_by_vertical = sorted(
         [{"vertical": k, "count": v} for k, v in vertical_map.items()],
         key=lambda x: x["count"], reverse=True,
-    )[:10]
+    )
 
     # ── 7. Top accounts by activity (leads + ideas combined) ──────────────────
     acct_map: dict[str, dict] = {}
@@ -414,7 +414,7 @@ async def monthly_trend(
         m = total % 12 + 1
         key = f"{y}-{m:02d}"
         slots[key] = {
-            "label": datetime(y, m, 1).strftime("%b %y"),
+            "label": datetime(y, m, 1).strftime("%b"),
             "pipeline_value": 0.0,
             "won_value": 0.0,
             "submissions": 0,

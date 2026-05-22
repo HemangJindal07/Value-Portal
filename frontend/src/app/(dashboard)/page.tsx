@@ -16,7 +16,7 @@ import Link from "next/link";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import type { LeadWithRelations } from "@/types";
+import type { LeadWithRelations, AssignmentWithRelations } from "@/types";
 // import type { IdeaWithRelations } from "@/types"; // Value Ideas disabled
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -91,39 +91,39 @@ const STATUS_BADGE: Record<string, string> = {
   rejected:             "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40",
 };
 
-const PRIORITY_BADGE: Record<string, string> = {
-  high:   "bg-[#E42525]/10 text-[#E42525] border-[#E42525]/20",
-  medium: "bg-[#003466]/10 text-[#003466] border-[#003466]/20",
-  low:    "bg-[#2E75B6]/10 text-[#2E75B6] border-[#2E75B6]/20",
-};
-
 function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, number>; color?: string }) {
-  const entries = Object.entries(data);
-  if (!entries.length) return <p className="text-sm text-muted-foreground">No data yet.</p>;
-  const max = Math.max(...entries.map(([, v]) => v), 1);
+  // Fixed lifecycle order so the chart always shows the same dynamic stages,
+  // each updating live from DB counts. "submitted" and "draft" are excluded —
+  // "submitted" rolls into the routing_pending "Awaiting Review" stage.
+  const STAGES: { key: string; label: string }[] = [
+    { key: "routing_pending",     label: "Awaiting Review (Routing Pending)" },
+    { key: "under_review",        label: "Under Review" },
+    { key: "qualified",           label: "Qualified" },
+    { key: "opportunity_created", label: "Opportunity Created" },
+    { key: "won",                 label: "Won" },
+    { key: "lost",                label: "Lost" },
+    { key: "rejected",            label: "Rejected" },
+  ];
+
+  // "Awaiting Review" combines submitted + routing_pending (both pre-review).
+  const countFor = (key: string) =>
+    key === "routing_pending"
+      ? (data["routing_pending"] || 0) + (data["submitted"] || 0)
+      : (data[key] || 0);
+
+  const max = Math.max(...STAGES.map((st) => countFor(st.key)), 1);
+
   return (
     <div className="space-y-2.5">
-      {entries.map(([status, count]) => {
+      {STAGES.map(({ key, label }) => {
+        const count = countFor(key);
         const pct = Math.round((count / max) * 100);
-        const badge = STATUS_BADGE[status] || "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40";
-        const STATUS_LABELS: Record<string, string> = {
-          submitted:           "Submitted",
-          routing_pending:     "Routing Pending",
-          under_review:        "Under Review",
-          qualified:           "Qualified",
-          opportunity_created: "Opportunity Created",
-          won:                 "Won",
-          lost:                "Lost",
-          rejected:            "Rejected",
-          draft:               "Draft",
-        };
-        const HIDDEN = ["routing_pending", "draft"];
-        if (HIDDEN.includes(status)) return null;
+        const badge = STATUS_BADGE[key] || "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40";
         return (
-          <div key={status}>
+          <div key={key}>
             <div className="flex items-center justify-between mb-1">
               <Badge variant="outline" className={`text-[11px] px-2 py-0.5 ${badge}`}>
-                {STATUS_LABELS[status] || status.replace(/_/g, " ")}
+                {label}
               </Badge>
               <span className="text-xs font-semibold text-[#232222]">{count}</span>
             </div>
@@ -146,7 +146,7 @@ function StatusBarChart({ data, color = "#B12B35" }: { data: Record<string, numb
 function WorkflowPipelineChart({ data }: { data: Record<string, number> }) {
   const stages = [
     {
-      label: "Awaiting Review",
+      label: "Awaiting Review (Routing Pending)",
       count: (data["submitted"] || 0) + (data["routing_pending"] || 0),
       subLabels: [
         { label: "Submitted",       count: data["submitted"]       || 0, color: "#2E75B6" },
@@ -290,87 +290,121 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
-// ── Funnel Chart — proper visual funnel, no text truncation ─────────────
+// ── Lead Status Breakdown — pipeline-stage data as a donut ──────────────────
 
 function FunnelChart({
   stages,
 }: {
   stages: { label: string; count: number; color: string }[];
 }) {
-  const maxCount = Math.max(...stages.map(s => s.count), 1);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const total = stages.reduce((sum, s) => sum + s.count, 0);
+
+  // Donut geometry
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 70;          // outer radius of the arc stroke
+  const stroke = 30;     // donut thickness
+  const circumference = 2 * Math.PI * r;
+
+  // Build cumulative arc segments. Each slice is a stroked circle with a
+  // dash gap, rotated to its start angle (classic SVG donut technique).
+  let cumulative = 0;
 
   return (
-    <div className="space-y-2 py-1">
-      {stages.map((stage, i) => {
-        // Width shrinks proportionally: min 36%, max 100%
-        const proportion = Math.max(stage.count / maxCount, 0);
-        const widthPct = Math.round(36 + proportion * 64);
-        const marginPct = (100 - widthPct) / 2;
-
-        // Conversion rate from previous stage
-        const prevCount = i === 0 ? maxCount : stages[i - 1].count;
-        const convRate = prevCount > 0 ? Math.round((stage.count / prevCount) * 100) : 0;
-
-        // % of largest stage (so widest bar = 100%)
-        const ofTotal = maxCount > 0 ? Math.round((stage.count / maxCount) * 100) : 0;
-
-        return (
-          <div key={i} className="group">
-            {/* Row: label left, count + % right — always readable */}
-            <div className="flex items-center justify-between mb-1 px-0.5">
-              <div className="flex items-center gap-2">
-                <div
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ background: stage.color }}
-                />
-                <span className="text-[12px] font-semibold text-[#232222]">
-                  {stage.label}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                {i > 0 && (
-                  <span className="text-[11px] text-[#5D5D5D]">
-                    {convRate}% conv.
-                  </span>
-                )}
-                <span
-                  className="text-[13px] font-bold"
-                  style={{ color: stage.color }}
+    <div className="flex flex-col sm:flex-row items-center gap-5 py-2">
+      {/* Donut */}
+      <div className="relative shrink-0">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {/* Track */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke="#EDE7E6"
+            strokeWidth={stroke}
+          />
+          {total > 0 &&
+            stages.map((stage, i) => {
+              const fraction = stage.count / total;
+              if (fraction <= 0) return null;
+              const dash = fraction * circumference;
+              const offset = -(cumulative / total) * circumference;
+              cumulative += stage.count;
+              const isHovered = hovered === i;
+              return (
+                <circle
+                  key={i}
+                  cx={cx}
+                  cy={cy}
+                  r={r}
+                  fill="none"
+                  stroke={stage.color}
+                  strokeWidth={isHovered ? stroke + 6 : stroke}
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={offset}
+                  transform={`rotate(-90 ${cx} ${cy})`}
+                  className="transition-all duration-200 cursor-pointer"
+                  style={{ opacity: hovered === null || isHovered ? 1 : 0.45 }}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
                 >
-                  {stage.count}
-                </span>
-              </div>
-            </div>
+                  <title>{`${stage.label}: ${stage.count}`}</title>
+                </circle>
+              );
+            })}
+          {/* Center: total, or the hovered slice's label + count */}
+          <text
+            x={cx}
+            y={hovered === null ? cy - 4 : cy - 6}
+            textAnchor="middle"
+            className="fill-[#232222]"
+            style={{ fontSize: 26, fontWeight: 700 }}
+          >
+            {hovered === null ? total : stages[hovered].count}
+          </text>
+          <text
+            x={cx}
+            y={hovered === null ? cy + 16 : cy + 14}
+            textAnchor="middle"
+            className="fill-[#5D5D5D]"
+            style={{ fontSize: 11 }}
+          >
+            {hovered === null ? "total" : stages[hovered].label}
+          </text>
+        </svg>
+      </div>
 
-            {/* Funnel bar — centered, narrows with data */}
-            <div
-              className="relative h-9 transition-all duration-700"
-              style={{
-                marginLeft:  `${marginPct}%`,
-                marginRight: `${marginPct}%`,
-              }}
-            >
+      {/* Legend — label + count only */}
+      <div className="flex-1 w-full space-y-2">
+        {stages.map((stage, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between px-0.5 rounded-md py-0.5 cursor-pointer transition-colors"
+            style={{ background: hovered === i ? "#F9F9F9" : "transparent" }}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className="flex items-center gap-2 min-w-0">
               <div
-                className="h-full w-full rounded-md flex items-center justify-center"
+                className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ background: stage.color }}
-              >
-                <span className="text-[11px] font-semibold text-white opacity-90">
-                  {ofTotal}%
-                </span>
-              </div>
+              />
+              <span className="text-[12px] font-semibold text-[#232222] truncate">
+                {stage.label}
+              </span>
             </div>
-
-            {/* Connector arrow between stages */}
-            {i < stages.length - 1 && (
-              <div className="flex justify-center my-1">
-                <svg width="20" height="8" viewBox="0 0 20 8">
-                  <polygon points="0,0 20,0 10,8" fill={stage.color} opacity="0.3" />
-                </svg>
-              </div>
-            )}
+            <span
+              className="text-[13px] font-bold shrink-0"
+              style={{ color: stage.color }}
+            >
+              {stage.count}
+            </span>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
@@ -567,8 +601,15 @@ function MonthlyTrendChart({ data }: { data: MonthlyPoint[] }) {
 
 // ── Submissions bar chart with hover tooltip ─────────────────────────────
 
-function MonthlySubmissionsChart({ data }: { data: MonthlyPoint[] }) {
+const MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function MonthlySubmissionsChart({ data: rawData }: { data: MonthlyPoint[] }) {
   const [hovered, setHovered] = useState<number>(-1);
+
+  // Reorder the 12-month window into calendar order (Jan → Dec) for display.
+  const data = [...rawData].sort(
+    (a, b) => MONTH_ORDER.indexOf(a.label) - MONTH_ORDER.indexOf(b.label)
+  );
 
   if (!data.length) return null;
 
@@ -673,19 +714,17 @@ function MonthlySubmissionsChart({ data }: { data: MonthlyPoint[] }) {
                 </text>
               )}
 
-              {/* X-axis month labels — every 2nd, always show last */}
-              {(i % 2 === 0 || i === data.length - 1) && (
-                <text
-                  x={bX + barW / 2}
-                  y={H - 4}
-                  textAnchor="middle"
-                  fontSize="7.5"
-                  fill={isHov ? "#232222" : "#9CA3AF"}
-                  fontWeight={isHov ? "700" : "400"}
-                >
-                  {d.label}
-                </text>
-              )}
+              {/* X-axis month labels — every month, just the abbreviated name */}
+              <text
+                x={bX + barW / 2}
+                y={H - 4}
+                textAnchor="middle"
+                fontSize="7.5"
+                fill={isHov ? "#232222" : "#9CA3AF"}
+                fontWeight={isHov ? "700" : "400"}
+              >
+                {d.label}
+              </text>
             </g>
           );
         })}
@@ -928,7 +967,7 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
             Lead Dashboard
           </h1>
           <p className="text-sm text-[#5D5D5D] mt-1 max-w-xl">
-            We believe best value cases accelerate team performance &amp; aid high&#8209;level follow-up across all accounts.
+            Centralized access to account insights, and operational updates to manage priorities efficiently
           </p>
         </div>
         <Badge className="bg-[#232222] text-white border-0 text-[11px] px-3 py-1">Full Access</Badge>
@@ -1000,63 +1039,49 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
         </Card>
 
         {/* Routing & Mapping Issues */}
-        <Card className="border-[#EDE7E6] bg-white">
+        <Card className="border-[#EDE7E6] bg-white flex flex-col">
           <CardHeader className="pb-4">
             <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
               <GitMerge className="h-4 w-4 text-amber-500" />
-              Routing and Mapping Issues
+              Routing and Mapping Pending
             </CardTitle>
             <CardDescription>Submissions that could not be auto-routed</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 flex flex-col">
             {routingExceptions === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center mb-3">
-                  <ShieldCheck className="h-5 w-5 text-green-500" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+                <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center mb-3">
+                  <ShieldCheck className="h-6 w-6 text-green-500" />
                 </div>
                 <p className="text-sm font-medium text-[#232222]">All submissions routed</p>
                 <p className="text-xs text-[#5D5D5D] mt-1">No pending routing exceptions</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Summary tiles */}
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="rounded-xl bg-[#B12B35]/5 border border-[#B12B35]/10 p-3">
-                    <p className="text-2xl font-bold text-[#B12B35]">{an?.routing_pending_leads ?? 0}</p>
-                    <p className="text-xs text-[#5D5D5D] mt-0.5">Leads unrouted</p>
+              <div className="flex-1 flex flex-col">
+                {/* Hero tile — fills available vertical space */}
+                <div className="flex-1 flex flex-col items-center justify-center rounded-xl bg-[#B12B35]/5 border border-[#B12B35]/10 py-8 text-center">
+                  <div className="h-12 w-12 rounded-full bg-[#B12B35]/10 flex items-center justify-center mb-3">
+                    <AlertTriangle className="h-6 w-6 text-[#B12B35]" />
                   </div>
-                  {/* Ideas unrouted tile disabled
-                  <div className="rounded-xl bg-[#003466]/5 ...">{an?.routing_pending_ideas ?? 0}</div>
-                  */}
+                  <p className="text-4xl font-bold text-[#B12B35] leading-none">
+                    {an?.routing_pending_leads ?? 0}
+                  </p>
+                  <p className="text-sm text-[#5D5D5D] mt-2">Leads unrouted</p>
+                  <p className="text-xs text-[#5D5D5D] mt-0.5 max-w-[16rem]">
+                    These submissions need a stakeholder or routing rule before review can begin.
+                  </p>
                 </div>
 
-                {/* What's causing this */}
-                <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Common causes</p>
-                  <div className="space-y-1.5">
-                    {[
-                      "Account has no stakeholders mapped",
-                      "No vertical routing rule for industry",
-                      "No region→sales mapping configured",
-                    ].map((cause) => (
-                      <div key={cause} className="flex items-start gap-2 text-xs text-amber-800">
-                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" />
-                        <span>{cause}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-4">
                   <Link
                     href="/admin/exception-queue"
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#B12B35] px-3 py-2 text-xs font-semibold text-white hover:bg-[#9a2330] transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#B12B35] px-3 py-2.5 text-xs font-semibold text-white hover:bg-[#9a2330] transition-colors"
                   >
                     View Exception Queue <ChevronRight className="h-3 w-3" />
                   </Link>
                   <Link
                     href="/admin/stakeholder-mapping"
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-[#EDE7E6] bg-white px-3 py-2 text-xs font-semibold text-[#5D5D5D] hover:border-[#B12B35]/30 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-[#EDE7E6] bg-white px-3 py-2.5 text-xs font-semibold text-[#5D5D5D] hover:border-[#B12B35]/30 transition-colors"
                   >
                     Fix Mappings
                   </Link>
@@ -1084,7 +1109,6 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-[#232222]">{an.qualification_ratio}%</div>
-                <p className="text-xs text-[#5D5D5D] mt-1">leads reaching qualified+</p>
               </CardContent>
             </Card>
 
@@ -1098,7 +1122,6 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-[#232222]">{an.win_rate}%</div>
-                <p className="text-xs text-[#5D5D5D] mt-1">{an.won_count}W / {an.lost_count}L closed deals</p>
               </CardContent>
             </Card>
 
@@ -1111,12 +1134,9 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-[#232222]">
+                <div className="text-2xl xl:text-3xl font-bold text-[#232222] break-all leading-tight">
                   ${an.pipeline_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </div>
-                <p className="text-xs text-[#5D5D5D] mt-1">
-                  ${an.won_value.toLocaleString(undefined, { maximumFractionDigits: 0 })} won
-                </p>
               </CardContent>
             </Card>
 
@@ -1130,7 +1150,6 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-[#232222]">{s.total_accounts}</div>
-                <p className="text-xs text-[#5D5D5D] mt-1">{s.active_users} portal contributors</p>
               </CardContent>
             </Card>
           </div>
@@ -1171,7 +1190,7 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
                 <CardTitle className="text-sm font-semibold text-[#232222] flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-[#B12B35]" /> Leads by Vertical
                 </CardTitle>
-                <CardDescription>Industry / practice coverage</CardDescription>
+                <CardDescription>Industry / Practice coverage</CardDescription>
               </CardHeader>
               <CardContent>
                 {an.leads_by_vertical.length === 0 ? (
@@ -1334,23 +1353,46 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
 function ExecutiveDashboard({ token, userName }: { token: string; userName: string }) {
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
-  const [topLeads, setTopLeads] = useState<LeadWithRelations[]>([]);
+  const [topLeads, setTopLeads] = useState<AssignmentWithRelations[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlyPoint[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const [s, an, leads, trend, act] = await Promise.all([
+      const [s, an, myAssignments, trend, act] = await Promise.all([
         api<OrgStats>("/api/dashboard/stats", { token }),
         api<AdminAnalytics>("/api/dashboard/admin-analytics", { token }),
-        api<LeadWithRelations[]>("/api/leads?limit=5", { token }),
+        api<AssignmentWithRelations[]>("/api/assignments/mine", { token }),
         api<MonthlyPoint[]>("/api/dashboard/monthly-trend", { token }),
         api<Activity[]>("/api/dashboard/recent-activity?limit=20", { token }),
       ]);
       setStats(s);
       setAnalytics(an);
-      setTopLeads(Array.isArray(leads) ? leads.slice(0, 5) : []);
+      // "Needing Attention" — only leads THIS reviewer is actually assigned to
+      // and can action: their own pending lead-assignments still in the
+      // pre-qualified stage. Same source as the Pending Review tab, so the
+      // card and that tab never disagree. Oldest assignment first.
+      setTopLeads(
+        Array.isArray(myAssignments)
+          ? [...myAssignments]
+              .filter(
+                (a) =>
+                  a.action_taken === "pending" &&
+                  a.submission_type === "lead" &&
+                  (!a.submission_status ||
+                    ["submitted", "routing_pending", "under_review"].includes(
+                      a.submission_status
+                    ))
+              )
+              .sort(
+                (a, b) =>
+                  new Date(a.assignment_date || a.created_at).getTime() -
+                  new Date(b.assignment_date || b.created_at).getTime()
+              )
+              .slice(0, 5)
+          : []
+      );
       setMonthlyTrend(Array.isArray(trend) ? trend : []);
       // Strategic highlights: only status transitions that matter to leadership
       const STRATEGIC = ["qualified", "opportunity_created", "won", "lost", "rejected"];
@@ -1385,12 +1427,13 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
 
   // BRD §5.2.2 — pipeline reflects the 5 high-level stages
   const funnelStages = [
-    { label: "Awaiting Review",     count: (s.leads_by_status["submitted"] || 0) + (s.leads_by_status["routing_pending"] || 0), color: "#2E75B6" },
+    { label: "Awaiting Review (Routing Pending)",     count: (s.leads_by_status["submitted"] || 0) + (s.leads_by_status["routing_pending"] || 0), color: "#2E75B6" },
     { label: "Under Review",        count: s.leads_by_status["under_review"] || 0,        color: "#003466" },
-    { label: "Qualified / Rejected",count: (s.leads_by_status["qualified"] || 0) + (s.leads_by_status["approved"] || 0) + (s.leads_by_status["rejected"] || 0), color: "#B12B35" },
+    { label: "Qualified",           count: (s.leads_by_status["qualified"] || 0) + (s.leads_by_status["approved"] || 0), color: "#0d9488" },
+    { label: "Rejected",            count: s.leads_by_status["rejected"] || 0,            color: "#B12B35" },
     { label: "Opportunity Created", count: s.leads_by_status["opportunity_created"] || 0, color: "#7c3aed" },
     { label: "Won / Lost",          count: (s.leads_by_status["won"] || 0) + (s.leads_by_status["lost"] || 0), color: "#22c55e" },
-  ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Awaiting Review");
+  ].filter((stage) => totalActive === 0 || stage.count > 0 || stage.label === "Awaiting Review (Routing Pending)");
 
   return (
     <div className="space-y-6">
@@ -1398,25 +1441,25 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
       {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          {/* <div className="flex items-center gap-2 mb-1">
             <BarChart3 className="h-4 w-4 text-[#003466]" />
             <span className="text-[11px] font-semibold text-[#003466] uppercase tracking-widest">
               Leadership Dashboard
             </span>
-          </div>
+          </div> */}
           <h1 className="text-2xl font-bold tracking-tight text-[#232222]">
             Leadership Dashboard
           </h1>
-          <p className="text-sm text-[#5D5D5D] mt-1 max-w-xl">
-            We believe best value cases accelerate team performance &amp; aid high-level reviews.
-            Welcome, {userName.split(" ")[0]}.
+          <p className="text-sm text-[#5D5D5D] mt-1 max-w-2xl leading-relaxed">
+            Welcome, {userName.split(" ")[0]}. A Unified View of Leadership Priorities, Key Metrics,
+            and Progress to Support Faster Alignment and Informed Decision-Making.
           </p>
         </div>
         <Badge className="bg-[#003466] text-white border-0 text-[11px] px-3 py-1">Leadership View</Badge>
       </div>
 
       {/* ── 5 Primary KPIs ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
         <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
           <div className="h-1 bg-[#B12B35]" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
@@ -1447,24 +1490,6 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
             </div>
             <p className="text-xs text-[#5D5D5D] mt-1">
               {s.leads_by_status["won"] || 0} deal{(s.leads_by_status["won"] || 0) !== 1 ? "s" : ""} closed
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
-          <div className="h-1 bg-[#2E75B6]" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
-            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Qualified Leads</CardTitle>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2E75B6]/10">
-              <Target className="h-4 w-4 text-[#2E75B6]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-[#232222] tracking-tight">
-              {s.leads_by_status["qualified"] || 0}
-            </div>
-            <p className="text-xs text-[#5D5D5D] mt-1">
-              {s.leads_by_status["opportunity_created"] || 0} in progress · {s.leads_by_status["won"] || 0} won
             </p>
           </CardContent>
         </Card>
@@ -1504,20 +1529,20 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
         </Card>
       </div>
 
-      {/* ── Opportunity Funnel + Monthly Value Realization ── */}
+      {/* ── Lead Status Breakdown + Monthly Value Realization ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Opportunity Funnel */}
+        {/* Lead Status Breakdown */}
         <Card className="border-[#EDE7E6] bg-white">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
               <Activity className="h-4 w-4 text-[#B12B35]" />
-              Opportunity Funnel
+              Lead Status Breakdown
             </CardTitle>
             <CardDescription>Leads across all pipeline stages</CardDescription>
           </CardHeader>
           <CardContent>
             <FunnelChart stages={funnelStages} />
-            {/* Lost / dropped row below funnel */}
+            {/* Lost / dropped row below chart */}
             <div className="mt-4 pt-3 border-t border-[#EDE7E6] grid grid-cols-2 gap-2">
               <div className="flex items-center gap-2 text-xs">
                 <div className="h-2.5 w-2.5 rounded-sm bg-[#C5C5C5]" />
@@ -1592,10 +1617,10 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
             <CardTitle className="text-base font-semibold text-[#232222]">
               Top Opportunities Needing Attention
             </CardTitle>
-            <CardDescription>Most recent leads — click to view details</CardDescription>
+            <CardDescription>Your pending reviews — click to take action</CardDescription>
           </div>
           <Link
-            href="/leads"
+            href="/assignments?tab=pending"
             className="text-xs font-medium text-[#B12B35] hover:underline flex items-center gap-1"
           >
             View all <ChevronRight className="h-3 w-3" />
@@ -1603,49 +1628,54 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
         </CardHeader>
         <CardContent className="p-0">
           {topLeads.length === 0 ? (
-            <p className="text-sm text-muted-foreground px-6 pb-4">No leads submitted yet.</p>
+            <p className="text-sm text-muted-foreground px-6 pb-4">
+              No leads pending your review.
+            </p>
           ) : (
             <div className="divide-y divide-[#EDE7E6]">
               {/* Table header */}
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-2 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
+              <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr] gap-3 px-6 py-2 bg-[#F9F9F9] text-[11px] font-semibold text-[#5D5D5D] uppercase tracking-wider">
                 <span>Opportunity</span>
-                <span>Priority</span>
-                <span>Lead updated</span>
+                <span>Account</span>
+                <span>Assigned</span>
                 <span className="text-right">Status</span>
               </div>
-              {topLeads.map((lead, i) => (
-                <Link key={lead.lead_id} href={`/leads/${lead.lead_id}`}>
-                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-6 py-3 items-center hover:bg-[#F9F9F9] transition-colors text-sm">
-                    {/* Title + number */}
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[11px] text-[#C5C5C5] font-mono w-5 shrink-0">{i + 1}</span>
-                      <span className="font-medium text-[#232222] truncate">{lead.title}</span>
+              {topLeads.map((a, i) => {
+                const status = a.submission_status || "under_review";
+                return (
+                  <Link
+                    key={a.assignment_id}
+                    href={`/assignments?tab=pending&highlight=${a.submission_id}`}
+                  >
+                    <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr] gap-3 px-6 py-3 items-center hover:bg-[#F9F9F9] transition-colors text-sm">
+                      {/* Title + number */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] text-[#C5C5C5] font-mono w-5 shrink-0">{i + 1}</span>
+                        <span className="font-medium text-[#232222] truncate">
+                          {a.submission_title || "Untitled"}
+                        </span>
+                      </div>
+                      {/* Account */}
+                      <span className="text-xs text-[#5D5D5D] truncate">
+                        {a.account_name || "—"}
+                      </span>
+                      {/* Time ago */}
+                      <span className="text-xs text-[#5D5D5D]">
+                        {a.assignment_date ? timeAgo(a.assignment_date) : "—"}
+                      </span>
+                      {/* Status */}
+                      <div className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`capitalize text-[10px] px-1.5 py-0 ${STATUS_BADGE[status] || "bg-[#C5C5C5]/20 text-[#5D5D5D]"}`}
+                        >
+                          {status.replace(/_/g, " ")}
+                        </Badge>
+                      </div>
                     </div>
-                    {/* Priority */}
-                    <div>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] px-2 py-0 capitalize ${PRIORITY_BADGE[lead.priority] || "bg-[#C5C5C5]/20 text-[#5D5D5D] border-[#C5C5C5]/40"}`}
-                      >
-                        {lead.priority || "—"}
-                      </Badge>
-                    </div>
-                    {/* Time ago */}
-                    <span className="text-xs text-[#5D5D5D]">
-                      {lead.updated_at ? timeAgo(lead.updated_at) : "—"}
-                    </span>
-                    {/* Status */}
-                    <div className="text-right">
-                      <Badge
-                        variant="outline"
-                        className={`capitalize text-[10px] px-1.5 py-0 ${STATUS_BADGE[lead.status] || "bg-[#C5C5C5]/20 text-[#5D5D5D]"}`}
-                      >
-                        {lead.status.replace(/_/g, " ")}
-                      </Badge>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -1715,7 +1745,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
       {/* ── Exception Queue Summary + Stakeholder Completeness + Leaderboard ── */}
       <SectionLabel icon={ShieldCheck} label="Operations & Engagement" color="#5D5D5D" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Exception Queue summary card */}
+        {/* Exception Queue summary card — executive read-only view */}
         <StatCard
           title="Routing Exceptions"
           value={an ? an.routing_pending_leads : 0}
@@ -1724,7 +1754,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
           iconColor="text-amber-500"
           iconBg="bg-amber-50"
           accent="#f59e0b"
-          href="/admin/exception-queue"
+          href="/executive/exception-queue"
         />
         {/* Placeholder to keep grid alignment */}
         <div className="hidden lg:block" />
@@ -1840,7 +1870,6 @@ function UserDashboard({
         <StatCard
           title="Leads Submitted"
           value={d.myLeads}
-          desc={`${d.leadsByStatus["submitted"] || 0} Submitted · ${d.leadsByStatus["qualified"] || 0} Qualified · ${d.leadsByStatus["opportunity_created"] || 0} Opportunity · ${d.leadsByStatus["won"] || 0} Won`}
           icon={Target}
           iconColor="text-[#B12B35]"
           iconBg="bg-[#B12B35]/10"

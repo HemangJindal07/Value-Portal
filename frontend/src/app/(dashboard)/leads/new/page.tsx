@@ -36,6 +36,49 @@ const TX_SERVICES = [
   { value: "Insurance",              label: "Insurance",              reviewer: "Yuvraj" },
 ];
 
+// Country -> ISO 4217 currency code. Used to pre-select currency when the
+// contact country changes (the user can still override via the dropdown).
+const COUNTRY_CURRENCY: Record<string, string> = {
+  "Australia": "AUD",
+  "Bahrain": "BHD",
+  "Belgium": "EUR",
+  "Canada": "CAD",
+  "Denmark": "DKK",
+  "France": "EUR",
+  "Germany": "EUR",
+  "Hong Kong": "HKD",
+  "India": "INR",
+  "Indonesia": "IDR",
+  "Ireland": "EUR",
+  "Kenya": "KES",
+  "Kuwait": "KWD",
+  "Malaysia": "MYR",
+  "Netherlands": "EUR",
+  "New Zealand": "NZD",
+  "Nigeria": "NGN",
+  "North America": "USD",
+  "Norway": "NOK",
+  "Oman": "OMR",
+  "Philippines": "PHP",
+  "Qatar": "QAR",
+  "Saudi Arabia": "SAR",
+  "Singapore": "SGD",
+  "South Africa": "ZAR",
+  "South Korea": "KRW",
+  "Spain": "EUR",
+  "Sweden": "SEK",
+  "Switzerland": "CHF",
+  "Thailand": "THB",
+  "United Arab Emirates": "AED",
+  "United Kingdom": "GBP",
+  "United States": "USD",
+  "Vietnam": "VND",
+};
+
+const CURRENCY_OPTIONS = Array.from(
+  new Set(Object.values(COUNTRY_CURRENCY))
+).sort();
+
 const COUNTRIES = [
   "Australia",
   "Bahrain",
@@ -74,7 +117,7 @@ const COUNTRIES = [
 ];
 
 export default function NewLeadPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const router = useRouter();
   const { registerGuard, requestNavigate } = useNavigationGuard();
   const [loading, setLoading] = useState(false);
@@ -85,6 +128,8 @@ export default function NewLeadPage() {
   const [priority, setPriority] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [estimatedValueError, setEstimatedValueError] = useState(false);
+  const [estimatedValue, setEstimatedValue] = useState("");
+  const [currency, setCurrency] = useState("USD");
   const [isDirty, setIsDirty] = useState(false);
   const isDirtyRef = useRef(false);
 
@@ -127,6 +172,11 @@ export default function NewLeadPage() {
   function handleAccountSelected(account: Account, isNew: boolean) {
     setAccountType(isNew ? "new_lead" : "current_lead");
     if (isNew) setService("");
+  }
+
+  function handleAccountCleared() {
+    setAccountType(null);
+    setService("");
   }
 
   const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
@@ -196,7 +246,7 @@ export default function NewLeadPage() {
         service:             service || null,
         contact_details:     contactDetails,
         estimated_value:     evRaw ? Number(evRaw) : null,
-        currency:            "USD",
+        currency:            currency || "USD",
         expected_close_date: (fd.get("expected_close_date") as string) || null,
         priority:            priority || "medium",
         supporting_docs:     uploadedDoc ? [uploadedDoc] : [],
@@ -205,7 +255,12 @@ export default function NewLeadPage() {
       await api("/api/leads", { method: "POST", body: payload, token: token! });
       setIsDirty(false);
       toast.success("Lead submitted successfully.");
-      router.push("/assignments");
+      // An executive's own submission is assigned to a reviewer, not to them,
+      // so it never appears in their Pending Review tab. Send executives to the
+      // Overview tab (value "all", lists all org assignments) so they see it.
+      router.push(
+        user?.role === "executive" ? "/assignments?tab=all" : "/assignments"
+      );
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to submit lead");
     } finally {
@@ -261,6 +316,7 @@ export default function NewLeadPage() {
                   value={accountId}
                   onChange={setAccountId}
                   onAccountSelected={handleAccountSelected}
+                  onCleared={handleAccountCleared}
                   name="account_id"
                   required
                 />
@@ -306,7 +362,13 @@ export default function NewLeadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Country</Label>
-                <Select value={contactCountry} onValueChange={(v) => setContactCountry(v ?? "")}>
+                <Select value={contactCountry} onValueChange={(v) => {
+                  const next = v ?? "";
+                  setContactCountry(next);
+                  if (next && COUNTRY_CURRENCY[next]) {
+                    setCurrency(COUNTRY_CURRENCY[next]);
+                  }
+                }}>
                   <SelectTrigger className="w-full h-9">
                     {contactCountry ? (
                       <span className="flex flex-1 items-center justify-between text-sm">
@@ -396,16 +458,34 @@ export default function NewLeadPage() {
             {/* Value + Priority */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="estimated_value">Estimated Value ($)</Label>
+                <Label htmlFor="estimated_value">Estimated Value</Label>
                 <Input
                   id="estimated_value"
                   name="estimated_value"
                   type="text"
                   inputMode="decimal"
-                  placeholder="e.g. 500,000 or 500000.00"
+                  placeholder="e.g. 500,000"
+                  value={estimatedValue}
                   className={estimatedValueError ? "border-red-500 focus-visible:ring-red-500/50" : ""}
                   onChange={(e) => {
-                    const raw = e.target.value.replace(/,/g, "");
+                    // Strip everything except digits and a single decimal point,
+                    // then re-insert thousands separators on the integer portion
+                    // so the user sees "900,000" while typing "900000".
+                    const cleaned = e.target.value.replace(/[^\d.]/g, "");
+                    const firstDot = cleaned.indexOf(".");
+                    const normalized =
+                      firstDot === -1
+                        ? cleaned
+                        : cleaned.slice(0, firstDot + 1) +
+                          cleaned.slice(firstDot + 1).replace(/\./g, "");
+                    const [intPart, decPart] = normalized.split(".");
+                    const intFormatted = intPart
+                      ? Number(intPart).toLocaleString("en-US")
+                      : "";
+                    const display =
+                      decPart !== undefined ? `${intFormatted}.${decPart}` : intFormatted;
+                    setEstimatedValue(display);
+                    const raw = normalized;
                     setEstimatedValueError(raw !== "" && (isNaN(Number(raw)) || Number(raw) < 0));
                   }}
                 />
@@ -442,14 +522,24 @@ export default function NewLeadPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Input
-                  id="currency"
-                  name="currency"
-                  value="USD"
-                  readOnly
-                  className="bg-muted/40 text-muted-foreground cursor-not-allowed"
-                />
-                <p className="text-[11px] text-muted-foreground">USD only (per BRD)</p>
+                <Select value={currency} onValueChange={(v) => setCurrency(v ?? "USD")}>
+                  <SelectTrigger id="currency" className="w-full h-9">
+                    <SelectValue placeholder="Select currency…" />
+                  </SelectTrigger>
+                  <SelectContent
+                    alignItemWithTrigger={false}
+                    side="bottom"
+                    sideOffset={4}
+                    className="z-[200] w-[var(--anchor-width)] min-w-[var(--anchor-width)] max-h-72 overflow-y-auto bg-white border border-[#EDE7E6] shadow-lg"
+                  >
+                    {CURRENCY_OPTIONS.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Auto-set from selected country; you can override.
+                </p>
               </div>
             </div>
 

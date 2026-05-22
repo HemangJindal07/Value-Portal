@@ -37,7 +37,6 @@ const ADMIN_NAV = [
     items: [
       { title: "Dashboard",         href: "/",              icon: LayoutDashboard },
       { title: "Accounts",          href: "/accounts",      icon: Building2 },
-      { title: "Submit New Lead",   href: "/leads/new",     icon: Target },
       // { title: "Value Ideas",     href: "/ideas",         icon: Lightbulb },
       { title: "My Assignments",    href: "/assignments",   icon: ClipboardList },
     ],
