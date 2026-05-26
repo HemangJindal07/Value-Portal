@@ -898,6 +898,25 @@ function AssignmentsPageInner() {
   const refreshAssignments = () =>
     queryClient.invalidateQueries({ queryKey: ["assignments"] });
 
+  // Optimistically drop an acted-on assignment from the cached lists so the row
+  // disappears instantly, instead of waiting on the (multi-request) background
+  // refetch. The subsequent invalidateQueries reconciles the lists.
+  const removeAssignmentFromCache = (assignmentId: string) => {
+    queryClient.setQueriesData<{
+      myAssignments: AssignmentWithRelations[];
+      allAssignments: AssignmentWithRelations[];
+      orgLeads: LeadWithRelations[];
+      myLeads: LeadWithRelations[];
+    }>({ queryKey: ["assignments"] }, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        myAssignments: old.myAssignments.filter((a) => a.assignment_id !== assignmentId),
+        allAssignments: old.allAssignments.filter((a) => a.assignment_id !== assignmentId),
+      };
+    });
+  };
+
   const handleAction = async (assignmentId: string, action: string, notes?: string) => {
     if (!token) return;
     setActioning(assignmentId);
@@ -917,6 +936,8 @@ function AssignmentsPageInner() {
       });
       toast.success(`Marked as ${action}`);
       setReviewPending(null);
+      // Drop the row immediately, then reconcile with the server in the background.
+      removeAssignmentFromCache(assignmentId);
       refreshAssignments();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Action failed");
@@ -1045,6 +1066,8 @@ function AssignmentsPageInner() {
       });
       toast.success(`Lead marked as ${action === "won" ? "Won" : "Lost"}`);
       setWlConfirm(null);
+      // Drop the row immediately, then reconcile with the server in the background.
+      removeAssignmentFromCache(assignmentId);
       refreshAssignments();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Action failed");

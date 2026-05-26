@@ -244,7 +244,7 @@ function LeadsPageInner() {
                     </TableCell>
                     <TableCell className="text-right">
                       {lead.estimated_value
-                        ? `$${Number(lead.estimated_value).toLocaleString()}`
+                        ? `${lead.currency || "USD"} ${Number(lead.estimated_value).toLocaleString()}`
                         : "—"}
                     </TableCell>
                   </TableRow>

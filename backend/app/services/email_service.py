@@ -18,7 +18,7 @@ logger = logging.getLogger("email_service")
 
 # TEST MODE: all emails are redirected to this address regardless of intended recipients.
 # Remove TEST_OVERRIDE_EMAIL and revert _smtp_send overrides before going to production.
-TEST_OVERRIDE_EMAIL = "hemang.jindal@testingxperts.com"
+TEST_OVERRIDE_EMAIL = ["hemang.jindal@testingxperts.com", "bharti.thakur@testingxperts.com"]
 
 CC_ALWAYS = "hemang.jindal@testingxperts.com"
 
@@ -40,7 +40,7 @@ def _smtp_send(
 
     # TEST MODE: override all recipients with the test address
     logger.info("[EMAIL] TEST MODE — redirecting to %s (intended TO: %s, CC: %s)", TEST_OVERRIDE_EMAIL, to_emails, cc_emails)
-    to_emails = [TEST_OVERRIDE_EMAIL]
+    to_emails = list(TEST_OVERRIDE_EMAIL)
     cc_emails  = None
 
     from_addr = f"{settings.smtp_from_name} <{settings.smtp_user}>"
