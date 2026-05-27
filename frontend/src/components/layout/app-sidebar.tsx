@@ -14,6 +14,8 @@ import {
   GitMerge,
   Route,
   AlertTriangle,
+  DollarSign,
+  MessageSquareWarning,
 } from "lucide-react";
 import {
   Sidebar,
@@ -55,6 +57,8 @@ const ADMIN_NAV = [
       { title: "Exception Queue",      href: "/admin/exception-queue",        icon: AlertTriangle },
       { title: "Stakeholder Mapping",  href: "/admin/stakeholder-mapping",    icon: GitMerge },
       { title: "Routing Config",       href: "/admin/routing-config",         icon: Route },
+      { title: "FX Rates",             href: "/admin/exchange-rates",         icon: DollarSign },
+      { title: "Issues",               href: "/admin/issues",                 icon: MessageSquareWarning },
       { title: "Admin",                href: "/admin/users",                  icon: Settings },
     ],
   },
@@ -82,6 +86,7 @@ const EXECUTIVE_NAV = [
     label: "System",
     items: [
       { title: "Notifications", href: "/notifications", icon: Bell },
+      { title: "My Issues",     href: "/my-issues",     icon: MessageSquareWarning },
     ],
   },
 ];
@@ -108,6 +113,7 @@ const USER_NAV = [
     label: "System",
     items: [
       { title: "Notifications", href: "/notifications", icon: Bell },
+      { title: "My Issues",     href: "/my-issues",     icon: MessageSquareWarning },
     ],
   },
 ];
@@ -178,16 +184,17 @@ export function AppSidebar() {
         <button
           type="button"
           onClick={() => requestNavigate(() => router.push("/"))}
-          className="flex items-center gap-2.5 w-full"
+          className="flex items-center gap-3 w-full"
         >
-          {/* White pill wrapping the logo so its white bg blends in */}
-          <div className="shrink-0 rounded-lg bg-white px-2 py-1.5 shadow-sm">
+          {/* White field with even clear-space around the logo (brand guideline:
+              the corporate logo must always keep its clearance margin). */}
+          <div className="shrink-0 rounded-lg bg-white p-2.5 shadow-sm flex items-center justify-center">
             <Image
-              src="/txlogo-full.webp"
+              src="/tx-logo.png"
               alt="TestingXperts"
-              width={110}
-              height={26}
-              className="h-[26px] w-auto object-contain block"
+              width={40}
+              height={40}
+              className="h-10 w-10 object-contain block"
               priority
             />
           </div>

@@ -15,6 +15,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { formatMoney } from "@/lib/utils";
 import type { LeadWithRelations } from "@/types";
 import { ActivitySection } from "@/components/activity-section";
 
@@ -250,7 +251,7 @@ export default function LeadDetailPage() {
               label="Estimated Value"
               value={
                 lead.estimated_value
-                  ? `${lead.currency} ${Number(lead.estimated_value).toLocaleString()}`
+                  ? formatMoney(lead.estimated_value, lead.currency)
                   : null
               }
             />
@@ -266,41 +267,6 @@ export default function LeadDetailPage() {
               label="Created"
               value={new Date(lead.created_at).toLocaleDateString()}
             />
-            {lead.ai_category && (
-              <>
-                <Separator />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">AI Insights</p>
-                <Field
-                  label="Category"
-                  value={lead.ai_category
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase())}
-                />
-                <Field
-                  label="Confidence"
-                  value={
-                    lead.ai_confidence
-                      ? `${(lead.ai_confidence * 100).toFixed(0)}%`
-                      : null
-                  }
-                />
-                {lead.ai_suggested_priority && (
-                  <Field
-                    label="Suggested Priority"
-                    value={lead.ai_suggested_priority.replace(/\b\w/g, (c) => c.toUpperCase())}
-                  />
-                )}
-                {lead.ai_win_probability != null && lead.ai_win_probability > 0 && (
-                  <Field label="Win Probability" value={`${(lead.ai_win_probability * 100).toFixed(0)}%`} />
-                )}
-                {lead.ai_summary && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">AI Recommendation</p>
-                    <p className="text-sm text-foreground">{lead.ai_summary}</p>
-                  </div>
-                )}
-              </>
-            )}
           </CardContent>
         </Card>
       </div>

@@ -75,9 +75,20 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   "Vietnam": "VND",
 };
 
-const CURRENCY_OPTIONS = Array.from(
-  new Set(Object.values(COUNTRY_CURRENCY))
-).sort();
+// Fixed shortlist of currencies the business supports, plus an "Others" bucket
+// stored as "OTH". Any country whose mapped currency isn't in this set falls
+// back to "OTH" (the user can still override).
+// Alphabetical order; "Others" (OTH) is kept last as the catch-all.
+const CURRENCY_SHORTLIST = ["AED", "AUD", "CAD", "GBP", "INR", "NZD", "SAR", "SGD", "USD", "ZAR"];
+const CURRENCY_OPTIONS = [...CURRENCY_SHORTLIST, "OTH"];
+const SHORTLIST_SET = new Set(CURRENCY_SHORTLIST);
+
+const currencyLabel = (code: string) => (code === "OTH" ? "Others" : code);
+
+const resolveCurrency = (country: string): string => {
+  const mapped = COUNTRY_CURRENCY[country];
+  return mapped && SHORTLIST_SET.has(mapped) ? mapped : "OTH";
+};
 
 const COUNTRIES = [
   "Australia",
@@ -114,6 +125,7 @@ const COUNTRIES = [
   "United Kingdom",
   "United States",
   "Vietnam",
+  "Others",
 ];
 
 export default function NewLeadPage() {
@@ -179,7 +191,7 @@ export default function NewLeadPage() {
     setService("");
   }
 
-  const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+  const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg"];
   const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB — matches the backend upload limit
 
   function getFileExt(filename: string) {
@@ -216,7 +228,7 @@ export default function NewLeadPage() {
       const ext = getFileExt(attachment.name);
       if (!ALLOWED_EXTENSIONS.includes(ext)) {
         toast.error(
-          `"${attachment.name}" cannot be uploaded. Only PDF, Word (.doc/.docx), and Excel (.xls/.xlsx) files are accepted.`
+          `"${attachment.name}" cannot be uploaded. Only PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), and image (JPG/PNG) files are accepted.`
         );
         return;
       }
@@ -373,8 +385,8 @@ export default function NewLeadPage() {
                 <Select value={contactCountry} onValueChange={(v) => {
                   const next = v ?? "";
                   setContactCountry(next);
-                  if (next && COUNTRY_CURRENCY[next]) {
-                    setCurrency(COUNTRY_CURRENCY[next]);
+                  if (next) {
+                    setCurrency(resolveCurrency(next));
                   }
                 }}>
                   <SelectTrigger className="w-full h-9">
@@ -546,7 +558,7 @@ export default function NewLeadPage() {
                     className="z-[200] w-[var(--anchor-width)] min-w-[var(--anchor-width)] max-h-72 overflow-y-auto bg-white border border-[#EDE7E6] shadow-lg"
                   >
                     {CURRENCY_OPTIONS.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                      <SelectItem key={c} value={c}>{currencyLabel(c)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

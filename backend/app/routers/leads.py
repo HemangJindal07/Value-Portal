@@ -7,7 +7,6 @@ from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
 from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
 from app.services.routing_engine import start_routing
-from app.services.lead_classifier import classify_lead
 from app.services.tracking import record_status_change
 from app.services.notification_service import notify_status_change, send_notification
 from app.services.scoring import award_points, revoke_points_for_submission
@@ -361,7 +360,6 @@ async def create_lead(
     background_tasks.add_task(
         start_routing, "lead", str(lead["lead_id"]), str(lead["account_id"]), current_user["id"]
     )
-    background_tasks.add_task(classify_lead, str(lead["lead_id"]))
 
     return lead
 

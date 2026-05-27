@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { formatMoney } from "@/lib/utils";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -96,6 +97,7 @@ type PipelineLead = {
   status: string;
   lead_type: string;
   estimated_value: number | null;
+  currency?: string | null;
   priority: string;
   created_at: string;
   account: { account_name: string; region?: string } | null;
@@ -207,9 +209,7 @@ function LeadsPipelineTable({ leads, loading }: { leads: PipelineLead[]; loading
                 )}
               </TableCell>
               <TableCell className="text-right text-sm font-medium text-[#232222]">
-                {lead.estimated_value
-                  ? `$${Number(lead.estimated_value).toLocaleString()}`
-                  : "—"}
+                {formatMoney(lead.estimated_value, lead.currency)}
               </TableCell>
             </TableRow>
           );

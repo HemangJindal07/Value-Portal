@@ -24,6 +24,9 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
+// Only addresses on this domain may sign in or register.
+const ALLOWED_DOMAIN = "testingxperts.com";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -127,6 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const signIn = async (email: string, password: string) => {
+    // TEMP: login domain restriction disabled — any email may sign in.
+    // if (!email.trim().toLowerCase().endsWith("@" + ALLOWED_DOMAIN)) {
+    //   throw new Error(`Only @${ALLOWED_DOMAIN} email addresses are allowed.`);
+    // }
+
     const key = `_fl_${email.toLowerCase()}`;
     const raw = sessionStorage.getItem(key);
     if (raw) {

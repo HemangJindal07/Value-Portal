@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Target, /* Lightbulb, */ Trophy, ClipboardList, ArrowRight, ShieldCheck,
   TrendingUp, BadgePercent, AlertTriangle, Banknote, Clock, Globe, BarChart3,
-  Building2, GitMerge, Activity, ChevronRight,
+  Building2, GitMerge, Activity, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -417,7 +417,37 @@ type MonthlyPoint = {
   pipeline_value: number;
   won_value: number;
   submissions: number;
+  won_count: number;
+  lost_count: number;
+  open_count: number;
 };
+
+// ── Calendar-year navigator (◀ year ▶) ───────────────────────────────────
+// `max` caps forward navigation at the current year (no future data).
+function YearNav({ year, onChange, max }: { year: number; onChange: (y: number) => void; max: number }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onChange(year - 1)}
+        aria-label="Previous year"
+        className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-[#EDE7E6] text-[#5D5D5D] hover:bg-[#F9F9F9] transition-colors"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <span className="text-sm font-semibold text-[#232222] w-12 text-center tabular-nums">{year}</span>
+      <button
+        type="button"
+        onClick={() => onChange(year + 1)}
+        disabled={year >= max}
+        aria-label="Next year"
+        className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-[#EDE7E6] text-[#5D5D5D] hover:bg-[#F9F9F9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 // ── Hover-enabled dual-line chart ────────────────────────────────────────
 
@@ -554,17 +584,14 @@ function MonthlyTrendChart({ data }: { data: MonthlyPoint[] }) {
           </>
         )}
 
-        {/* X-axis month labels */}
-        {data.map((d, i) => {
-          if (i % 2 !== 0 && i !== data.length - 1) return null;
-          return (
-            <text key={i} x={xPos(i)} y={H - 4}
-              textAnchor="middle" fontSize="8" fill={hovered === i ? "#232222" : "#9CA3AF"}
-              fontWeight={hovered === i ? "700" : "400"}>
-              {d.label}
-            </text>
-          );
-        })}
+        {/* X-axis month labels — show every month */}
+        {data.map((d, i) => (
+          <text key={i} x={xPos(i)} y={H - 4}
+            textAnchor="middle" fontSize="7.5" fill={hovered === i ? "#232222" : "#9CA3AF"}
+            fontWeight={hovered === i ? "700" : "400"}>
+            {d.label}
+          </text>
+        ))}
 
         {/* Invisible hover zones — one per month column */}
         {data.map((_, i) => (
@@ -604,49 +631,56 @@ function MonthlyTrendChart({ data }: { data: MonthlyPoint[] }) {
 
 const MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function MonthlySubmissionsChart({ data: rawData }: { data: MonthlyPoint[] }) {
+const OUTCOME_COLORS = { open: "#2E75B6", won: "#16a34a", lost: "#C5C5C5" };
+
+// Stacked outcome bars per month: In-pipeline / Won / Lost. Complements the
+// value-trend line (which shows $), this shows how each month's leads resolve.
+function MonthlyOutcomeChart({ data: rawData }: { data: MonthlyPoint[] }) {
   const [hovered, setHovered] = useState<number>(-1);
 
-  // Reorder the 12-month window into calendar order (Jan → Dec) for display.
+  // Reorder into calendar order (Jan → Dec) for display.
   const data = [...rawData].sort(
     (a, b) => MONTH_ORDER.indexOf(a.label) - MONTH_ORDER.indexOf(b.label)
   );
-
   if (!data.length) return null;
 
-  const maxS  = Math.max(...data.map((d) => d.submissions), 1);
+  const totalFor = (d: MonthlyPoint) => d.open_count + d.won_count + d.lost_count;
+  const maxT = Math.max(...data.map(totalFor), 1);
+
   const W = 520; const H = 90; const padL = 8; const padR = 8; const padB = 22; const padT = 8;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const gap    = chartW / data.length;
   const barW   = Math.max(gap * 0.6, 4);
 
-  const fmt = (v: number) =>
-    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M`
-    : v >= 1_000   ? `$${(v / 1_000).toFixed(0)}K`
-    : `$${v}`;
-
   const hd = hovered >= 0 ? data[hovered] : null;
 
   return (
     <div className="w-full">
-      {/* Tooltip row — appears instantly when a bar is hovered */}
+      {/* Legend */}
+      <div className="flex items-center gap-4 mb-2 text-[11px] text-[#5D5D5D]">
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: OUTCOME_COLORS.open }} /> In-pipeline</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: OUTCOME_COLORS.won }} /> Won</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: OUTCOME_COLORS.lost }} /> Lost</span>
+      </div>
+
+      {/* Tooltip row */}
       <div className="mb-2" style={{ minHeight: 48 }}>
         {hd && (
           <div className="flex items-stretch gap-3 rounded-xl border border-[#EDE7E6] bg-[#FAFAFA] px-4 py-2.5 text-xs">
             <div className="flex-1 text-center">
-              <p className="font-bold text-[#2E75B6] text-sm">{hd.submissions}</p>
-              <p className="text-[#5D5D5D]">Submissions</p>
+              <p className="font-bold text-[#2E75B6] text-sm">{hd.open_count}</p>
+              <p className="text-[#5D5D5D]">In-pipeline</p>
             </div>
             <div className="w-px bg-[#EDE7E6]" />
             <div className="flex-1 text-center">
-              <p className="font-bold text-[#B12B35] text-sm">{fmt(hd.pipeline_value)}</p>
-              <p className="text-[#5D5D5D]">Pipeline Value</p>
+              <p className="font-bold text-green-600 text-sm">{hd.won_count}</p>
+              <p className="text-[#5D5D5D]">Won</p>
             </div>
             <div className="w-px bg-[#EDE7E6]" />
             <div className="flex-1 text-center">
-              <p className="font-bold text-green-600 text-sm">{fmt(hd.won_value)}</p>
-              <p className="text-[#5D5D5D]">Won Value</p>
+              <p className="font-bold text-[#5D5D5D] text-sm">{hd.lost_count}</p>
+              <p className="text-[#5D5D5D]">Lost</p>
             </div>
             <div className="w-px bg-[#EDE7E6]" />
             <div className="flex-1 text-center">
@@ -657,7 +691,7 @@ function MonthlySubmissionsChart({ data: rawData }: { data: MonthlyPoint[] }) {
         )}
       </div>
 
-      {/* Bar chart */}
+      {/* Stacked bar chart */}
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
@@ -665,11 +699,17 @@ function MonthlySubmissionsChart({ data: rawData }: { data: MonthlyPoint[] }) {
         onMouseLeave={() => setHovered(-1)}
       >
         {data.map((d, i) => {
-          const bH    = Math.max((d.submissions / maxS) * chartH, d.submissions > 0 ? 3 : 0);
-          const bX    = padL + i * gap + (gap - barW) / 2;
-          const bY    = padT + chartH - bH;
-          const isHov = hovered === i;
-          const isEmpty = d.submissions === 0;
+          const total  = totalFor(d);
+          const bX     = padL + i * gap + (gap - barW) / 2;
+          const fullH  = (total / maxT) * chartH;
+          const isHov  = hovered === i;
+          const isEmpty = total === 0;
+          const segs = [
+            { key: "open", v: d.open_count, c: OUTCOME_COLORS.open },
+            { key: "won",  v: d.won_count,  c: OUTCOME_COLORS.won },
+            { key: "lost", v: d.lost_count, c: OUTCOME_COLORS.lost },
+          ];
+          let yCursor = padT + chartH; // build the stack from the bottom up
 
           return (
             <g
@@ -677,45 +717,31 @@ function MonthlySubmissionsChart({ data: rawData }: { data: MonthlyPoint[] }) {
               style={{ cursor: isEmpty ? "default" : "pointer" }}
               onMouseEnter={() => setHovered(i)}
             >
-              {/* Hover highlight column (full height, subtle) */}
               {isHov && (
-                <rect
-                  x={padL + i * gap}
-                  y={padT}
-                  width={gap}
-                  height={chartH}
-                  fill="#2E75B6"
-                  opacity="0.06"
-                  rx="2"
-                />
+                <rect x={padL + i * gap} y={padT} width={gap} height={chartH} fill="#2E75B6" opacity="0.06" rx="2" />
               )}
 
-              {/* Bar */}
-              <rect
-                x={bX}
-                y={bY}
-                width={barW}
-                height={Math.max(bH, 2)}
-                rx="3"
-                fill={isEmpty ? "#EDE7E6" : isHov ? "#003466" : "#2E75B6"}
-                opacity={isHov ? 1 : 0.82}
-              />
-
-              {/* Count label above bar when hovered */}
-              {isHov && !isEmpty && (
-                <text
-                  x={bX + barW / 2}
-                  y={bY - 3}
-                  textAnchor="middle"
-                  fontSize="8.5"
-                  fontWeight="700"
-                  fill="#003466"
-                >
-                  {d.submissions}
-                </text>
+              {isEmpty ? (
+                <rect x={bX} y={padT + chartH - 2} width={barW} height={2} rx="1" fill="#EDE7E6" />
+              ) : (
+                segs.map((s) => {
+                  if (s.v <= 0) return null;
+                  const segH = (s.v / total) * fullH;
+                  yCursor -= segH;
+                  return (
+                    <rect
+                      key={s.key}
+                      x={bX}
+                      y={yCursor}
+                      width={barW}
+                      height={Math.max(segH, 1)}
+                      fill={s.c}
+                      opacity={isHov ? 1 : 0.85}
+                    />
+                  );
+                })
               )}
 
-              {/* X-axis month labels — every month, just the abbreviated name */}
               <text
                 x={bX + barW / 2}
                 y={H - 4}
@@ -1143,7 +1169,7 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl xl:text-3xl font-bold text-[#232222] break-all leading-tight">
-                  ${an.pipeline_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  ${an.pipeline_value.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                 </div>
               </CardContent>
             </Card>
@@ -1356,23 +1382,123 @@ function AdminDashboard({ token }: { token: string; userName: string }) {
   );
 }
 
+// ── Self-contained trend cards ────────────────────────────────────────────
+// Each owns its own calendar-year + data + loading state and fetches
+// independently, so the two charts never share a year and never flash the
+// previous year's data while a switch is in flight (a cancel guard discards
+// stale responses).
+
+function TrendLoading() {
+  return (
+    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground gap-2">
+      <span className="h-4 w-4 rounded-full border-2 border-[#B12B35]/30 border-t-[#B12B35] animate-spin" />
+      Loading…
+    </div>
+  );
+}
+
+function useTrendYear(token: string) {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [data, setData] = useState<MonthlyPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api<MonthlyPoint[]>(`/api/dashboard/monthly-trend?year=${year}`, { token })
+      .then((d) => { if (!cancelled) setData(Array.isArray(d) ? d : []); })
+      .catch(() => { if (!cancelled) setData([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, year]);
+
+  return { currentYear, year, setYear, data, loading };
+}
+
+function ValueRealizationCard({ token }: { token: string }) {
+  const { currentYear, year, setYear, data, loading } = useTrendYear(token);
+  return (
+    <Card className="border-[#EDE7E6] bg-white">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-[#B12B35]" />
+              Monthly Value Realization
+            </CardTitle>
+            <CardDescription>Pipeline vs won value — {year}</CardDescription>
+          </div>
+          <YearNav year={year} onChange={setYear} max={currentYear} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? <TrendLoading /> : <MonthlyTrendChart data={data} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+function OutcomeMixCard({ token }: { token: string }) {
+  const { currentYear, year, setYear, data, loading } = useTrendYear(token);
+  const wonTotal  = data.reduce((s, d) => s + d.won_count, 0);
+  const lostTotal = data.reduce((s, d) => s + d.lost_count, 0);
+  const openTotal = data.reduce((s, d) => s + d.open_count, 0);
+  const closed    = wonTotal + lostTotal;
+  const winRate   = closed > 0 ? Math.round((wonTotal / closed) * 100) : 0;
+
+  return (
+    <Card className="border-[#EDE7E6] bg-white">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-[#2E75B6]" />
+              Monthly Lead Outcomes
+            </CardTitle>
+            <CardDescription>How each month&apos;s leads resolved — {year}</CardDescription>
+          </div>
+          <YearNav year={year} onChange={setYear} max={currentYear} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <TrendLoading />
+        ) : (
+          <>
+            <MonthlyOutcomeChart data={data} />
+            <div className="flex items-center justify-between mt-1 text-[11px] text-[#5D5D5D]">
+              <span>
+                Won <span className="font-semibold text-green-600">{wonTotal}</span> ·
+                Lost <span className="font-semibold text-[#5D5D5D]">{lostTotal}</span> ·
+                In-pipeline <span className="font-semibold text-[#2E75B6]">{openTotal}</span>
+              </span>
+              <span>
+                Win rate: <span className="font-semibold text-[#232222]">{winRate}%</span>
+              </span>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Executive / Leadership dashboard ──────────────────────────────────────
 
 function ExecutiveDashboard({ token, userName }: { token: string; userName: string }) {
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [topLeads, setTopLeads] = useState<AssignmentWithRelations[]>([]);
-  const [monthlyTrend, setMonthlyTrend] = useState<MonthlyPoint[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const [s, an, myAssignments, trend, act] = await Promise.all([
+      const [s, an, myAssignments, act] = await Promise.all([
         api<OrgStats>("/api/dashboard/stats", { token }),
         api<AdminAnalytics>("/api/dashboard/admin-analytics", { token }),
         api<AssignmentWithRelations[]>("/api/assignments/mine", { token }),
-        api<MonthlyPoint[]>("/api/dashboard/monthly-trend", { token }),
         api<Activity[]>("/api/dashboard/recent-activity?limit=20", { token }),
       ]);
       setStats(s);
@@ -1401,7 +1527,6 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
               .slice(0, 5)
           : []
       );
-      setMonthlyTrend(Array.isArray(trend) ? trend : []);
       // Strategic highlights: only status transitions that matter to leadership
       const STRATEGIC = ["qualified", "opportunity_created", "won", "lost", "rejected"];
       setActivity(
@@ -1478,7 +1603,7 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[#232222] tracking-tight">
-              ${(an?.pipeline_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              ${(an?.pipeline_value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
             </div>
             <p className="text-xs text-[#5D5D5D] mt-1">Total active pipeline</p>
           </CardContent>
@@ -1494,11 +1619,27 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[#232222] tracking-tight">
-              ${(an?.won_value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              ${(an?.won_value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
             </div>
             <p className="text-xs text-[#5D5D5D] mt-1">
               {s.leads_by_status["won"] || 0} deal{(s.leads_by_status["won"] || 0) !== 1 ? "s" : ""} closed
             </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
+          <div className="h-1 bg-[#003466]" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
+            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Conversion Rate</CardTitle>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#003466]/10">
+              <BadgePercent className="h-4 w-4 text-[#003466]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#232222] tracking-tight">
+              {an?.qualification_ratio ?? 0}%
+            </div>
+            <p className="text-xs text-[#5D5D5D] mt-1">leads reaching qualified+</p>
           </CardContent>
         </Card>
 
@@ -1520,21 +1661,6 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
           </CardContent>
         </Card>
 
-        <Card className="border-[#EDE7E6] bg-white overflow-hidden hover:shadow-md transition-shadow">
-          <div className="h-1 bg-[#003466]" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4">
-            <CardTitle className="text-sm font-medium text-[#5D5D5D]">Conversion Rate</CardTitle>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#003466]/10">
-              <BadgePercent className="h-4 w-4 text-[#003466]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-[#232222] tracking-tight">
-              {an?.qualification_ratio ?? 0}%
-            </div>
-            <p className="text-xs text-[#5D5D5D] mt-1">leads reaching qualified+</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* ── Lead Status Breakdown + Monthly Value Realization ── */}
@@ -1566,57 +1692,12 @@ function ExecutiveDashboard({ token, userName }: { token: string; userName: stri
           </CardContent>
         </Card>
 
-        {/* Monthly Value Realization — real data */}
-        <Card className="border-[#EDE7E6] bg-white">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-[#B12B35]" />
-                  Monthly Value Realization
-                </CardTitle>
-                <CardDescription>Pipeline vs won value — last 12 months</CardDescription>
-              </div>
-              {monthlyTrend.length > 0 && (
-                <Badge variant="outline" className="text-[10px] text-[#5D5D5D] border-[#EDE7E6]">
-                  Live
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <MonthlyTrendChart data={monthlyTrend} />
-          </CardContent>
-        </Card>
+        {/* Monthly Value Realization — own calendar-year selector */}
+        <ValueRealizationCard token={token} />
       </div>
 
-      {/* ── Monthly Submissions Volume ── */}
-      {monthlyTrend.length > 0 && (
-        <Card className="border-[#EDE7E6] bg-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold text-[#232222] flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-[#2E75B6]" />
-              Monthly Submission Volume
-            </CardTitle>
-            <CardDescription>Leads submitted per month (last 12 months)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MonthlySubmissionsChart data={monthlyTrend} />
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-[11px] text-[#5D5D5D]">
-                Peak month: <span className="font-semibold text-[#232222]">
-                  {monthlyTrend.reduce((p, c) => c.submissions > p.submissions ? c : p, monthlyTrend[0]).label}
-                </span>
-              </span>
-              <span className="text-[11px] text-[#5D5D5D]">
-                Avg/month: <span className="font-semibold text-[#232222]">
-                  {Math.round(monthlyTrend.reduce((s, d) => s + d.submissions, 0) / monthlyTrend.length)}
-                </span>
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* ── Monthly Lead Outcomes — own calendar-year selector ── */}
+      <OutcomeMixCard token={token} />
 
       {/* ── Top Opportunities Needing Attention ── */}
       <Card className="border-[#EDE7E6] bg-white">

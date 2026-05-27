@@ -635,6 +635,196 @@ def send_password_reset_otp_email(
     _smtp_send_direct(to_email=recipient_email, subject=subject, html_body=html)
 
 
+def send_signup_otp_email(
+    recipient_email: str,
+    code: str,
+    expiry_minutes: int,
+) -> None:
+    """
+    Email a 6-digit one-time code to verify a new signup. Sent directly to the
+    address being registered (not the TEST_OVERRIDE address) so signup works
+    end to end.
+    """
+    subject = "[Tx-Catalyst] Your signup verification code"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Signup Verification Code</title>
+</head>
+<body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
+        <tr>
+          <td style="background:#B12B35;padding:20px 28px;">
+            <span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
+            <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 28px 8px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#B12B35;font-weight:600;
+                      text-transform:uppercase;letter-spacing:0.8px;">Create Account</p>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#232222;line-height:1.3;">
+              Verify your email
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:12px 28px 8px;">
+            <p style="margin:0;font-size:14px;color:#232222;line-height:1.6;">
+              Use the code below to finish creating your Tx-Catalyst account.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;">
+            <div style="background:#F9F9F9;border:1px solid #EDE7E6;border-radius:6px;
+                        text-align:center;padding:20px 12px;">
+              <span style="font-size:34px;font-weight:700;letter-spacing:10px;
+                           color:#232222;font-family:monospace;">{code}</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px 24px;">
+            <p style="margin:0;font-size:13px;color:#5D5D5D;line-height:1.6;">
+              This code expires in <strong>{expiry_minutes} minutes</strong>.
+              If you didn't try to create an account, you can safely ignore this email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
+            <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    _smtp_send_direct(to_email=recipient_email, subject=subject, html_body=html)
+
+
+def _issue_email_shell(eyebrow: str, heading: str, body_rows: str) -> str:
+    """Shared branded HTML shell for issue emails. `body_rows` is inner <tr>…</tr>."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>{heading}</title>
+</head>
+<body style="margin:0;padding:0;background:#F9F9F9;font-family:'Inter',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F9F9;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #EDE7E6;">
+        <tr>
+          <td style="background:#B12B35;padding:20px 28px;">
+            <span style="color:#fff;font-size:18px;font-weight:700;">Tx-Catalyst</span>
+            <span style="color:rgba(255,255,255,0.65);font-size:12px;margin-left:8px;">TestingXperts</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 28px 4px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#B12B35;font-weight:600;
+                      text-transform:uppercase;letter-spacing:0.8px;">{eyebrow}</p>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#232222;line-height:1.3;">
+              {heading}
+            </h1>
+          </td>
+        </tr>
+        {body_rows}
+        <tr>
+          <td style="background:#F9F9F9;padding:14px 28px;border-top:1px solid #EDE7E6;">
+            <p style="margin:0;font-size:11px;color:#C5C5C5;text-align:center;">
+              Automated notification from TestingXperts Tx-Catalyst. Do not reply.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def _esc(text: str) -> str:
+    """Minimal HTML escaping for user-supplied text in emails."""
+    return (
+        (text or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def send_issue_reported_email(
+    recipient_email: str,
+    reporter_name: str,
+    reporter_email: str,
+    description: str,
+    screenshot_names: list[str],
+) -> None:
+    """Notify an admin that a new issue was reported. Sent to real inbox."""
+    shots = (
+        "".join(f"<li style='margin:2px 0;'>{_esc(n)}</li>" for n in screenshot_names)
+        if screenshot_names
+        else "<li style='margin:2px 0;color:#5D5D5D;'>None attached</li>"
+    )
+    body_rows = f"""
+        <tr><td style="padding:12px 28px 0;">
+          <p style="margin:0;font-size:14px;color:#232222;line-height:1.6;">
+            <strong>{_esc(reporter_name)}</strong> ({_esc(reporter_email)}) reported a new issue:
+          </p>
+        </td></tr>
+        <tr><td style="padding:12px 28px 0;">
+          <div style="background:#F9F9F9;border:1px solid #EDE7E6;border-radius:6px;padding:14px 16px;">
+            <p style="margin:0;font-size:14px;color:#232222;line-height:1.6;white-space:pre-wrap;">{_esc(description)}</p>
+          </div>
+        </td></tr>
+        <tr><td style="padding:14px 28px 24px;">
+          <p style="margin:0 0 4px;font-size:12px;color:#5D5D5D;font-weight:600;">Screenshots</p>
+          <ul style="margin:0;padding-left:18px;font-size:13px;color:#232222;">{shots}</ul>
+        </td></tr>
+    """
+    html = _issue_email_shell("Issue Reported", "A new issue was reported", body_rows)
+    _smtp_send_direct(to_email=recipient_email, subject="[Tx-Catalyst] New issue reported", html_body=html)
+
+
+def send_issue_resolved_email(
+    recipient_email: str,
+    reporter_name: str,
+    description: str,
+    resolved_by: str,
+) -> None:
+    """Notify reporter/admins that an issue has been resolved. Sent to real inbox."""
+    body_rows = f"""
+        <tr><td style="padding:12px 28px 0;">
+          <p style="margin:0;font-size:14px;color:#232222;line-height:1.6;">
+            The issue reported by <strong>{_esc(reporter_name)}</strong> has been marked
+            <strong style="color:#15803d;">Resolved</strong> by {_esc(resolved_by)}.
+          </p>
+        </td></tr>
+        <tr><td style="padding:12px 28px 24px;">
+          <div style="background:#F9F9F9;border:1px solid #EDE7E6;border-radius:6px;padding:14px 16px;">
+            <p style="margin:0;font-size:14px;color:#232222;line-height:1.6;white-space:pre-wrap;">{_esc(description)}</p>
+          </div>
+        </td></tr>
+    """
+    html = _issue_email_shell("Issue Resolved", "Your reported issue is resolved", body_rows)
+    _smtp_send_direct(to_email=recipient_email, subject="[Tx-Catalyst] Issue resolved", html_body=html)
+
+
 def send_submitter_status_email(
     submitter_email: str,
     submitter_name: str,

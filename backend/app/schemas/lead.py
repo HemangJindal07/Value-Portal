@@ -83,8 +83,6 @@ class LeadResponse(BaseModel):
     priority: Priority
     supporting_docs: list[Union[str, dict[str, str]]] = []
     rejection_remarks: str | None = None
-    ai_category: str | None = None
-    ai_confidence: float | None = None
     value_score: int | None = None
     created_at: datetime
     updated_at: datetime

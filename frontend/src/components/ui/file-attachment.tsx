@@ -116,7 +116,7 @@ export function FileAttachment({
           drop
         </p>
         <p className="text-xs text-[#5D5D5D] mt-0.5">
-          PDF, Word (.doc/.docx), Excel (.xls/.xlsx) — max 20 MB
+          PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), JPG, PNG — max 20 MB
         </p>
       </div>
       {error && (
@@ -130,7 +130,7 @@ export function FileAttachment({
         className="sr-only"
         onChange={(e) => handleFiles(e.target.files)}
         disabled={disabled}
-        accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/png,image/jpeg"
       />
     </div>
   );

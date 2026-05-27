@@ -18,25 +18,25 @@ export default function AuthLayout({
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/10" />
         </div>
 
-        {/* TX Logo + app name */}
-        <div className="relative mb-auto flex flex-col gap-3">
-          <div className="bg-white px-4 py-2.5 inline-block shadow-sm" style={{ borderRadius: "8px" }}>
-            <Image
-              src="/txlogo-full.webp"
-              alt="TestingXperts"
-              width={180}
-              height={42}
-              className="h-[42px] w-auto object-contain block"
-              priority
-            />
+        {/* Brand lockup — icon + name inline, divider below before the headline */}
+        <div className="relative mb-auto">
+          <div className="flex items-center gap-3">
+            <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
+              <Image
+                src="/tx-logo.png"
+                alt="TestingXperts"
+                width={34}
+                height={34}
+                className="h-[34px] w-[34px] object-contain block"
+                priority
+              />
+            </div>
+            <div className="flex flex-col leading-tight gap-0.5">
+              <span className="text-xs font-medium text-white/70">TestingXperts</span>
+              <span className="text-lg font-bold uppercase tracking-wide text-white leading-none">Tx Catalyst</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-px w-5 bg-white/40" />
-            <p className="text-white text-lg font-extrabold tracking-[0.12em]">
-              Tx Catalyst
-            </p>
-            <div className="h-px flex-1 bg-white/20" />
-          </div>
+          <div className="mt-4 h-px w-full bg-white/15" />
         </div>
 
         {/* Hero copy */}
@@ -114,11 +114,11 @@ export default function AuthLayout({
           {/* Mobile-only logo */}
           <div className="flex flex-col gap-1 mb-8 lg:hidden">
             <Image
-              src="/txlogo-full.webp"
+              src="/tx-logo.png"
               alt="TestingXperts"
-              width={200}
-              height={48}
-              className="h-10 w-auto object-contain object-left"
+              width={64}
+              height={64}
+              className="h-16 w-16 object-contain object-left"
             />
             <p className="text-[10px] font-bold text-[#B12B35] tracking-[0.18em] uppercase">
               Tx&nbsp;Catalyst&nbsp;Portal

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { formatMoney } from "@/lib/utils";
 import type { LeadWithRelations } from "@/types";
 import { LEAD_STATUS_FILTERS, LEAD_STATUS_LABELS } from "@/types";
 
@@ -243,9 +244,7 @@ function LeadsPageInner() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {lead.estimated_value
-                        ? `${lead.currency || "USD"} ${Number(lead.estimated_value).toLocaleString()}`
-                        : "—"}
+                      {formatMoney(lead.estimated_value, lead.currency)}
                     </TableCell>
                   </TableRow>
                 ))}

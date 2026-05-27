@@ -8,11 +8,14 @@ import secrets
 from app.database.supabase import get_supabase_client, get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.user import ProfileResponse, ProfileUpdate
-from app.services.email_service import send_password_reset_otp_email
+from app.services.email_service import send_password_reset_otp_email, send_signup_otp_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 SELF_ASSIGNABLE_ROLES = ("user", "sales", "practice_lead", "executive")
+
+# Only addresses on this domain may register through the public signup flow.
+ALLOWED_SIGNUP_DOMAIN = "testingxperts.com"
 
 _COMMON_PASSWORDS = {
     "12345678", "password", "password1", "password123", "qwerty123",
@@ -60,6 +63,17 @@ class ConfirmResetRequest(BaseModel):
     new_password: str
 
 
+class SignupOtpRequest(BaseModel):
+    email: EmailStr
+
+
+class SignupVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str
+    password: str
+    full_name: str
+
+
 class AuthResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -76,6 +90,15 @@ def _check_password_strength(password: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This password is too common. Please choose a stronger one.",
+        )
+
+
+def _enforce_signup_domain(email: str) -> None:
+    """Reject any signup email not on the allowed corporate domain."""
+    if not email.lower().strip().endswith("@" + ALLOWED_SIGNUP_DOMAIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Only @{ALLOWED_SIGNUP_DOMAIN} email addresses are allowed.",
         )
 
 
@@ -174,6 +197,8 @@ async def sign_up(payload: SignUpRequest):
 
 @router.post("/signin", response_model=AuthResponse)
 async def sign_in(payload: SignInRequest):
+    # TEMP: login domain restriction disabled — any email may sign in.
+    # _enforce_signup_domain(payload.email)
     _check_lockout(payload.email)
     supabase = get_supabase_client()
     try:
@@ -431,3 +456,162 @@ async def confirm_reset(payload: ConfirmResetRequest):
     _clear_failure(email)
 
     return {"message": "Password updated. You can now sign in with your new password."}
+
+
+# ── Signup OTP flow (domain-restricted, email-verified) ───────────────────────
+
+def _consume_signup_otp(email: str, code: str, *, mark_consumed: bool) -> dict:
+    """
+    Validate a signup OTP for an email. Mirrors _consume_active_otp but against
+    the signup_otps table. Raises HTTPException on any failure.
+    """
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+
+    result = (
+        supabase.table("signup_otps")
+        .select("*")
+        .ilike("email", email)
+        .is_("consumed_at", "null")
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    otp = result.data[0] if result.data else None
+
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired code. Please request a new one.",
+    )
+
+    if not otp:
+        raise invalid
+
+    expires_at = datetime.fromisoformat(otp["expires_at"])
+    if expires_at < now:
+        raise invalid
+
+    if otp["attempts"] >= _OTP_MAX_ATTEMPTS:
+        supabase.table("signup_otps").update(
+            {"consumed_at": now.isoformat()}
+        ).eq("otp_id", otp["otp_id"]).execute()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many incorrect attempts. Please request a new code.",
+        )
+
+    if _hash_otp(code.strip()) != otp["code_hash"]:
+        supabase.table("signup_otps").update(
+            {"attempts": otp["attempts"] + 1}
+        ).eq("otp_id", otp["otp_id"]).execute()
+        raise invalid
+
+    if mark_consumed:
+        supabase.table("signup_otps").update(
+            {"consumed_at": now.isoformat()}
+        ).eq("otp_id", otp["otp_id"]).execute()
+
+    return otp
+
+
+@router.post("/signup/request-otp")
+async def signup_request_otp(payload: SignupOtpRequest):
+    """
+    Step 1 — request a signup verification code. Only @testingxperts.com emails
+    are accepted. Generates a 6-digit OTP, stores it hashed, and emails it.
+    """
+    email = payload.email.strip().lower()
+    _enforce_signup_domain(email)
+
+    if _find_user_by_email(email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+
+    # Invalidate any earlier unconsumed codes for this email.
+    supabase.table("signup_otps").update(
+        {"consumed_at": now.isoformat()}
+    ).ilike("email", email).is_("consumed_at", "null").execute()
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires_at = now + timedelta(minutes=_OTP_EXPIRY_MINUTES)
+
+    supabase.table("signup_otps").insert(
+        {
+            "email": email,
+            "code_hash": _hash_otp(code),
+            "expires_at": expires_at.isoformat(),
+        }
+    ).execute()
+
+    try:
+        send_signup_otp_email(
+            recipient_email=email,
+            code=code,
+            expiry_minutes=_OTP_EXPIRY_MINUTES,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not send the verification email. Please try again shortly.",
+        )
+
+    return {"message": "A verification code has been sent to your email."}
+
+
+@router.post("/signup/verify-and-create", response_model=AuthResponse)
+async def signup_verify_and_create(payload: SignupVerifyRequest):
+    """
+    Step 2 — verify the code and create the account. Domain is re-checked so a
+    direct API call cannot bypass the restriction. Email is pre-confirmed since
+    we just verified it ourselves.
+    """
+    email = payload.email.strip().lower()
+    _enforce_signup_domain(email)
+    _check_password_strength(payload.password)
+
+    if _find_user_by_email(email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    _consume_signup_otp(email, payload.code, mark_consumed=True)
+
+    supabase = get_supabase_admin()
+    try:
+        created = supabase.auth.admin.create_user(
+            {
+                "email": email,
+                "password": payload.password,
+                "email_confirm": True,
+                "user_metadata": {"full_name": payload.full_name, "role": "user"},
+            }
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not create account: {exc}",
+        )
+
+    # Sign the new user in to return a session.
+    signin = get_supabase_client().auth.sign_in_with_password(
+        {"email": email, "password": payload.password}
+    )
+    profile = (
+        supabase.table("profiles")
+        .select("*")
+        .eq("id", created.user.id)
+        .single()
+        .execute()
+    )
+
+    return AuthResponse(
+        access_token=signin.session.access_token,
+        refresh_token=signin.session.refresh_token,
+        user=profile.data,
+    )

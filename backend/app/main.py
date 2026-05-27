@@ -7,7 +7,7 @@ import logging
 import sys
 from app.config import get_settings
 # Value Ideas API disabled — leads-only portal (re-enable: add `ideas` back to import + router below)
-from app.routers import auth, accounts, users, leads, ai, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing
+from app.routers import auth, accounts, users, leads, assignments, tracking, notifications, scoring, dashboard, governance, uploads, stakeholders, vertical_routing, exchange_rates, issues
 # from app.routers import ideas
 
 logger = logging.getLogger("main")
@@ -89,7 +89,6 @@ app.include_router(accounts.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
 # app.include_router(ideas.router, prefix="/api")
-app.include_router(ai.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(tracking.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
@@ -99,6 +98,8 @@ app.include_router(governance.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(stakeholders.router, prefix="/api")
 app.include_router(vertical_routing.router, prefix="/api")
+app.include_router(exchange_rates.router, prefix="/api")
+app.include_router(issues.router, prefix="/api")
 
 
 @app.get("/health")

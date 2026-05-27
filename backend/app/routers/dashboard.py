@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from app.database.supabase import get_supabase_admin
 from app.dependencies import get_current_user, require_role
+from app.services.fx import load_rates, to_usd
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -19,11 +20,13 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
     is_org = role in ("admin", "executive")
 
+    rates = load_rates(supabase)
+
     # ── Leads: scoped query ──────────────────────────────────────────────────
     if is_org:
-        all_leads_res = supabase.table("leads").select("lead_id, status, estimated_value").execute()
+        all_leads_res = supabase.table("leads").select("lead_id, status, estimated_value, currency").execute()
     else:
-        all_leads_res = supabase.table("leads").select("lead_id, status, estimated_value").eq("submitted_by", user_id).execute()
+        all_leads_res = supabase.table("leads").select("lead_id, status, estimated_value, currency").eq("submitted_by", user_id).execute()
     all_leads = all_leads_res.data or []
 
     total_leads = len(all_leads)
@@ -33,11 +36,11 @@ async def dashboard_stats(current_user: dict = Depends(get_current_user)):
 
     _active_statuses = {"submitted", "routing_pending", "under_review", "qualified", "opportunity_created"}
     pipeline_value = sum(
-        float(l.get("estimated_value") or 0)
+        to_usd(l.get("estimated_value"), l.get("currency"), rates)
         for l in all_leads if l["status"] in _active_statuses
     )
     won_value = sum(
-        float(l.get("estimated_value") or 0)
+        to_usd(l.get("estimated_value"), l.get("currency"), rates)
         for l in all_leads if l["status"] == "won"
     )
 
@@ -146,9 +149,11 @@ async def admin_analytics(
     """
     supabase = get_supabase_admin()
 
+    rates = load_rates(supabase)
+
     # ── 1. Leads with account context ────────────────────────────────────────
     leads_res = supabase.table("leads").select(
-        "lead_id, status, estimated_value, lead_type, "
+        "lead_id, status, estimated_value, currency, lead_type, "
         "account:accounts(account_id, account_name, region, industry)"
     ).execute()
     leads = leads_res.data or []
@@ -173,11 +178,11 @@ async def admin_analytics(
     # ── 4. Revenue / savings ──────────────────────────────────────────────────
     _active_statuses = {"submitted", "routing_pending", "under_review", "qualified", "opportunity_created"}
     pipeline_value = sum(
-        float(l.get("estimated_value") or 0)
+        to_usd(l.get("estimated_value"), l.get("currency"), rates)
         for l in non_draft if l["status"] in _active_statuses
     )
     won_value = sum(
-        float(l.get("estimated_value") or 0) for l in non_draft if l["status"] == "won"
+        to_usd(l.get("estimated_value"), l.get("currency"), rates) for l in non_draft if l["status"] == "won"
     )
     total_savings = sum(
         float(i.get("estimated_saving") or 0) for i in ideas if i["status"] == "implemented"
@@ -191,7 +196,7 @@ async def admin_analytics(
         if r not in region_map:
             region_map[r] = {"region": r, "count": 0, "value": 0.0}
         region_map[r]["count"] += 1
-        region_map[r]["value"] += float(l.get("estimated_value") or 0)
+        region_map[r]["value"] += to_usd(l.get("estimated_value"), l.get("currency"), rates)
     leads_by_region = sorted(region_map.values(), key=lambda x: x["count"], reverse=True)
 
     # ── 6. Leads by vertical (industry) ──────────────────────────────────────
@@ -296,7 +301,7 @@ async def pipeline_report(
 
     # ── Fetch leads ───────────────────────────────────────────────────────────
     lq = supabase.table("leads").select(
-        "lead_id, title, status, lead_type, estimated_value, priority, created_at, updated_at, "
+        "lead_id, title, status, lead_type, estimated_value, currency, priority, created_at, updated_at, "
         "submitted_by, "
         "account:accounts(account_id, account_name, region, industry), "
         "submitter:profiles!submitted_by(id, full_name)"
@@ -397,39 +402,44 @@ async def stakeholder_completeness(
 
 @router.get("/monthly-trend")
 async def monthly_trend(
+    year: int | None = Query(None, description="Calendar year (defaults to current year)"),
     current_user: dict = Depends(require_role("admin", "executive")),
 ):
     """
-    Real month-by-month pipeline trend for the last 12 months.
+    Real month-by-month pipeline trend for a calendar year (Jan–Dec).
+    Defaults to the current year; pass ?year= to view a previous year.
     Returns: label, pipeline_value, won_value, submissions per month.
     """
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc)
+    target_year = year or now.year
+    rates = load_rates(supabase)
 
-    # Build ordered 12-month slot map  (oldest → newest)
+    # Build the 12 calendar-month slots (Jan → Dec) for the target year.
     slots: dict[str, dict] = {}
-    for i in range(11, -1, -1):
-        total = now.year * 12 + (now.month - 1) - i
-        y = total // 12
-        m = total % 12 + 1
-        key = f"{y}-{m:02d}"
+    for m in range(1, 13):
+        key = f"{target_year}-{m:02d}"
         slots[key] = {
-            "label": datetime(y, m, 1).strftime("%b"),
+            "label": datetime(target_year, m, 1).strftime("%b"),
             "pipeline_value": 0.0,
             "won_value": 0.0,
             "submissions": 0,
+            # Lead-outcome breakdown (by lead created that month, current status)
+            "won_count": 0,
+            "lost_count": 0,
+            "open_count": 0,
         }
 
-    # Oldest month boundary for DB filter
-    oldest_key = next(iter(slots))
-    oldest_y, oldest_m = int(oldest_key[:4]), int(oldest_key[5:])
-    cutoff = datetime(oldest_y, oldest_m, 1, tzinfo=timezone.utc).isoformat()
+    # Calendar-year window [Jan 1, next-Jan 1)
+    cutoff = datetime(target_year, 1, 1, tzinfo=timezone.utc).isoformat()
+    upper = datetime(target_year + 1, 1, 1, tzinfo=timezone.utc).isoformat()
 
     # ── Leads ──────────────────────────────────────────────────────────────────
     leads_res = (
         supabase.table("leads")
-        .select("created_at, estimated_value, status")
+        .select("created_at, estimated_value, currency, status")
         .gte("created_at", cutoff)
+        .lt("created_at", upper)
         .execute()
     )
     for lead in leads_res.data or []:
@@ -439,11 +449,17 @@ async def monthly_trend(
             if key not in slots:
                 continue
             slots[key]["submissions"] += 1
-            val = float(lead.get("estimated_value") or 0)
-            if lead["status"] not in ("rejected", "lost", "routing_pending"):
+            val = to_usd(lead.get("estimated_value"), lead.get("currency"), rates)
+            status = lead["status"]
+            if status not in ("rejected", "lost", "routing_pending"):
                 slots[key]["pipeline_value"] += val
-            if lead["status"] == "won":
+            if status == "won":
                 slots[key]["won_value"] += val
+                slots[key]["won_count"] += 1
+            elif status in ("lost", "rejected", "dropped"):
+                slots[key]["lost_count"] += 1
+            else:
+                slots[key]["open_count"] += 1
         except Exception:
             pass
 
@@ -452,6 +468,7 @@ async def monthly_trend(
         supabase.table("value_ideas")
         .select("created_at")
         .gte("created_at", cutoff)
+        .lt("created_at", upper)
         .execute()
     )
     for idea in ideas_res.data or []:
@@ -469,6 +486,9 @@ async def monthly_trend(
             "pipeline_value": round(s["pipeline_value"], 0),
             "won_value":      round(s["won_value"], 0),
             "submissions":    s["submissions"],
+            "won_count":      s["won_count"],
+            "lost_count":     s["lost_count"],
+            "open_count":     s["open_count"],
         }
         for s in slots.values()
     ]

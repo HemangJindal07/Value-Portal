@@ -124,11 +124,6 @@ export interface Lead {
   priority: Priority;
   supporting_docs: (string | { url: string; name: string })[];
   rejection_remarks: string | null;
-  ai_category: string | null;
-  ai_confidence: number | null;
-  ai_summary: string | null;
-  ai_suggested_priority: string | null;
-  ai_win_probability: number | null;
   value_score: number | null;
   created_at: string;
   updated_at: string;
@@ -337,24 +332,6 @@ export interface LeaderboardEntry {
   period_label: string;
   badge: string | null;
   generated_at: string;
-}
-
-// ── M10: AI Classification ──
-
-export interface AIClassificationLog {
-  log_id: string;
-  submission_type: SubmissionType;
-  submission_id: string;
-  input_text: string;
-  raw_response: Record<string, unknown>;
-  assigned_category: string;
-  confidence_score: number;
-  ai_summary: string;
-  suggested_assignees: Record<string, unknown>;
-  human_override: boolean;
-  override_by: string | null;
-  model_used: string;
-  processed_at: string;
 }
 
 // ── M11: Dashboards ──

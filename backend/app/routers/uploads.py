@@ -22,6 +22,12 @@ ALLOWED_MIME_TYPES = {
     # Excel
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # PowerPoint
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    # Images (issue-report screenshots + supporting docs)
+    "image/png",
+    "image/jpeg",
 }
 
 
@@ -45,7 +51,7 @@ async def upload_attachment(
         ext = (file.filename or "").rsplit(".", 1)[-1].upper() if file.filename and "." in file.filename else content_type
         raise HTTPException(
             status_code=400,
-            detail=f"{ext} files are not supported. Please upload a PDF, Word (.doc/.docx), or Excel (.xls/.xlsx) file.",
+            detail=f"{ext} files are not supported. Please upload a PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), or image (PNG/JPG) file.",
         )
 
     contents = await file.read()
