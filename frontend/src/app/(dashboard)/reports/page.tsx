@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
@@ -227,59 +227,47 @@ const PIPELINE_ALL_ROLES = ["admin", "executive"];
 
 export default function ReportsPage() {
   const { token, user } = useAuth();
-  const [reportData, setReportData] = useState<UserReportData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [pipeline, setPipeline] = useState<{ leads: PipelineLead[] } | null>(null);
-  const [pipelineLoading, setPipelineLoading] = useState(true);
-
   const canSeeAll = PIPELINE_ALL_ROLES.includes(user?.role ?? "");
 
-  const fetchData = useCallback(async () => {
-    if (!token || !user?.id) return;
-    try {
+  // Cached report summary — instant on revisit, refreshed in the background.
+  const { data: reportData, isLoading: loading } = useQuery({
+    queryKey: ["report-data", user?.id],
+    queryFn: async (): Promise<UserReportData> => {
       const [leadsRaw, scoreRaw, assignmentsRaw] = await Promise.all([
-        api<LeadWithRelations[]>("/api/leads", { token }),
-        api<{ total_points: number; events?: ScoreEvent[] }>("/api/scores/me", { token }),
-        api<{ action_taken: string }[]>("/api/assignments/mine", { token }),
+        api<LeadWithRelations[]>("/api/leads", { token: token! }),
+        api<{ total_points: number; events?: ScoreEvent[] }>("/api/scores/me", { token: token! }),
+        api<{ action_taken: string }[]>("/api/assignments/mine", { token: token! }),
       ]);
 
-      const myLeads = leadsRaw.filter((l) => l.submitted_by === user.id);
+      const myLeads = leadsRaw.filter((l) => l.submitted_by === user!.id);
       const pendingReviews = Array.isArray(assignmentsRaw)
         ? assignmentsRaw.filter((a) => a.action_taken === "pending").length
         : 0;
 
-      setReportData({
+      return {
         myLeads,
         totalPoints: scoreRaw.total_points || 0,
         pendingReviews,
         scoreEvents: scoreRaw.events || [],
-      });
-    } catch {
-      toast.error("Failed to load report data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token, user?.id]);
+      };
+    },
+    enabled: !!token && !!user?.id,
+  });
 
-  const fetchPipeline = useCallback(async () => {
-    if (!token) return;
-    setPipelineLoading(true);
-    try {
+  // Cached pipeline data, keyed by scope (mine vs all).
+  const { data: pipelineData, isLoading: pipelineLoading } = useQuery({
+    queryKey: ["report-pipeline", canSeeAll],
+    queryFn: async () => {
       const scope = canSeeAll ? "all" : "mine";
       const data = await api<{ leads: PipelineLead[]; ideas: unknown[] }>(
         `/api/dashboard/pipeline?scope=${scope}`,
-        { token }
+        { token: token! }
       );
-      setPipeline({ leads: data.leads ?? [] });
-    } catch {
-      toast.error("Failed to load pipeline data.");
-    } finally {
-      setPipelineLoading(false);
-    }
-  }, [token, canSeeAll]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { fetchPipeline(); }, [fetchPipeline]);
+      return { leads: data.leads ?? [] };
+    },
+    enabled: !!token,
+  });
+  const pipeline = pipelineData ?? null;
 
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
@@ -453,7 +441,7 @@ export default function ReportsPage() {
               <BarChart3 className="h-4 w-4 text-[#B12B35]" />
               My Lead Funnel
             </CardTitle>
-            <CardDescription>Your {reportData.myLeads.length} leads by current status</CardDescription>
+            <CardDescription>Your {reportData.myLeads.length} lead{reportData.myLeads.length !== 1 ? "s" : ""} by current status</CardDescription>
           </CardHeader>
           <CardContent>
             <StatusFunnel data={leadsByStatus} total={reportData.myLeads.length} color="#B12B35" />

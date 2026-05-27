@@ -80,8 +80,12 @@ export async function updateSession(request: NextRequest) {
   });
 
   const pathname = request.nextUrl.pathname;
+  // Public pages reachable without a session. /forgot-password is the OTP-based
+  // password reset flow, so unauthenticated users must be allowed to load it.
   const isAuthPage =
-    pathname.startsWith("/login") || pathname.startsWith("/register");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password");
 
   try {
     const {

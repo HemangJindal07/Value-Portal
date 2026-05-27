@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import {
@@ -750,16 +751,21 @@ function SectionLabel({ icon: Icon, label, color }: { icon: React.ElementType; l
 // ── Mini Leaderboard widget ───────────────────────────────────────────────
 
 function MiniLeaderboard({ token }: { token: string }) {
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [open, setOpen] = useState(false);
   const [allEntries, setAllEntries] = useState<LeaderboardEntry[]>([]);
   const [loadingAll, setLoadingAll] = useState(false);
 
-  useEffect(() => {
-    api<LeaderboardEntry[]>("/api/scores/leaderboard?limit=10", { token })
-      .then((data) => setEntries(Array.isArray(data) ? data.slice(0, 10) : []))
-      .catch(() => {});
-  }, [token]);
+  // Cached top-10 — instant on revisit, refreshed in the background.
+  const { data: entriesData, isLoading: loading } = useQuery({
+    queryKey: ["mini-leaderboard"],
+    queryFn: async () => {
+      const data = await api<LeaderboardEntry[]>("/api/scores/leaderboard?limit=10", { token });
+      return Array.isArray(data) ? data.slice(0, 10) : [];
+    },
+    enabled: !!token,
+    refetchInterval: 15_000,
+  });
+  const entries = entriesData ?? [];
 
   const openModal = async () => {
     setOpen(true);
@@ -809,7 +815,9 @@ function MiniLeaderboard({ token }: { token: string }) {
           <CardDescription className="text-[11px]">Top contributors by value points</CardDescription>
         </CardHeader>
         <CardContent className="p-0 pb-1">
-          {entries.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-muted-foreground px-4 py-3">Loading…</p>
+          ) : entries.length === 0 ? (
             <p className="text-sm text-muted-foreground px-4 py-3">No scores yet.</p>
           ) : (
             <div>{entries.map((e) => renderRow(e))}</div>
@@ -1807,50 +1815,55 @@ type UserDashData = {
   leadsByStatus: Record<string, number>;
 };
 
+async function fetchUserDashData(
+  token: string,
+  userId: string
+): Promise<UserDashData> {
+  const [leadsRaw, scoreRaw] = await Promise.all([
+    api<LeadWithRelations[]>("/api/leads", { token }),
+    // api<IdeaWithRelations[]>("/api/ideas", { token }), // Value Ideas disabled
+    api<{ total_points: number }>("/api/scores/me", { token }),
+  ]);
+
+  const myLeads = leadsRaw.filter((l) => l.submitted_by === userId);
+
+  const leadsByStatus = myLeads.reduce<Record<string, number>>((acc, l) => {
+    acc[l.status] = (acc[l.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const myUnderReview = myLeads.filter((l) =>
+    ["submitted", "routing_pending", "under_review"].includes(l.status)
+  ).length;
+
+  return {
+    myLeads: myLeads.length,
+    myScore: scoreRaw.total_points || 0,
+    myUnderReview,
+    leadsByStatus,
+  };
+}
+
 function UserDashboard({
   token, userName, userId,
 }: {
   token: string; userName: string; userId: string;
 }) {
-  const [data, setData] = useState<UserDashData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // React Query caches this result. On revisit the cached data renders
+  // instantly (no spinner) while a background refetch keeps it current.
+  // refetchInterval polls every 15s so newly routed leads surface quickly.
+  const { data, isLoading } = useQuery({
+    queryKey: ["user-dashboard", userId],
+    queryFn: () => fetchUserDashData(token, userId),
+    enabled: !!token && !!userId,
+    refetchInterval: 15_000,
+  });
 
-  const load = useCallback(async () => {
-    try {
-      const [leadsRaw, scoreRaw] = await Promise.all([
-        api<LeadWithRelations[]>("/api/leads", { token }),
-        // api<IdeaWithRelations[]>("/api/ideas", { token }), // Value Ideas disabled
-        api<{ total_points: number }>("/api/scores/me", { token }),
-      ]);
-
-      const myLeads = leadsRaw.filter((l) => l.submitted_by === userId);
-
-      const leadsByStatus = myLeads.reduce<Record<string, number>>((acc, l) => {
-        acc[l.status] = (acc[l.status] || 0) + 1;
-        return acc;
-      }, {});
-
-      const myUnderReview = myLeads.filter((l) =>
-        ["submitted", "routing_pending", "under_review"].includes(l.status)
-      ).length;
-
-      setData({
-        myLeads: myLeads.length,
-        myScore: scoreRaw.total_points || 0,
-        myUnderReview,
-        leadsByStatus,
-      });
-    } catch { /* silent */ }
-    finally { setLoading(false); }
-  }, [token, userId]);
-
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
-  }, [load]);
-
-  if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
+  // Only show the full-page loader on the very first load, when there is
+  // no cached data yet. On every later visit `data` is already populated.
+  if (isLoading && !data) {
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading dashboard…</div>;
+  }
 
   const d = data ?? { myLeads: 0, myScore: 0, myUnderReview: 0, leadsByStatus: {} };
 

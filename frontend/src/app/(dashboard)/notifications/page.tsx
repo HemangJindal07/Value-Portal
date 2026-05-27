@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
@@ -92,25 +93,24 @@ export default function NotificationsPage() {
   const { token, user } = useAuth();
   const router = useRouter();
   const isOrgRole = user?.role === "admin" || user?.role === "executive";
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("all");
 
-  const fetchNotifications = useCallback(async () => {
-    if (!token) return;
-    try {
-      const data = await api<Notification[]>("/api/notifications", { token });
-      setNotifications(data);
-    } catch {
-      toast.error("Failed to load notifications");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  // Cached notification list — instant on revisit, refreshed in the background.
+  const { data: notificationsData, isLoading: loading } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => {
+      try {
+        return await api<Notification[]>("/api/notifications", { token: token! });
+      } catch {
+        toast.error("Failed to load notifications");
+        throw new Error("Failed to load notifications");
+      }
+    },
+    enabled: !!token,
+    refetchInterval: 30_000,
+  });
+  const notifications = notificationsData ?? [];
 
   const markAsRead = async (ids: string[]) => {
     if (!token) return;
@@ -120,11 +120,8 @@ export default function NotificationsPage() {
         token,
         body: { notification_ids: ids },
       });
-      setNotifications((prev) =>
-        prev.map((n) =>
-          ids.includes(n.notification_id) ? { ...n, is_read: true } : n
-        )
-      );
+      // Refresh the cached list so the read state is reflected immediately.
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     } catch {
       toast.error("Failed to mark as read");
     }
@@ -137,7 +134,7 @@ export default function NotificationsPage() {
         method: "PATCH",
         token,
       });
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
       toast.success("All notifications marked as read");
     } catch {
       toast.error("Failed to mark all as read");

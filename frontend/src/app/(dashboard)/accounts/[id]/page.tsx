@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, Pencil, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,53 +75,48 @@ export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const router = useRouter();
-  const [account, setAccount] = useState<Account | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [dh, setDh] = useState<UserProfile | null>(null);
-  const [du, setDu] = useState<UserProfile | null>(null);
-  const [sales, setSales] = useState<UserProfile | null>(null);
-  const [accountLeads, setAccountLeads] = useState<Lead[]>([]);
 
-  useEffect(() => {
-    if (!token || !id) return;
-    api<Account>(`/api/accounts/${id}`, { token })
-      .then((acct) => {
-        setAccount(acct);
-        // Resolve stakeholder names in parallel
-        const fetches: Promise<void>[] = [];
-        if (acct.account_owner_id) {
-          fetches.push(
-            api<UserProfile>(`/api/users/${acct.account_owner_id}`, { token })
-              .then(setDh)
-              .catch(() => setDh(null))
-          );
+  // Cached account + its stakeholder profiles, resolved in one query.
+  const { data: accountData, isLoading: loading, isError } = useQuery({
+    queryKey: ["account", id],
+    queryFn: async () => {
+      const acct = await api<Account>(`/api/accounts/${id}`, { token: token! });
+      const resolveUser = async (userId?: string | null) => {
+        if (!userId) return null;
+        try {
+          return await api<UserProfile>(`/api/users/${userId}`, { token: token! });
+        } catch {
+          return null;
         }
-        if (acct.practice_leader_id) {
-          fetches.push(
-            api<UserProfile>(`/api/users/${acct.practice_leader_id}`, { token })
-              .then(setDu)
-              .catch(() => setDu(null))
-          );
-        }
-        if (acct.sales_lead_id) {
-          fetches.push(
-            api<UserProfile>(`/api/users/${acct.sales_lead_id}`, { token })
-              .then(setSales)
-              .catch(() => setSales(null))
-          );
-        }
-        return Promise.all(fetches);
-      })
-      .catch(() => router.push("/accounts"))
-      .finally(() => setLoading(false));
-  }, [token, id, router]);
+      };
+      const [dh, du, sales] = await Promise.all([
+        resolveUser(acct.account_owner_id),
+        resolveUser(acct.practice_leader_id),
+        resolveUser(acct.sales_lead_id),
+      ]);
+      return { account: acct, dh, du, sales };
+    },
+    enabled: !!token && !!id,
+  });
 
+  // A missing/forbidden account redirects back to the list.
   useEffect(() => {
-    if (!token || !id) return;
-    api<Lead[]>(`/api/leads?account_id=${encodeURIComponent(id)}`, { token })
-      .then(setAccountLeads)
-      .catch(() => setAccountLeads([]));
-  }, [token, id]);
+    if (isError) router.push("/accounts");
+  }, [isError, router]);
+
+  const account = accountData?.account ?? null;
+  const dh = accountData?.dh ?? null;
+  const du = accountData?.du ?? null;
+  const sales = accountData?.sales ?? null;
+
+  // Cached leads for this account.
+  const { data: accountLeadsData } = useQuery({
+    queryKey: ["account-leads", id],
+    queryFn: () =>
+      api<Lead[]>(`/api/leads?account_id=${encodeURIComponent(id)}`, { token: token! }),
+    enabled: !!token && !!id,
+  });
+  const accountLeads = accountLeadsData ?? [];
 
   if (loading) {
     return (

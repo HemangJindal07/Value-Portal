@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, Suspense } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import {
   GitMerge,
@@ -300,10 +301,24 @@ function StakeholderMappingInner() {
   // An account_id may arrive as a URL param (e.g. deep-link) — pre-select it.
   const presetAccountId = searchParams.get("account_id");
   const [accountId, setAccountId] = useState<string | null>(presetAccountId || null);
-  const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Cached stakeholder chain for the selected account.
+  // NOTE: all hooks must run before the admin-access early return below —
+  // React requires hooks to be called in the same order on every render.
+  const { data: stakeholdersData, isLoading: loading } = useQuery({
+    queryKey: ["stakeholders", accountId],
+    queryFn: () =>
+      api<Stakeholder[]>(`/api/stakeholders?account_id=${accountId}`, { token: token! }),
+    enabled: !!accountId && !!token,
+  });
+  const stakeholders = stakeholdersData ?? [];
+
+  // Refresh the cached chain after any add/update/remove/reorder.
+  const refreshStakeholders = () =>
+    queryClient.invalidateQueries({ queryKey: ["stakeholders", accountId] });
 
   if (user && user.role !== "admin") {
     return (
@@ -312,23 +327,6 @@ function StakeholderMappingInner() {
       </div>
     );
   }
-
-  const fetchStakeholders = useCallback(async () => {
-    if (!accountId || !token) return;
-    setLoading(true);
-    try {
-      const data = await api<Stakeholder[]>(`/api/stakeholders?account_id=${accountId}`, { token });
-      setStakeholders(data);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to load stakeholders.");
-    } finally {
-      setLoading(false);
-    }
-  }, [accountId, token]);
-
-  useEffect(() => {
-    fetchStakeholders();
-  }, [fetchStakeholders]);
 
   // ── Reorder helpers ────────────────────────────────────────────────────────
 
@@ -342,7 +340,7 @@ function StakeholderMappingInner() {
         body: { items },
         token,
       });
-      setStakeholders(reordered.map((s, idx) => ({ ...s, step_order: idx + 1 })));
+      refreshStakeholders();
     } catch {
       toast.error("Failed to save order.");
     } finally {
@@ -375,7 +373,7 @@ function StakeholderMappingInner() {
         token,
       });
       toast.success("Updated.");
-      fetchStakeholders();
+      refreshStakeholders();
     } catch {
       toast.error("Failed to update.");
     }
@@ -388,7 +386,7 @@ function StakeholderMappingInner() {
     try {
       await api(`/api/stakeholders/${id}`, { method: "DELETE", token });
       toast.success("Reviewer removed.");
-      setStakeholders((prev) => prev.filter((s) => s.id !== id));
+      refreshStakeholders();
     } catch {
       toast.error("Failed to remove.");
     }
@@ -425,7 +423,6 @@ function StakeholderMappingInner() {
             value={accountId ?? ""}
             onChange={(id) => {
               setAccountId(id || null);
-              setStakeholders([]);
               setShowAddForm(false);
             }}
             token={token ?? ""}
@@ -490,7 +487,7 @@ function StakeholderMappingInner() {
                 accountId={accountId}
                 token={token ?? ""}
                 nextStep={nextStep}
-                onAdded={() => { setShowAddForm(false); fetchStakeholders(); }}
+                onAdded={() => { setShowAddForm(false); refreshStakeholders(); }}
                 onCancel={() => setShowAddForm(false)}
               />
             ) : (

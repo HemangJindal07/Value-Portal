@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Plus, Target, Search } from "lucide-react";
@@ -32,6 +33,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { LeadWithRelations } from "@/types";
+import { LEAD_STATUS_FILTERS, LEAD_STATUS_LABELS } from "@/types";
 
 const statusColors: Record<string, string> = {
   draft: "bg-[#C5C5C5]/30 text-[#5D5D5D]",
@@ -57,19 +59,6 @@ const typeLabels: Record<string, string> = {
   new_lead: "New Lead",
 };
 
-const statusFilterLabels: Record<string, string> = {
-  "": "All Statuses",
-  submitted: "Submitted",
-  routing_pending: "Routing Pending",
-  under_review: "Under Review",
-  qualified: "Qualified",
-  opportunity_created: "Opportunity Created",
-  approved: "Approved",
-  won: "Won",
-  lost: "Lost",
-  rejected: "Rejected",
-};
-
 // Roles that can see ALL leads across the org
 const LEADS_ALL_ROLES = ["admin", "executive", "sales"];
 
@@ -77,7 +66,6 @@ function LeadsPageInner() {
   const { token, user } = useAuth();
   const searchParams = useSearchParams();
   const canSeeAll = LEADS_ALL_ROLES.includes(user?.role ?? "");
-  const [leads, setLeads] = useState<LeadWithRelations[]>([]);
   const [search, setSearch] = useState("");
   // Initialize status filter from ?status= URL param so dashboard cards
   // (e.g. "Under Review" → /leads?status=under_review) pre-filter the list.
@@ -89,33 +77,32 @@ function LeadsPageInner() {
     return raw;
   })();
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
-  const [loading, setLoading] = useState(true);
   // Highlight routing_pending rows when navigated from dashboard alert
   const highlightPending = (searchParams.get("status") ?? "")
     .split(",")
     .map((s) => s.trim())
     .includes("routing_pending");
 
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (statusFilter) params.set("status", statusFilter);
-    const qs = params.toString() ? `?${params.toString()}` : "";
+  // Cached lead list keyed by search + status filter. Each filter combination
+  // gets its own cache entry, so switching back to a prior filter is instant.
+  const { data: leadsData, isLoading: loading } = useQuery({
+    queryKey: ["leads", { search, statusFilter, canSeeAll, userId: user?.id }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (statusFilter) params.set("status", statusFilter);
+      const qs = params.toString() ? `?${params.toString()}` : "";
 
-    api<LeadWithRelations[]>(`/api/leads${qs}`, { token })
-      .then((data) => {
-        // user and practice_lead only see their own submissions
-        if (!canSeeAll && user?.id) {
-          setLeads(data.filter((l) => l.submitted_by === user.id));
-        } else {
-          setLeads(data);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [token, search, statusFilter, canSeeAll, user?.id]);
+      const data = await api<LeadWithRelations[]>(`/api/leads${qs}`, { token: token! });
+      // user and practice_lead only see their own submissions
+      if (!canSeeAll && user?.id) {
+        return data.filter((l) => l.submitted_by === user.id);
+      }
+      return data;
+    },
+    enabled: !!token,
+  });
+  const leads = leadsData ?? [];
 
   return (
     <div className="space-y-6">
@@ -151,21 +138,17 @@ function LeadsPageInner() {
           <SelectTrigger className="w-44">
             <SelectValue placeholder="All Statuses">
               {(val: string | null) =>
-                statusFilterLabels[val ?? ""] ?? "All Statuses"
+                LEAD_STATUS_LABELS[val ?? ""] ?? "All Statuses"
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All Statuses</SelectItem>
-            <SelectItem value="submitted">Submitted</SelectItem>
-            <SelectItem value="routing_pending">Routing Pending</SelectItem>
-            <SelectItem value="under_review">Under Review</SelectItem>
-            <SelectItem value="qualified">Qualified</SelectItem>
-            <SelectItem value="opportunity_created">Opportunity Created</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="won">Won</SelectItem>
-            <SelectItem value="lost">Lost</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
+            {LEAD_STATUS_FILTERS.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -261,7 +244,7 @@ function LeadsPageInner() {
                     </TableCell>
                     <TableCell className="text-right">
                       {lead.estimated_value
-                        ? `$${Number(lead.estimated_value).toLocaleString()}`
+                        ? `${lead.currency || "USD"} ${Number(lead.estimated_value).toLocaleString()}`
                         : "—"}
                     </TableCell>
                   </TableRow>

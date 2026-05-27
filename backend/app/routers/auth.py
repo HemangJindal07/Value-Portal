@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from typing import Literal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import hashlib
+import secrets
+
 from app.database.supabase import get_supabase_client, get_supabase_admin
 from app.dependencies import get_current_user
 from app.schemas.user import ProfileResponse, ProfileUpdate
+from app.services.email_service import send_password_reset_otp_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -20,6 +24,10 @@ _LOCKOUT_THRESHOLD = 5
 _LOCKOUT_MINUTES = 15
 _failed_attempts: dict[str, dict] = {}
 
+# ── Password-reset OTP config ─────────────────────────────────────────────────
+_OTP_EXPIRY_MINUTES = 10
+_OTP_MAX_ATTEMPTS = 5  # wrong-code guesses allowed per OTP before it is invalidated
+
 
 class SignUpRequest(BaseModel):
     email: str
@@ -34,6 +42,21 @@ class SignInRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyOtpRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class ConfirmResetRequest(BaseModel):
+    email: EmailStr
+    code: str
     new_password: str
 
 
@@ -84,6 +107,26 @@ def _record_failure(email: str) -> None:
 
 def _clear_failure(email: str) -> None:
     _failed_attempts.pop(email.lower(), None)
+
+
+# ── Password-reset OTP helpers ────────────────────────────────────────────────
+
+def _hash_otp(code: str) -> str:
+    """Hash an OTP code so plaintext codes are never stored at rest."""
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _find_user_by_email(email: str) -> dict | None:
+    """Return the profiles row for an email, or None if no such active user."""
+    result = (
+        get_supabase_admin()
+        .table("profiles")
+        .select("*")
+        .ilike("email", email)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
 
 
 @router.post("/signup", response_model=AuthResponse)
@@ -230,3 +273,161 @@ async def reset_password(
         .execute()
     )
     return result.data[0] if result.data else {"must_reset_password": False}
+
+
+# ── Forgot-password OTP flow ──────────────────────────────────────────────────
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    """
+    Step 1 — request a reset code. Generates a 6-digit OTP, stores it hashed
+    with a short expiry, and emails it to the user.
+
+    Always returns a generic success response so the endpoint cannot be used to
+    enumerate which emails are registered.
+    """
+    email = payload.email.strip().lower()
+    generic_ok = {
+        "message": "If an account exists for that email, a reset code has been sent."
+    }
+
+    user = _find_user_by_email(email)
+    if not user:
+        return generic_ok
+
+    supabase = get_supabase_admin()
+
+    # Invalidate any earlier unconsumed codes for this email.
+    now = datetime.now(timezone.utc)
+    supabase.table("password_reset_otps").update(
+        {"consumed_at": now.isoformat()}
+    ).ilike("email", email).is_("consumed_at", "null").execute()
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires_at = now + timedelta(minutes=_OTP_EXPIRY_MINUTES)
+
+    supabase.table("password_reset_otps").insert(
+        {
+            "email": email,
+            "code_hash": _hash_otp(code),
+            "expires_at": expires_at.isoformat(),
+        }
+    ).execute()
+
+    try:
+        send_password_reset_otp_email(
+            recipient_email=user["email"],
+            recipient_name=user.get("full_name") or "there",
+            code=code,
+            expiry_minutes=_OTP_EXPIRY_MINUTES,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not send the reset email. Please try again shortly.",
+        )
+
+    return generic_ok
+
+
+def _consume_active_otp(email: str, code: str, *, mark_consumed: bool) -> dict:
+    """
+    Validate an OTP for an email. Raises HTTPException on any failure.
+    On success, optionally marks the OTP consumed and returns the row.
+    """
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+
+    result = (
+        supabase.table("password_reset_otps")
+        .select("*")
+        .ilike("email", email)
+        .is_("consumed_at", "null")
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    otp = result.data[0] if result.data else None
+
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired code. Please request a new one.",
+    )
+
+    if not otp:
+        raise invalid
+
+    expires_at = datetime.fromisoformat(otp["expires_at"])
+    if expires_at < now:
+        raise invalid
+
+    if otp["attempts"] >= _OTP_MAX_ATTEMPTS:
+        supabase.table("password_reset_otps").update(
+            {"consumed_at": now.isoformat()}
+        ).eq("otp_id", otp["otp_id"]).execute()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many incorrect attempts. Please request a new code.",
+        )
+
+    if _hash_otp(code.strip()) != otp["code_hash"]:
+        supabase.table("password_reset_otps").update(
+            {"attempts": otp["attempts"] + 1}
+        ).eq("otp_id", otp["otp_id"]).execute()
+        raise invalid
+
+    if mark_consumed:
+        supabase.table("password_reset_otps").update(
+            {"consumed_at": now.isoformat()}
+        ).eq("otp_id", otp["otp_id"]).execute()
+
+    return otp
+
+
+@router.post("/verify-otp")
+async def verify_otp(payload: VerifyOtpRequest):
+    """
+    Step 2 — verify the 6-digit code without consuming it. Lets the frontend
+    confirm the code before showing the new-password form.
+    """
+    email = payload.email.strip().lower()
+    _consume_active_otp(email, payload.code, mark_consumed=False)
+    return {"verified": True}
+
+
+@router.post("/confirm-reset")
+async def confirm_reset(payload: ConfirmResetRequest):
+    """
+    Step 3 — re-verify the code, then set the new password in Supabase Auth.
+    The OTP is consumed here so it cannot be reused.
+    """
+    email = payload.email.strip().lower()
+    _check_password_strength(payload.new_password)
+
+    user = _find_user_by_email(email)
+    if not user:
+        # Code was issued for an email that no longer has a profile.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired code. Please request a new one.",
+        )
+
+    # Verify and consume the OTP in one step.
+    _consume_active_otp(email, payload.code, mark_consumed=True)
+
+    supabase = get_supabase_admin()
+    try:
+        supabase.auth.admin.update_user_by_id(
+            user["id"],
+            {"password": payload.new_password},
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not update password: {exc}",
+        )
+
+    # Clear any login lockout so the user can sign in immediately.
+    _clear_failure(email)
+
+    return {"message": "Password updated. You can now sign in with your new password."}

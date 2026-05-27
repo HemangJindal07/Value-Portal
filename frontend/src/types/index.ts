@@ -56,6 +56,54 @@ export type LeadStatus =
   | "lost"
   | "dropped"
   | "rejected";
+
+/**
+ * Single source of truth for the lead-status filter dropdowns
+ * (Leads page, My Submissions tab, etc.). Statuses are part of the
+ * business workflow, not user data — they are intentionally static.
+ * Adding a new lead status means: (1) extend `LeadStatus` above,
+ * (2) add an entry here, (3) update the DB CHECK constraint.
+ *
+ * `draft` and `dropped` are omitted on purpose — they are internal
+ * states not surfaced as user-facing filter options.
+ */
+export const LEAD_STATUS_FILTERS: { value: LeadStatus; label: string }[] = [
+  { value: "submitted", label: "Submitted" },
+  { value: "routing_pending", label: "Routing Pending" },
+  { value: "under_review", label: "Under Review" },
+  { value: "qualified", label: "Qualified" },
+  { value: "opportunity_created", label: "Opportunity Created" },
+  { value: "approved", label: "Approved" },
+  { value: "won", label: "Won" },
+  { value: "lost", label: "Lost" },
+  { value: "rejected", label: "Rejected" },
+];
+
+/**
+ * Display label for EVERY lead status — including `draft` and `dropped`,
+ * which are not filter options but can still appear on a lead's status badge.
+ * Use this for rendering a lead's current status anywhere in the UI.
+ */
+export const LEAD_STATUS_DISPLAY: Record<LeadStatus, string> = {
+  draft: "Draft",
+  submitted: "Submitted",
+  routing_pending: "Routing Pending",
+  under_review: "Under Review",
+  qualified: "Qualified",
+  opportunity_created: "Opportunity Created",
+  approved: "Approved",
+  won: "Won",
+  lost: "Lost",
+  dropped: "Dropped",
+  rejected: "Rejected",
+};
+
+/** value → label lookup for the filter dropdown, including "" → "All Statuses". */
+export const LEAD_STATUS_LABELS: Record<string, string> = {
+  "": "All Statuses",
+  ...LEAD_STATUS_DISPLAY,
+};
+
 export type Priority = "high" | "medium" | "low";
 export type ServiceType = "QE" | "DE" | "AI" | "Data" | "Insurance";
 

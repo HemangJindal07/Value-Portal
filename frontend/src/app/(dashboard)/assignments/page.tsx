@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ClipboardList, ExternalLink, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, Target, Briefcase, Trophy, TrendingDown, UserPlus } from "lucide-react";
@@ -34,6 +35,8 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { AssignmentWithRelations, LeadWithRelations } from "@/types";
+import { LEAD_STATUS_FILTERS, LEAD_STATUS_LABELS, LEAD_STATUS_DISPLAY } from "@/types";
+import type { LeadStatus } from "@/types";
 
 const roleLabels: Record<string, string> = {
   account_owner: "Delivery Head (DH)",
@@ -641,21 +644,6 @@ const accountTypeLabels: Record<string, string> = {
   new_lead:     "New Account",
 };
 
-const SUBMISSION_STATUS_LABELS: Record<string, string> = {
-  "":                  "All Statuses",
-  submitted:           "Submitted",
-  routing_pending:     "Routing Pending",
-  under_review:        "Under Review",
-  qualified:           "Qualified",
-  opportunity_created: "Opportunity Created",
-  approved:            "Approved",
-  won:                 "Won",
-  lost:                "Lost",
-  rejected:            "Rejected",
-  dropped:             "Dropped",
-  draft:               "Draft",
-};
-
 function MySubmissionsTab({
   leads,
   loading,
@@ -703,21 +691,17 @@ function MySubmissionsTab({
           <StatusSelectTrigger className="w-44">
             <StatusSelectValue placeholder="All Statuses">
               {(val: string | null) =>
-                SUBMISSION_STATUS_LABELS[val ?? ""] ?? "All Statuses"
+                LEAD_STATUS_LABELS[val ?? ""] ?? "All Statuses"
               }
             </StatusSelectValue>
           </StatusSelectTrigger>
           <StatusSelectContent>
             <StatusSelectItem value="">All Statuses</StatusSelectItem>
-            <StatusSelectItem value="submitted">Submitted</StatusSelectItem>
-            <StatusSelectItem value="routing_pending">Routing Pending</StatusSelectItem>
-            <StatusSelectItem value="under_review">Under Review</StatusSelectItem>
-            <StatusSelectItem value="qualified">Qualified</StatusSelectItem>
-            <StatusSelectItem value="opportunity_created">Opportunity Created</StatusSelectItem>
-            <StatusSelectItem value="approved">Approved</StatusSelectItem>
-            <StatusSelectItem value="won">Won</StatusSelectItem>
-            <StatusSelectItem value="lost">Lost</StatusSelectItem>
-            <StatusSelectItem value="rejected">Rejected</StatusSelectItem>
+            {LEAD_STATUS_FILTERS.map((s) => (
+              <StatusSelectItem key={s.value} value={s.value}>
+                {s.label}
+              </StatusSelectItem>
+            ))}
           </StatusSelectContent>
         </StatusSelect>
       </div>
@@ -761,7 +745,7 @@ function MySubmissionsTab({
               <TableBody>
                 {filtered.map((lead) => {
                   const cd = lead.contact_details as { name?: string; email?: string; country?: string; title?: string } | null;
-                  const statusDisplay = SUBMISSION_STATUS_LABELS[lead.status] ?? lead.status.replace(/_/g, " ");
+                  const statusDisplay = LEAD_STATUS_DISPLAY[lead.status as LeadStatus] ?? lead.status.replace(/_/g, " ");
                   return (
                   <TableRow key={lead.lead_id} className={highlightId && lead.lead_id === highlightId ? "bg-amber-100/60 dark:bg-amber-500/15 ring-1 ring-amber-400/60" : ""}>
                     <TableCell>
@@ -845,11 +829,7 @@ function AssignmentsPageInner() {
   const urlTab = searchParams.get("tab");
   const highlightId = searchParams.get("highlight");
 
-  const [myAssignments, setMyAssignments] = useState<AssignmentWithRelations[]>([]);
-  const [allAssignments, setAllAssignments] = useState<AssignmentWithRelations[]>([]);
-  const [myLeads, setMyLeads] = useState<LeadWithRelations[]>([]);
-  const [orgLeads, setOrgLeads] = useState<LeadWithRelations[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState<ReviewPending | null>(null);
@@ -880,36 +860,62 @@ function AssignmentsPageInner() {
   // Don't render the page content until the user role is resolved to prevent tab flash
   const userResolved = user !== null && user !== undefined;
 
-  const fetchAssignments = useCallback(async (showSpinner = false) => {
-    if (!token || !user) return;
-    if (showSpinner) setLoading(true);
-    try {
-      const mine = await api<AssignmentWithRelations[]>("/api/assignments/mine", { token });
-      setMyAssignments(mine);
-
+  // Cached assignments + leads. On revisit the cached lists render instantly
+  // while a background refetch keeps them current. After an approve/reject/
+  // won/lost action the query is invalidated so the lists refresh immediately.
+  const { data: assignmentsData, isLoading: loading } = useQuery({
+    queryKey: ["assignments", { isOrgRole, userId: user?.id }],
+    queryFn: async () => {
+      const mine = await api<AssignmentWithRelations[]>("/api/assignments/mine", { token: token! });
       if (isOrgRole) {
-        const all = await api<AssignmentWithRelations[]>("/api/assignments/all", { token });
-        setAllAssignments(all);
-        const leads = await api<LeadWithRelations[]>("/api/leads", { token });
-        setOrgLeads(Array.isArray(leads) ? leads : []);
-      } else {
-        const leads = await api<LeadWithRelations[]>("/api/leads", { token });
-        // const ideas = await api<IdeaWithRelations[]>("/api/ideas", { token }); // Value Ideas disabled
-        setMyLeads(leads.filter((l) => l.submitted_by === user.id));
+        const all = await api<AssignmentWithRelations[]>("/api/assignments/all", { token: token! });
+        const leads = await api<LeadWithRelations[]>("/api/leads", { token: token! });
+        return {
+          myAssignments: mine,
+          allAssignments: all,
+          orgLeads: Array.isArray(leads) ? leads : [],
+          myLeads: [] as LeadWithRelations[],
+        };
       }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to load assignments");
-    } finally {
-      setLoading(false);
-    }
-  }, [token, isOrgRole, user]);
+      const leads = await api<LeadWithRelations[]>("/api/leads", { token: token! });
+      return {
+        myAssignments: mine,
+        allAssignments: [] as AssignmentWithRelations[],
+        orgLeads: [] as LeadWithRelations[],
+        myLeads: leads.filter((l) => l.submitted_by === user!.id),
+      };
+    },
+    enabled: !!token && !!user,
+    refetchInterval: 15_000,
+  });
 
-  const initialLoadDone = useRef(false);
-  useEffect(() => {
-    // Show spinner only on first load; subsequent calls (tab-switch refetch) are silent
-    fetchAssignments(!initialLoadDone.current);
-    initialLoadDone.current = true;
-  }, [fetchAssignments]);
+  const myAssignments = assignmentsData?.myAssignments ?? [];
+  const allAssignments = assignmentsData?.allAssignments ?? [];
+  const myLeads = assignmentsData?.myLeads ?? [];
+  const orgLeads = assignmentsData?.orgLeads ?? [];
+
+  // Refresh the cached assignment lists after an action.
+  const refreshAssignments = () =>
+    queryClient.invalidateQueries({ queryKey: ["assignments"] });
+
+  // Optimistically drop an acted-on assignment from the cached lists so the row
+  // disappears instantly, instead of waiting on the (multi-request) background
+  // refetch. The subsequent invalidateQueries reconciles the lists.
+  const removeAssignmentFromCache = (assignmentId: string) => {
+    queryClient.setQueriesData<{
+      myAssignments: AssignmentWithRelations[];
+      allAssignments: AssignmentWithRelations[];
+      orgLeads: LeadWithRelations[];
+      myLeads: LeadWithRelations[];
+    }>({ queryKey: ["assignments"] }, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        myAssignments: old.myAssignments.filter((a) => a.assignment_id !== assignmentId),
+        allAssignments: old.allAssignments.filter((a) => a.assignment_id !== assignmentId),
+      };
+    });
+  };
 
   const handleAction = async (assignmentId: string, action: string, notes?: string) => {
     if (!token) return;
@@ -930,7 +936,9 @@ function AssignmentsPageInner() {
       });
       toast.success(`Marked as ${action}`);
       setReviewPending(null);
-      await fetchAssignments();
+      // Drop the row immediately, then reconcile with the server in the background.
+      removeAssignmentFromCache(assignmentId);
+      refreshAssignments();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -1058,7 +1066,9 @@ function AssignmentsPageInner() {
       });
       toast.success(`Lead marked as ${action === "won" ? "Won" : "Lost"}`);
       setWlConfirm(null);
-      await fetchAssignments();
+      // Drop the row immediately, then reconcile with the server in the background.
+      removeAssignmentFromCache(assignmentId);
+      refreshAssignments();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -1075,7 +1085,7 @@ function AssignmentsPageInner() {
         onClose={() => setAssignReviewerPending(null)}
         onAssigned={() => {
           setAssignReviewerPending(null);
-          fetchAssignments();
+          refreshAssignments();
         }}
       />
       <ReviewDecisionDialog
@@ -1230,7 +1240,7 @@ function AssignmentsPageInner() {
 
         {/* My Submissions tab — user's leads only (Value Ideas disabled) */}
         {!isOrgRole && (
-          <TabsContent value="submissions">
+          <TabsContent value="submissions" className="mt-4">
             <MySubmissionsTab
               leads={myLeads}
               loading={loading}
