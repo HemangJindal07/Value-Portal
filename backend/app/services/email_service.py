@@ -16,10 +16,6 @@ logger = logging.getLogger("email_service")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-# TEST MODE: all emails are redirected to this address regardless of intended recipients.
-# Remove TEST_OVERRIDE_EMAIL and revert _smtp_send overrides before going to production.
-TEST_OVERRIDE_EMAIL = ["hemang.jindal@testingxperts.com", "bharti.thakur@testingxperts.com"]
-
 CC_ALWAYS = "hemang.jindal@testingxperts.com"
 
 
@@ -37,11 +33,6 @@ def _smtp_send(
     if not settings.smtp_user or not settings.smtp_pass:
         logger.warning("[EMAIL] SMTP credentials not configured — skipping email.")
         return
-
-    # TEST MODE: override all recipients with the test address
-    logger.info("[EMAIL] TEST MODE — redirecting to %s (intended TO: %s, CC: %s)", TEST_OVERRIDE_EMAIL, to_emails, cc_emails)
-    to_emails = list(TEST_OVERRIDE_EMAIL)
-    cc_emails  = None
 
     from_addr = f"{settings.smtp_from_name} <{settings.smtp_user}>"
     cc_list   = [e for e in (cc_emails or []) if e]
@@ -75,9 +66,9 @@ def _smtp_send(
 
 def _smtp_send_direct(to_email: str, subject: str, html_body: str) -> None:
     """
-    Send an HTML email to the real recipient, bypassing the TEST_OVERRIDE_EMAIL
-    redirect. Used for transactional auth emails (e.g. password-reset OTP) that
-    must reach the actual user even while the portal is in test mode.
+    Send an HTML email to a single real recipient with no CC. Used for
+    transactional auth emails (e.g. password-reset / signup OTP, issue
+    notifications) that go directly to one address.
     """
     settings = get_settings()
 

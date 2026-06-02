@@ -33,7 +33,7 @@ export default function AuthLayout({
             </div>
             <div className="flex flex-col leading-tight gap-0.5">
               <span className="text-xs font-medium text-white/70">TestingXperts</span>
-              <span className="text-lg font-bold uppercase tracking-wide text-white leading-none">Tx Catalyst</span>
+              <span className="text-lg font-bold tracking-wide text-white leading-none">Tx Catalyst</span>
             </div>
           </div>
           <div className="mt-4 h-px w-full bg-white/15" />
