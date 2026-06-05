@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   DollarSign,
   MessageSquareWarning,
+  FileText,
 } from "lucide-react";
 import {
   Sidebar,
@@ -51,6 +52,12 @@ const ADMIN_NAV = [
     ],
   },
   {
+    label: "Resources",
+    items: [
+      { title: "Policy & Guidelines", href: "/policy", icon: FileText },
+    ],
+  },
+  {
     label: "System",
     items: [
       { title: "Notifications",        href: "/notifications",                icon: Bell },
@@ -83,6 +90,12 @@ const EXECUTIVE_NAV = [
     ],
   },
   {
+    label: "Resources",
+    items: [
+      { title: "Policy & Guidelines", href: "/policy", icon: FileText },
+    ],
+  },
+  {
     label: "System",
     items: [
       { title: "Notifications", href: "/notifications", icon: Bell },
@@ -107,6 +120,12 @@ const USER_NAV = [
     items: [
       { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
       // { title: "Reports",  href: "/reports",     icon: BarChart3 }, // Reports hidden
+    ],
+  },
+  {
+    label: "Resources",
+    items: [
+      { title: "Policy & Guidelines", href: "/policy", icon: FileText },
     ],
   },
   {

@@ -120,7 +120,7 @@ export default function AuthLayout({
               height={64}
               className="h-16 w-16 object-contain object-left"
             />
-            <p className="text-[10px] font-bold text-[#B12B35] tracking-[0.18em] uppercase">
+            <p className="text-[10px] font-bold text-[#B12B35] tracking-[0.18em]">
               Tx&nbsp;Catalyst&nbsp;Portal
             </p>
           </div>
