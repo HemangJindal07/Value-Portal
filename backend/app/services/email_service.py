@@ -16,7 +16,7 @@ logger = logging.getLogger("email_service")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-CC_ALWAYS = "hemang.jindal@testingxperts.com"
+CC_ALWAYS = ["adeesh.jain@testingxperts.com", "upkar.singh@testingxperts.com"]
 
 
 # ── SMTP send helper ──────────────────────────────────────────────────────────
@@ -418,7 +418,7 @@ def send_submission_email(
         extra_rows=extra_rows,
     )
 
-    _smtp_send(to_emails=to_emails, subject=subject, html_body=html, cc_emails=[CC_ALWAYS])
+    _smtp_send(to_emails=to_emails, subject=subject, html_body=html, cc_emails=CC_ALWAYS)
 
 
 def send_new_lead_under_review_email(

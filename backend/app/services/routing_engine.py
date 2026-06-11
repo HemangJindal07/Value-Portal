@@ -624,6 +624,30 @@ async def start_routing(
         f'You have a new {submission_type} awaiting your review as {routing_label}: "{title}".',
     )
 
+    # Email the first reviewer ("Action Required")
+    try:
+        first_profile = _get_profile(supabase, first["user_id"])
+        if first_profile.get("email"):
+            acct_res_fr = (
+                supabase.table("accounts")
+                .select("account_name")
+                .eq("account_id", account_id)
+                .single()
+                .execute()
+            )
+            acct_name_fr = (acct_res_fr.data or {}).get("account_name", "")
+            send_reviewer_assignment_email(
+                reviewer_email=first_profile["email"],
+                reviewer_name=first_profile.get("full_name") or first_profile["email"],
+                role_label=routing_label,
+                submission_type=submission_type,
+                submission_id=submission_id,
+                title=title,
+                account_name=acct_name_fr,
+            )
+    except Exception as exc:
+        logger.exception("[ROUTE] Email failed for first reviewer %s: %s", first["user_id"], exc)
+
     # In-app submission confirmation to submitter (BRD §5.3.2 / §6.1 stage 1 / AC-04)
     if actual_submitter_id:
         _send_notification(
@@ -678,7 +702,9 @@ async def start_routing(
 
     contact_region: str | None = None
 
-    # ── Trigger email to ALL stakeholders + (UK/US extras only if user-entered) ──
+    # ── Trigger email to stakeholders (exclude first reviewer — they get the
+    #    "Action Required" reviewer email above instead) ─────────────────────
+    stakeholders_for_email = [s for s in stakeholders if s["user_id"] != first["user_id"]]
     _dispatch_submission_email(
         supabase=supabase,
         submission_type=submission_type,
@@ -687,7 +713,7 @@ async def start_routing(
         description=description,
         account_id=account_id,
         submitter_id=actual_submitter_id,
-        stakeholders=stakeholders,
+        stakeholders=stakeholders_for_email,
         contact_region=contact_region,
     )
 
